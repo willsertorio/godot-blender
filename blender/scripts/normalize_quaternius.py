@@ -264,6 +264,15 @@ def gun(src, out, length, name):
     k = length / (hi.x - lo.x)
     m = Matrix.Scale(k, 4) @ Matrix.Rotation(-math.pi / 2, 4, "Z")
     ob = static_piece(name + "Body", [(src, m)])
+    # Seen up close: smooth the low-poly curves (auto-smooth 35 deg keeps machined edges sharp).
+    for poly in ob.data.polygons:
+        poly.use_smooth = True
+    bpy.context.view_layer.objects.active = ob
+    ob.select_set(True)
+    try:
+        bpy.ops.object.shade_smooth_by_angle(angle=math.radians(35))
+    except Exception:
+        pass
     for o in objs:
         if o.name in bpy.data.objects and o != ob:
             bpy.data.objects.remove(o)

@@ -6,6 +6,7 @@
 #   tools/capture.sh                 # seed 123 -> captures/latest (previous -> captures/prev)
 #   tools/capture.sh 77              # another seed
 #   tools/capture.sh 77 seed77       # custom output label (no rotation)
+#   CAPTURE_ARGS=--lab tools/capture.sh 1 lab   # viewmodel test-room tour
 set -euo pipefail
 cd "$(dirname "$0")/.."
 SEED="${1:-123}"
@@ -17,6 +18,6 @@ fi
 rm -rf "$OUT" && mkdir -p "$OUT"
 godot --headless --editor --quit >/dev/null 2>&1 || true   # make sure imports are current
 xvfb-run -a -s "-screen 0 1280x720x24" \
-  godot --rendering-driver opengl3 --resolution 1280x720 --path . -- --seed="$SEED" --capture="$PWD/$OUT" 2>&1 \
+  godot --rendering-driver opengl3 --resolution 1280x720 --path . -- --seed="$SEED" --capture="$PWD/$OUT" ${CAPTURE_ARGS:-} 2>&1 \
   | grep -E '^\[|ERROR|SCRIPT' || true
 ls "$OUT"

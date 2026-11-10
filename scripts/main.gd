@@ -6,6 +6,7 @@ extends Node
 ##   --autostart     skip the title screen
 ##   --capture=DIR   run the capture tour (scripts/capture.gd) and quit
 ##   --greybox       build with greybox boxes instead of the Blender kit
+##   --lab           test room: one room, frozen targets, invulnerable (with --capture: the lab tour)
 ##   --perf          log FPS, draw calls, objects and triangles every 2 s (web: ?perf=1)
 ## In the browser the same options come from the URL query: ?seed=N&autostart=1
 
@@ -37,6 +38,8 @@ var ENEMY_SCRIPTS := {"turret": Turret, "brawler": Brawler, "pursuer": Pursuer}
 
 ## Tests can turn enemies off (traversal bot) before start_run().
 var enemies_enabled := true
+## Test room mode (see start_lab).
+var lab := false
 var drop_rng := RandomNumberGenerator.new()
 ## Door edges that are still closed: [cell_a, cell_b] both ways -> Door. Enemy pathing avoids them.
 var closed_edges: Dictionary = {}
@@ -69,7 +72,12 @@ func _ready() -> void:
 		var cap := CaptureTour.new()
 		cap.name = "CaptureTour"
 		add_child(cap)
-		cap.run(self, args.capture)
+		if args.has("lab"):
+			cap.run_lab(self, args.capture)
+		else:
+			cap.run(self, args.capture)
+	elif args.has("lab"):
+		start_lab()
 	elif args.has("autostart"):
 		start_run()
 	else:
@@ -80,9 +88,28 @@ func current_seed() -> int:
 	return base_seed + run_index
 
 
+## Test room (`--lab` / `?lab=1`): one room, the three enemies frozen as targets, player invulnerable.
+func start_lab() -> void:
+	lab = true
+	_begin(DungeonGen.new().generate_lab(current_seed()))
+	player.invulnerable = true
+	var c := DungeonGen.cell_center
+	for spec in [["turret", Vector2i(0, 1)], ["brawler", Vector2i(2, 1)], ["pursuer", Vector2i(4, 1)]]:
+		var e := spawn_enemy(spec[0], c.call(spec[1]), 0)
+		e.frozen = true
+	await get_tree().process_frame
+	for e in get_tree().get_nodes_in_group("hostiles"):
+		e.face_player_now()
+
+
 func start_run() -> void:
+	lab = false
+	_begin(DungeonGen.new().generate(current_seed(), difficulty))
+
+
+func _begin(p_layout: DungeonGen) -> void:
 	_clear_world()
-	layout = DungeonGen.new().generate(current_seed(), difficulty)
+	layout = p_layout
 	world = DungeonBuilder.new(KitGreybox.new() if args.has("greybox") else null).build(layout)
 	add_child(world)
 	var portal: ExitPortal = world.get_node("ExitPortal")
@@ -106,7 +133,7 @@ func start_run() -> void:
 	kills_by_type = {"turret": 0, "brawler": 0, "pursuer": 0}
 	drop_rng.seed = hash(current_seed() * 31 + 7)
 	_index_doors()
-	if enemies_enabled:
+	if enemies_enabled and not lab:
 		spawn_enemies()
 	spawn_crates()
 	Sfx.start_ambience()

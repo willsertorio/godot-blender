@@ -126,6 +126,26 @@ func generate(p_seed: int, p_difficulty: int = 0) -> DungeonGen:
 	return self
 
 
+## Test room for viewmodel / art work (`--lab`): one 5 x 5 room, a crate, decor, the portal in
+## a corner, no corridors.
+func generate_lab(p_seed: int = 1) -> DungeonGen:
+	seed_value = p_seed
+	difficulty = 0
+	rng.seed = hash(p_seed)
+	_add_room(Rect2i(0, 0, 5, 5), -1)
+	exit_room = 0
+	exit_pos = cell_center(Vector2i(4, 4))
+	player_spawn = cell_center(Vector2i(2, 3))
+	player_yaw = 0.0  # facing -Z, toward the targets
+	_used[Vector2i(4, 4)] = true
+	_used[Vector2i(2, 3)] = true
+	for c in [Vector2i(0, 1), Vector2i(2, 1), Vector2i(4, 1)]:
+		_used[c] = true  # target spots
+	_place_loot()
+	_place_deco()
+	return self
+
+
 # --- layout ---------------------------------------------------------------
 
 func _add_room(r: Rect2i, parent: int) -> Room:

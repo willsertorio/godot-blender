@@ -68,6 +68,49 @@ func run(p_main, p_dir: String) -> void:
 	get_tree().quit()
 
 
+## Lab tour (`--lab --capture=DIR`): the viewmodel in a fixed test room.
+func run_lab(p_main, p_dir: String) -> void:
+	main = p_main
+	dir = p_dir
+	DirAccess.make_dir_recursive_absolute(dir)
+	await _settle(4)
+	await main.start_lab()
+	var p: Player = main.player
+	p.input_enabled = false
+	await _settle(8)
+	var target: Vector3 = DungeonGen.cell_center(Vector2i(2, 1)) + Vector3.UP * 1.0
+	var w: WeaponHolder = p.weapons
+	for weapon in ["pistol", "rifle"]:
+		w.switch_to(weapon)
+		await _wait(0.5)
+		p.global_position = main.layout.player_spawn
+		p.look_at_point(target)
+		await shot("lab_%s_hip" % weapon)
+		p.input_enabled = true
+		Input.action_press("aim")
+		await _wait(0.5)
+		await shot("lab_%s_ads" % weapon)
+		Input.action_release("aim")
+		p.input_enabled = false
+		await _wait(0.4)
+		w.hold_fx = true
+		w.cooldown = 0.0
+		w.try_fire()
+		await shot("lab_%s_fire" % weapon, 2)
+		w.hold_fx = false
+		# Looking down a little shows the arms and the gun's underside.
+		p.look_at_point(target + Vector3.DOWN * 1.6)
+		await shot("lab_%s_low" % weapon)
+	# The three targets from the back of the room.
+	w.switch_to("rifle")
+	await _wait(0.4)
+	p.global_position = DungeonGen.cell_center(Vector2i(2, 4))
+	p.look_at_point(target)
+	await shot("lab_targets")
+	print("[capture] done -> ", dir)
+	get_tree().quit()
+
+
 func _combat(g: DungeonGen) -> void:
 	var p: Player = main.player
 	# Each enemy type engaging: telegraph frozen at 75 % of its lock.

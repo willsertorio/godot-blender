@@ -46,8 +46,18 @@ rule no longer applies to the environment):
   (multiply operator; the default ADD operator makes the whole surface glow). Enemy glow/beams `#FF4A2B`.
 - Walls are 5 m (bottom strip + 3 m wall + 2 m top band); wall geometry reaches 0.45 m into the cell
   (`DungeonGen.WALL_DEPTH`). Rooms pick one wall style (astra / band / window) and one floor (A/B/C).
-- Player arms: `blender/scripts/build_arms.py` (flat colours from the gun palette), rigid-part rig
-  `ArmR/ArmL > Hand*, Wrist* > Forearm*`, posed per weapon in `WeaponHolder.WEAPONS[*].arm_r/arm_l`.
+- Player arms: `blender/scripts/build_arms.py -- assets_src/quaternius assets/models` cuts the forearms + hands
+  out of Quaternius **Universal Base Characters** (`Superhero_Male_FullBody`, UE-style rig with finger chains),
+  shades them as gloves/sleeves (character normal map kept), adds cuff + vambrace, curls the fingers around a
+  vertical grip, bends the wrist 60 deg (sleeve drops out of frame), bakes that as rest pose and exports
+  `arm_r.glb` / `arm_l.glb` (origin = fist centre, hand along +Y). Bones keep UE names (`hand_r`, `index_01_r`...)
+  for animation. Posed per weapon in `WeaponHolder.WEAPONS[*].arm_r/arm_l` (empty = hidden; the pistol is one-handed).
+- Viewmodel (`scripts/viewmodel_rig.gd`): weapon + arms render on layer 5 through their own camera
+  (FOV 54, near 1 cm, SubViewport overlay under the HUD) with a key + rim light that only light that layer.
+  Tracers start where the muzzle appears on screen (`WeaponHolder._muzzle_in_world`).
+  Gun maps stay 2K; gun meshes are smooth-shaded by angle (35 deg).
+- Test room: `godot --path . -- --lab` (one room, three frozen targets, invulnerable);
+  `CAPTURE_ARGS=--lab tools/capture.sh 1 lab` captures hip / ADS / fire / low views of both guns.
 - Exit portal: `build_props.py` gate + MegaKit `Platform_Round1` pad; field = `portal.gdshader`.
 - Enemies (rigs + clips, names via `AnimUtil.play(prefix)`): Turret = `Enemy_Trilobite` (whole model yaws;
   Look while locking, AttackAuto on fire), Brawler = `Enemy_QuadShell` (Run, Charge, Attack), Pursuer =
@@ -104,6 +114,7 @@ licenses.csv         asset licence log
 ```
 godot --path .                                         # play (title screen)
 godot --path . -- --seed=123 --autostart               # reproduce a dungeon, skip title
+godot --path . -- --lab                                # viewmodel test room
 godot --headless -s tools/gen_check.gd -- --count=400  # generator check (must print PASS; ~100 s with the art kit)
 godot --headless -s tools/playthrough.gd -- --count=10 # bot walks spawn -> exit through real collision (enemies off)
 godot --headless -s tools/combat_check.gd              # 48 rule checks (lock timer, LOS, weapons, enemies, loot, crates, scaling, sounds)
@@ -115,7 +126,7 @@ python3 tools/compare.py                               # prev vs latest contact 
 blender -b -P blender/scripts/normalize_quaternius.py -- assets_src/quaternius assets/models  # all pack assets + q_materials.json
 python3 -I tools/pack_quaternius_textures.py           # resize/recompress the copied pack textures (run right after)
 blender -b -P blender/scripts/build_props.py -- assets/models  # portal.glb
-blender -b -P blender/scripts/build_arms.py -- assets/models   # arms.glb
+blender -b -P blender/scripts/build_arms.py -- assets_src/quaternius assets/models   # arm_r.glb + arm_l.glb
 python3 -I tools/set_texture_imports.py                # force VRAM compression + mipmaps on 3D textures (run after adding textures)
 ```
 Add `--greybox` to any run or capture to build with the greybox kit instead of the Blender kit.
