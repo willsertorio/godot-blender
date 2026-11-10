@@ -17,6 +17,9 @@ var flash: ColorRect
 var room_label: Label
 var objective_label: Label
 var health_label: Label
+var ammo_label: Label
+var weapon_label: Label
+var kits_label: Label
 var crosshair: Control
 var end_title: Label
 var end_stats: Label
@@ -55,8 +58,21 @@ func show_end(success: bool, score: int, kills: int, rooms_seen: int, rooms_tota
 func update_hud(main) -> void:
 	var p: Player = main.player
 	health_label.text = "HEALTH  %d" % ceili(p.health)
+	kits_label.text = "KITS  %d / %d" % [p.kits, Player.MAX_KITS]
+	var w: WeaponHolder = p.weapons
+	if w.current == "pistol":
+		weapon_label.text = "[1] PISTOL"
+		ammo_label.text = "∞"
+	else:
+		weapon_label.text = "[2] RIFLE" + ("  RELOADING" if w.reloading > 0.0 else "")
+		ammo_label.text = "%d / %d" % [w.mag, w.reserve]
+		ammo_label.add_theme_color_override("font_color", RED if w.mag == 0 else Color.WHITE)
 	room_label.text = "ROOMS  %d / %d" % [main.visited.size(), main.layout.rooms.size()]
 	objective_label.text = "OBJECTIVE  Reach the exit portal"
+
+
+func hit_marker(killed: bool) -> void:
+	crosshair.hit(killed)
 
 
 func flash_damage() -> void:
@@ -157,6 +173,22 @@ func _build_hud() -> void:
 	health_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_MINSIZE, 28)
 	hud.add_child(health_label)
 
+	kits_label = _label("", 20, GREEN)
+	kits_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_MINSIZE, 28)
+	kits_label.position.y -= 34
+	hud.add_child(kits_label)
+	ammo_label = _label("", 30, Color.WHITE)
+	ammo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	ammo_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 28)
+	ammo_label.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	hud.add_child(ammo_label)
+	weapon_label = _label("", 18, CYAN)
+	weapon_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	weapon_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 28)
+	weapon_label.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	weapon_label.position.y -= 38
+	hud.add_child(weapon_label)
+
 	room_label = _label("", 20, CYAN)
 	room_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT, Control.PRESET_MODE_MINSIZE, 24)
 	hud.add_child(room_label)
@@ -188,12 +220,34 @@ func _build_end() -> void:
 
 class Crosshair:
 	extends Control
+	## Tick marks plus a diagonal hit marker that flashes when a shot lands on a hostile
+	## (red and larger on a kill).
+
+	var _hit := 0.0
+	var _kill := false
 
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func hit(killed: bool) -> void:
+		_hit = 1.0
+		_kill = killed
+		queue_redraw()
+
+	func _process(delta: float) -> void:
+		if _hit > 0.0:
+			_hit = maxf(0.0, _hit - delta * 5.0)
+			queue_redraw()
 
 	func _draw() -> void:
 		var c := Color(0.85, 0.97, 1.0, 0.9)
 		for d in [Vector2(1, 0), Vector2(-1, 0), Vector2(0, 1), Vector2(0, -1)]:
 			draw_line(d * 5.0, d * 13.0, c, 2.0)
 		draw_circle(Vector2.ZERO, 1.5, c)
+		if _hit > 0.0:
+			var hc := Color("#FF2D55") if _kill else Color(1, 1, 1)
+			hc.a = _hit
+			var r0 := 8.0 if not _kill else 10.0
+			var r1 := 15.0 if not _kill else 20.0
+			for d in [Vector2(1, 1), Vector2(-1, 1), Vector2(1, -1), Vector2(-1, -1)]:
+				draw_line(d.normalized() * r0, d.normalized() * r1, hc, 2.5)

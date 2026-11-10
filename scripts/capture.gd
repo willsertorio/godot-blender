@@ -20,6 +20,9 @@ func run(p_main, p_dir: String) -> void:
 	main.start_run()
 	var p: Player = main.player
 	p.input_enabled = false
+	p.invulnerable = true
+	for e in get_tree().get_nodes_in_group("hostiles"):
+		e.frozen = true  # the tour stages fights itself; nobody else acts
 	await _settle(6)
 	await shot("01_spawn")
 
@@ -50,6 +53,7 @@ func run(p_main, p_dir: String) -> void:
 	_place(entry, g.exit_pos + Vector3.UP * 1.4)
 	await shot("05_exit_room")
 
+	await _combat(g)
 	await _overview(g)
 
 	# Walk into the portal: proves the trigger, then the end screen.
@@ -60,6 +64,109 @@ func run(p_main, p_dir: String) -> void:
 	await shot("06_end_screen")
 	print("[capture] done -> ", dir)
 	get_tree().quit()
+
+
+func _combat(g: DungeonGen) -> void:
+	var p: Player = main.player
+	# Each enemy type engaging: telegraph frozen at 75 % of its lock.
+	var dist := {"turret": 9.0, "pursuer": 7.0, "brawler": 3.2}
+	var n := 8
+	for kind in ["turret", "brawler", "pursuer"]:
+		var e: Enemy = await _stage_enemy(g, kind, dist[kind])
+		if e:
+			e.capture_frac = 0.75
+			await _settle(3)
+			await shot("%02d_%s_engaging" % [n, kind])
+			e.capture_frac = -1.0
+		n += 1
+
+	# Firing each weapon at a frozen pursuer in the spawn room, muzzle flash and tracer held.
+	_clear_frozen_staging()
+	var sr = g.rooms[g.spawn_room]
+	var target: Enemy = main.spawn_enemy("pursuer", sr.center() + Vector3(0, 0, -4.5), g.spawn_room)
+	target.frozen = true
+	target.max_hp = 1000.0  # survives the weapon shots; killed on purpose below
+	target.hp = 1000.0
+	_place(sr.center() + Vector3(1.2, 0, 3.5), target.eye_position())
+	await _settle(3)
+	var w: WeaponHolder = p.weapons
+	w.hold_fx = true
+	w.cooldown = 0.0
+	w.try_fire()
+	await shot("11_fire_pistol")
+	w.switch_to("rifle")
+	await _wait(0.45)
+	for i in 3:
+		w.cooldown = 0.0
+		w.try_fire()
+		await _settle(2)
+	await shot("12_fire_rifle")
+	w.hold_fx = false
+
+	# Aiming down sights (real input action, so the Player applies FOV + slow).
+	p.input_enabled = true
+	Input.action_press("aim")
+	await _wait(0.5)
+	await shot("13_aim_down_sights")
+	Input.action_release("aim")
+	p.input_enabled = false
+	await _wait(0.3)
+
+	# A kill: shards and flash a few frames after the killing shot.
+	if is_instance_valid(target):
+		target.take_damage(9999)
+	await shot("14_enemy_destroyed", 1)  # effects are real-time; software GL is slow
+	w.switch_to("pistol")
+
+
+var _staged: Array[Enemy] = []
+
+
+func _clear_frozen_staging() -> void:
+	for e in _staged:
+		if is_instance_valid(e):
+			e.queue_free()
+	_staged.clear()
+
+
+## The first enemy of `kind` from the layout (or a fresh one in the spawn room), with the
+## player placed `d` metres away inside the same room, in clear sight, facing it.
+func _stage_enemy(g: DungeonGen, kind: String, d: float) -> Enemy:
+	var e: Enemy = null
+	for h in get_tree().get_nodes_in_group("hostiles"):
+		if h.kind == kind and not h.dead:
+			e = h
+			break
+	if e == null:
+		e = main.spawn_enemy(kind, g.rooms[g.spawn_room].center() + Vector3(0, 0, -4), g.spawn_room)
+		e.frozen = true
+		_staged.append(e)
+		await _settle(2)
+	var r = g.rooms[e.room if e.room >= 0 else g.spawn_room]
+	var lo := Vector2(r.rect.position) * DungeonGen.CELL + Vector2(1.2, 1.2)
+	var hi := Vector2(r.rect.end) * DungeonGen.CELL - Vector2(1.2, 1.2)
+	var to_c := r.center() - e.global_position
+	to_c.y = 0
+	var dirs: Array[Vector3] = []
+	if to_c.length() > 0.5:
+		dirs.append(to_c.normalized())
+	dirs.append_array([Vector3.FORWARD, Vector3.BACK, Vector3.LEFT, Vector3.RIGHT])
+	var best_pos := Vector3.INF
+	var best_err := INF
+	for dv in dirs:
+		var pos := e.global_position + dv * d
+		pos.x = clampf(pos.x, lo.x, hi.x)
+		pos.z = clampf(pos.z, lo.y, hi.y)
+		_place(pos, e.eye_position() + Vector3.DOWN * 0.15)
+		await get_tree().physics_frame
+		await get_tree().physics_frame
+		var flat := Vector2(pos.x - e.global_position.x, pos.z - e.global_position.z).length()
+		if e.has_los() and absf(flat - d) < best_err:
+			best_err = absf(flat - d)
+			best_pos = pos
+	if best_pos != Vector3.INF:
+		_place(best_pos, e.eye_position() + Vector3.DOWN * 0.15)
+	return e
 
 
 func _overview(g: DungeonGen) -> void:
@@ -117,8 +224,8 @@ func _wait(sec: float) -> void:
 	await get_tree().create_timer(sec).timeout
 
 
-func shot(name: String) -> void:
-	await _settle(4)
+func shot(name: String, settle_frames: int = 4) -> void:
+	await _settle(settle_frames)
 	await RenderingServer.frame_post_draw
 	var img := get_viewport().get_texture().get_image()
 	var path := dir.path_join(name + ".png")
