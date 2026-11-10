@@ -25,6 +25,8 @@ var ads := false
 var kits := 0
 ## Tests / capture tour: take no damage.
 var invulnerable := false
+## Mouse look starts this many ms after spawn / re-capture (see _unhandled_input).
+var _look_ready_ms := 0
 
 var head: Node3D
 var camera: Camera3D
@@ -60,19 +62,28 @@ func _ready() -> void:
 	weapons.name = "Weapons"
 	camera.add_child(weapons)
 	weapons.setup(self)
+	hold_look()
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not input_enabled or not alive:
 		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		# Ignore the burst a browser can deliver as pointer lock engages, and clamp spikes.
+		if Time.get_ticks_msec() < _look_ready_ms:
+			return
+		var rel: Vector2 = event.relative.limit_length(250.0)
 		var sens := MOUSE_SENS * (0.6 if ads else 1.0)
-		rotate_y(-event.relative.x * sens)
-		head.rotation.x = clampf(head.rotation.x - event.relative.y * sens, -1.45, 1.45)
+		rotate_y(-rel.x * sens)
+		head.rotation.x = clampf(head.rotation.x - rel.y * sens, -1.45, 1.45)
 	elif event.is_action_pressed("interact"):
 		_try_interact()
 	elif event.is_action_pressed("use_kit"):
 		use_kit()
+
+
+func hold_look(ms: int = 150) -> void:
+	_look_ready_ms = Time.get_ticks_msec() + ms
 
 
 func _physics_process(delta: float) -> void:

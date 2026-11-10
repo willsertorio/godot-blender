@@ -285,7 +285,8 @@ func _place_enemies() -> void:
 			continue
 		var area := r.rect.size.x * r.rect.size.y
 		var n := 1 + int(area >= 16) + int(area >= 25) + rng.randi_range(0, 1)
-		n += difficulty  # more hostiles per completed mission
+		# More hostiles per completed mission: +0.5 per room per level on average.
+		n += difficulty / 2 + int(difficulty % 2 == 1 and rng.randf() < 0.5)
 		n = mini(n, 8)
 		var free := _free_cells(r, _used)
 		for i in mini(n, free.size()):
@@ -297,17 +298,36 @@ func _place_enemies() -> void:
 
 
 func _place_loot() -> void:
-	# Kits thin out with difficulty: weight 4 at d0, falling to 1.
+	## Containers stand against a wall on an edge cell (never a doorway cell or its
+	## neighbours), front facing into the room, so they never block a walking lane.
+	## Kits thin out with difficulty: weight 4 at d0, falling to 1.
 	var kit_w := maxi(1, 4 - difficulty)
 	for r in rooms:
-		var n := rng.randi_range(0, 2) if r.id != spawn_room else 1
-		var free := _free_cells(r, _used)
-		for i in mini(n, free.size()):
-			var c: Vector2i = free.pop_at(rng.randi() % free.size())
+		var n := rng.randi_range(1, 2) if r.id != spawn_room else 1
+		var spots: Array = []  # [cell, wall dir]
+		for c in _free_cells(r, _used):
+			var near_door := false
+			for dc in r.doorway_cells:
+				if absi(dc.x - c.x) + absi(dc.y - c.y) <= 1:
+					near_door = true
+			if near_door:
+				continue
+			for d in DIRS:
+				if not is_floor(c + d):
+					spots.append([c, d])
+		for i in n:
+			if spots.is_empty():
+				break
+			var pick: Array = spots[rng.randi() % spots.size()]
+			var c: Vector2i = pick[0]
+			var d: Vector2i = pick[1]
 			_used[c] = true
+			spots = spots.filter(func(s): return s[0] != c)
 			var payoff: String = LOOT_PAYOFFS[_weighted([kit_w, 4, 3])]
-			var j := Vector3(rng.randf_range(-0.6, 0.6), 0, rng.randf_range(-0.6, 0.6))
-			loot_spawns.append({"pos": cell_center(c) + j, "yaw": rng.randf() * TAU, "room": r.id, "payoff": payoff})
+			var out := Vector3(d.x, 0, d.y)
+			var along := Vector3(-d.y, 0, d.x) * rng.randf_range(-0.9, 0.9)
+			var pos := cell_center(c) + out * 1.25 + along
+			loot_spawns.append({"pos": pos, "yaw": yaw_facing(-out), "room": r.id, "payoff": payoff})
 
 
 func _weighted(weights: Array) -> int:

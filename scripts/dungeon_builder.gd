@@ -9,6 +9,8 @@ extends RefCounted
 
 const CELL := DungeonGen.CELL
 const CEILING_LAYER := 2  # visual layer bit for ceiling meshes
+## Area meshes beyond this distance (from their bounds) are not drawn.
+const VIEW_RANGE := 64.0
 
 var kit  # KitArt (default) or KitGreybox: get_mesh(), get_collision(), optional door_scene()
 
@@ -63,7 +65,7 @@ func build(g: DungeonGen) -> Node3D:
 	for v in g.pillars:
 		var px := Transform3D(Basis(), Vector3(v.x * CELL, 0, v.y * CELL))
 		var r := g.room_at(v)  # vertex v is the min-corner of cell v, inside the room
-		_add(pieces, "r%d" % r, "pillar", px)
+		_add(pieces, "cast_r%d" % r, "pillar", px)
 		collide.append(["pillar", px])
 
 	var geo := Node3D.new()
@@ -75,6 +77,12 @@ func build(g: DungeonGen) -> Node3D:
 		mi.mesh = _merge(pieces[area])
 		if area.begins_with("ceil_"):
 			mi.layers = CEILING_LAYER  # overhead views (capture overview) cull ceilings
+		# Room shells (walls, floor, ceiling, frames) can't cast a useful shadow onto their
+		# own interior, and every omni shadow renders 6 faces: only pillars ("cast_") cast.
+		if not area.begins_with("cast_"):
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		# No occlusion culling in Compatibility: drop far areas (fog hides the cut).
+		mi.visibility_range_end = VIEW_RANGE
 		geo.add_child(mi)
 
 	root.add_child(_build_collision(g, collide))
@@ -90,6 +98,13 @@ func build(g: DungeonGen) -> Node3D:
 	root.add_child(portal)
 	portal.build_greybox()
 	return root
+
+
+## Distance cut for props (enemies, crates, pickups): their meshes are small on screen
+## beyond this and there is no occlusion culling in Compatibility.
+static func limit_view_range(root: Node, distance: float = 48.0) -> void:
+	for gi in root.find_children("*", "GeometryInstance3D", true, false):
+		(gi as GeometryInstance3D).visibility_range_end = distance
 
 
 func _add(pieces: Dictionary, area: String, piece: String, xf: Transform3D) -> void:

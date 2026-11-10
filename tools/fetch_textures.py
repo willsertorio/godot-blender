@@ -8,7 +8,8 @@ For each set:
   - checks the asset page states the CC0 licence (refuses otherwise)
   - downloads <id>_<res>-JPG.zip into assets_src/textures/<id>/ (git-ignored)
   - writes assets/textures/<id>/albedo.jpg, normal.jpg (OpenGL / NormalGL) and
-    orm.jpg (R = AO, G = roughness, B = metalness), the layout ORMMaterial3D expects
+    orm.jpg (R = AO, G = roughness, B = metalness, half resolution for 2K sets), the
+    layout ORMMaterial3D expects
   - adds or updates its row in licenses.csv
 """
 import csv, datetime, io, json, pathlib, sys, urllib.request, zipfile
@@ -82,7 +83,12 @@ def fetch(asset_id, res):
     out.mkdir(parents=True, exist_ok=True)
     color.convert("RGB").save(out / "albedo.jpg", quality=92)
     normal.convert("RGB").save(out / "normal.jpg", quality=95)
-    Image.merge("RGB", (ao, rough, metal)).save(out / "orm.jpg", quality=92)
+    orm = Image.merge("RGB", (ao, rough, metal))
+    # ORM carries soft detail: half resolution for 2K sets keeps the web download down
+    # (albedo and normal stay at full 2K).
+    if size[0] > 1024:
+        orm = orm.resize((size[0] // 2, size[1] // 2), Image.LANCZOS)
+    orm.save(out / "orm.jpg", quality=92)
     print(f"{asset_id}: {size[0]}x{size[1]} -> {out.relative_to(ROOT)} (metal map: {'yes' if member('Metalness') else 'no'})")
     log_license(f"{asset_id} ({res} PBR texture)", "ambientCG",
                 f"https://ambientcg.com/view?id={asset_id}", "CC0 1.0")

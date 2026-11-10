@@ -215,6 +215,47 @@ func _run() -> void:
 	for n in main.get_tree().get_nodes_in_group("pickups"):
 		n.queue_free()
 
+	print("containers")
+	await reset_player(near)
+	p.kits = 0
+	var crate := LootCrate.new()
+	crate.payoff = "kit"
+	main.world.add_child(crate)
+	crate.global_position = near + Vector3(3.0, 0, 0)
+	await frames(2)
+	p._try_interact()
+	await frames(2)
+	ok(not crate.is_open, "E does nothing 3 m from a container")
+	p.global_position = near + Vector3(1.4, 0, 0)
+	await frames(2)
+	p._try_interact()
+	await seconds(0.6)
+	ok(crate.is_open and p.kits == 1, "E within range opens it and the kit is taken")
+	crate.queue_free()
+
+	print("difficulty scaling")
+	var stats := {}
+	for d in [0, 2, 4]:
+		var en := 0
+		var kits := 0
+		var loot := 0
+		for sd in range(1, 41):
+			var g := DungeonGen.new().generate(sd, d)
+			en += g.enemy_spawns.size()
+			loot += g.loot_spawns.size()
+			for l in g.loot_spawns:
+				if l.payoff == "kit":
+					kits += 1
+		stats[d] = [en / 40.0, float(kits) / loot]
+		print("    d%d: %.1f hostiles per dungeon, %.0f%% of containers hold kits" % [d, en / 40.0, 100.0 * kits / loot])
+	ok(stats[0][0] < stats[2][0] and stats[2][0] < stats[4][0], "more hostiles with each level")
+	ok(stats[0][1] > stats[2][1] and stats[2][1] > stats[4][1], "fewer kits with each level")
+	main.difficulty = 2
+	var tough: Enemy = main.spawn_enemy("turret", Vector3(2, 0, 2), 0)
+	ok(is_equal_approx(tough.max_hp, 70.0 * 1.4), "hostiles tougher at difficulty 2 (%d hp)" % tough.max_hp)
+	main.difficulty = 0
+	await clear_enemies()
+
 	print("death ends the run")
 	await reset_player(near)
 	p.health = 5

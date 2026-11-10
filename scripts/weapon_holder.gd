@@ -13,9 +13,11 @@ signal changed
 
 const WEAPONS := {
 	"pistol": {"damage": 25.0, "interval": 0.24, "auto": false, "spread": 0.022, "ads_spread": 0.003,
-		"range": 90.0, "sound": "pistol", "kick": 1.0},
+		"range": 90.0, "sound": "pistol", "kick": 1.0,
+		"model": "res://assets/models/pistol.glb", "hip": Vector3(0.15, -0.19, -0.36), "ads": Vector3(0.0, -0.1, -0.32)},
 	"rifle": {"damage": 12.0, "interval": 0.095, "auto": true, "spread": 0.035, "ads_spread": 0.009,
-		"range": 90.0, "sound": "rifle", "kick": 0.55, "mag": 30, "reload": 1.5},
+		"range": 90.0, "sound": "rifle", "kick": 0.55, "mag": 30, "reload": 1.5,
+		"model": "res://assets/models/rifle.glb", "hip": Vector3(0.19, -0.25, -0.42), "ads": Vector3(0.0, -0.215, -0.42)},
 }
 const RESERVE_START := 60
 const RESERVE_MAX := 240
@@ -44,8 +46,8 @@ var _fx := 0.0
 
 func setup(p: Player) -> void:
 	player = p
-	models["pistol"] = _greybox_pistol()
-	models["rifle"] = _greybox_rifle()
+	models["pistol"] = _load_model("pistol", _greybox_pistol)
+	models["rifle"] = _load_model("rifle", _greybox_rifle)
 	for k in models:
 		var m: Node3D = models[k]
 		add_child(m)
@@ -62,7 +64,7 @@ func setup(p: Player) -> void:
 
 	flash_sprite = MeshInstance3D.new()
 	var q := QuadMesh.new()
-	q.size = Vector2(0.16, 0.16)
+	q.size = Vector2(0.13, 0.13)
 	flash_sprite.mesh = q
 	var fm := StandardMaterial3D.new()
 	fm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -92,7 +94,7 @@ func setup(p: Player) -> void:
 
 
 func muzzle() -> Node3D:
-	return view_model.get_node("Muzzle")
+	return view_model.find_child("Muzzle", true, false)
 
 
 func _process(delta: float) -> void:
@@ -111,9 +113,8 @@ func _process(delta: float) -> void:
 	if switching > 0.0:
 		switching -= delta
 
-	var hip := Vector3(0.17, -0.16, -0.42)
-	var aimed := Vector3(0.0, -0.13, -0.34)
-	var target := aimed if player.ads else hip
+	var w0: Dictionary = WEAPONS[current]
+	var target: Vector3 = w0.ads if player.ads else w0.hip
 	var lower := 0.0
 	if switching > 0.0:
 		lower = sin(clampf(switching / SWITCH_TIME, 0, 1) * PI) * 0.25
@@ -249,10 +250,23 @@ func _impact(p: Vector3, n: Vector3) -> void:
 	tw.tween_callback(spark.queue_free)
 
 
+## The Blender weapon (Kenney Blaster Kit, normalized) or the greybox fallback.
+func _load_model(w: String, fallback: Callable) -> Node3D:
+	var path: String = WEAPONS[w].model
+	if not ResourceLoader.exists(path):
+		return fallback.call()
+	var m := (load(path) as PackedScene).instantiate() as Node3D
+	MaterialLib.rebind_tree(m)
+	assert(m.find_child("Muzzle", true, false) != null, path + " has no Muzzle")
+	m.position = WEAPONS[w].hip
+	return m
+
+
 static func _flash_texture() -> Texture2D:
 	var g := Gradient.new()
-	g.set_color(0, Color(1, 1, 1, 1))
-	g.set_color(1, Color(1, 1, 1, 0))
+	# Additive blend ignores alpha: fade the colour itself to black.
+	g.offsets = PackedFloat32Array([0.0, 0.35, 1.0])
+	g.colors = PackedColorArray([Color(1, 1, 1), Color(0.45, 0.45, 0.45), Color(0, 0, 0)])
 	var t := GradientTexture2D.new()
 	t.gradient = g
 	t.fill = GradientTexture2D.FILL_RADIAL

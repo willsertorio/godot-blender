@@ -32,6 +32,12 @@ func _build_visual() -> void:
 	cs.position.y = 0.95
 	add_child(cs)
 
+	var model := _adopt_model("res://assets/models/turret.glb")
+	if model:
+		head = model.find_child("Head", true, false)
+		muzzle = model.find_child("Muzzle", true, false)
+		beam = _make_beam(self)
+		return
 	var metal := body_metal()
 	var red := neon_red()
 	var base := CylinderMesh.new()

@@ -30,6 +30,7 @@ const SOUNDS := {
 	"brawler_motor": [["engineCircular_000"], -14.0, 0.0],
 	"pursuer_hover": [["spaceEngineSmall_003"], -16.0, 0.0],
 	"door": [["doorOpen_001"], -4.0, 0.03],
+	"crate_open": [["impactMetal_heavy_000"], -6.0, 0.05],
 	"pickup_health": [["confirmation_002"], -6.0, 0.0],
 	"pickup_ammo": [["drop_004"], -4.0, 0.0],
 	"pickup_kit": [["maximize_004"], -6.0, 0.0],

@@ -34,11 +34,19 @@ func _init() -> void:
 func _build_visual() -> void:
 	var cs := CollisionShape3D.new()
 	var shape := SphereShape3D.new()
-	shape.radius = 0.55
+	shape.radius = 0.62
 	cs.shape = shape
 	cs.position.y = HOVER
 	add_child(cs)
 
+	var model := _adopt_model("res://assets/models/pursuer.glb")
+	if model:
+		body = model.find_child("Body", true, false)
+		core = model.find_child("Core", true, false)
+		muzzle = model.find_child("Muzzle", true, false)
+		beam = _make_beam(self)
+		_hover_sfx = Sfx.loop_3d("pursuer_hover", body)
+		return
 	body = Node3D.new()
 	body.name = "Body"
 	body.position.y = HOVER

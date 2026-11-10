@@ -6,6 +6,7 @@ extends Node
 ##   --autostart     skip the title screen
 ##   --capture=DIR   run the capture tour (scripts/capture.gd) and quit
 ##   --greybox       build with greybox boxes instead of the Blender kit
+##   --perf          log FPS, draw calls, objects and triangles every 2 s (web: ?perf=1)
 ## In the browser the same options come from the URL query: ?seed=N&autostart=1
 
 const NEON_CYAN := Color("#22E5FF")
@@ -30,7 +31,7 @@ var light_cull_enabled := true
 var _cull_timer := 0.0
 
 ## Hostile toughness per completed mission (numbers grow in DungeonGen).
-const HP_PER_DIFFICULTY := 0.3
+const HP_PER_DIFFICULTY := 0.2
 const DROP_CHANCE := 0.35
 var ENEMY_SCRIPTS := {"turret": Turret, "brawler": Brawler, "pursuer": Pursuer}
 
@@ -44,6 +45,13 @@ var closed_edges: Dictionary = {}
 var kills := 0
 var score := 0
 var visited: Dictionary = {}
+## Every floor cell the player has stood in (rooms and corridors), for the map.
+var visited_cells: Dictionary = {}
+## Exit portal seen (clear line to it) or its room entered.
+var exit_found := false
+## Walking distance to the portal in metres (grid path), refreshed a few times a second.
+var exit_distance := 0.0
+var _exit_timer := 0.0
 var kills_by_type := {"turret": 0, "brawler": 0, "pursuer": 0}
 
 
@@ -92,11 +100,15 @@ func start_run() -> void:
 	kills = 0
 	score = 0
 	visited = {}
+	visited_cells = {}
+	exit_found = false
+	exit_distance = _path_metres(DungeonGen.world_to_cell(layout.player_spawn), DungeonGen.world_to_cell(layout.exit_pos))
 	kills_by_type = {"turret": 0, "brawler": 0, "pursuer": 0}
 	drop_rng.seed = hash(current_seed() * 31 + 7)
 	_index_doors()
 	if enemies_enabled:
 		spawn_enemies()
+	spawn_crates()
 	Sfx.start_ambience()
 	state = "playing"
 	ui.show_hud()
@@ -114,7 +126,7 @@ func end_run(success: bool) -> void:
 	for e in get_tree().get_nodes_in_group("hostiles"):
 		e.frozen = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	ui.show_end(success, score, kills, visited.size(), layout.rooms.size())
+	ui.show_end(success, score, kills, visited.size(), layout.rooms.size(), difficulty)
 	if success:
 		difficulty += 1
 	run_index += 1
@@ -128,12 +140,42 @@ func _clear_world() -> void:
 		player = null
 
 
+var _perf_t := 0.0
+
+
+func _perf_log(delta: float) -> void:
+	_perf_t += delta
+	if _perf_t < 2.0:
+		return
+	_perf_t = 0.0
+	var rs := RenderingServer
+	print("[perf] fps=%d draw_calls=%d objects=%d primitives=%d lights=%d" % [
+		Engine.get_frames_per_second(),
+		rs.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),
+		rs.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_OBJECTS_IN_FRAME),
+		rs.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME),
+		get_tree().get_nodes_in_group("culled_lights").filter(func(l): return l.visible).size()
+			+ world.get_node("Lights").get_children().filter(func(l): return l.visible).size()])
+
+
 func _process(_delta: float) -> void:
+	if args.has("perf") and state == "playing":
+		_perf_log(_delta)
 	if state != "playing" or player == null:
 		return
-	var r := layout.room_at(DungeonGen.world_to_cell(player.global_position))
+	var pc := DungeonGen.world_to_cell(player.global_position)
+	var r := layout.room_at(pc)
 	if r >= 0 and not visited.has(r):
 		visited[r] = true
+	if layout.is_floor(pc):
+		visited_cells[pc] = true
+	_exit_timer -= _delta
+	if _exit_timer <= 0.0:
+		_exit_timer = 0.25
+		if layout.is_floor(pc):
+			exit_distance = _path_metres(pc, DungeonGen.world_to_cell(layout.exit_pos))
+		if not exit_found:
+			exit_found = r == layout.exit_room or _sees_portal()
 	ui.update_hud(self)
 	_cull_timer -= _delta
 	if _cull_timer <= 0.0:
@@ -153,6 +195,19 @@ func spawn_enemies() -> void:
 		e.rotation.y = randf() * TAU
 		e.died.connect(_on_enemy_died)
 		holder.add_child(e)
+
+
+func spawn_crates() -> void:
+	var holder := Node3D.new()
+	holder.name = "Crates"
+	world.add_child(holder)
+	for l in layout.loot_spawns:
+		var c := LootCrate.new()
+		c.payoff = l.payoff
+		c.main = self
+		c.position = l.pos
+		c.rotation.y = l.yaw
+		holder.add_child(c)
 
 
 func spawn_enemy(kind: String, pos: Vector3, room: int = -1) -> Enemy:
@@ -245,12 +300,63 @@ func nav_next_cell(from: Vector2i, to: Vector2i) -> Vector2i:
 	return c
 
 
+func _path_metres(from: Vector2i, to: Vector2i) -> float:
+	## Grid walking distance (doors count as passable: they can be opened).
+	if not layout.is_floor(from):
+		return exit_distance
+	var dist := {from: 0}
+	var q: Array[Vector2i] = [from]
+	while q.size() > 0:
+		var c: Vector2i = q.pop_front()
+		if c == to:
+			return dist[c] * DungeonGen.CELL
+		for d in DungeonGen.DIRS:
+			var n: Vector2i = c + d
+			if layout.is_floor(n) and not dist.has(n):
+				dist[n] = dist[c] + 1
+				q.append(n)
+	return 0.0
+
+
+func _sees_portal() -> bool:
+	var eye := player.camera.global_position
+	var target := layout.exit_pos + Vector3.UP * 1.4
+	if eye.distance_to(target) > 40.0:
+		return false
+	var q := PhysicsRayQueryParameters3D.create(eye, target, Layers.WORLD)
+	return player.get_world_3d().direct_space_state.intersect_ray(q).is_empty()
+
+
+## Living hostiles per room, by where they are now (pursuers and brawlers roam).
+func hostiles_by_room() -> Dictionary:
+	var out := {}
+	for e in get_tree().get_nodes_in_group("hostiles"):
+		if e.dead:
+			continue
+		var r := layout.room_at(DungeonGen.world_to_cell(e.global_position))
+		if r >= 0:
+			out[r] = out.get(r, 0) + 1
+	return out
+
+
+## True when the centre of the screen is on a hostile with nothing in between.
+func crosshair_on_hostile() -> bool:
+	var cam := player.camera
+	var from := cam.global_position
+	var q := PhysicsRayQueryParameters3D.create(from, from - cam.global_transform.basis.z * 60.0, Layers.WORLD | Layers.HOSTILE)
+	q.exclude = [player.get_rid()]
+	var hit := player.get_world_3d().direct_space_state.intersect_ray(q)
+	return not hit.is_empty() and hit.collider is Enemy
+
+
 func cull_lights() -> void:
 	var lights := world.get_node_or_null("Lights")
 	if lights == null:
 		return
 	var eye := player.global_position
 	for l: OmniLight3D in lights.get_children():
+		l.visible = not light_cull_enabled or l.global_position.distance_to(eye) < l.omni_range + LIGHT_CULL_MARGIN
+	for l: OmniLight3D in get_tree().get_nodes_in_group("culled_lights"):
 		l.visible = not light_cull_enabled or l.global_position.distance_to(eye) < l.omni_range + LIGHT_CULL_MARGIN
 
 
@@ -259,6 +365,8 @@ func _input(event: InputEvent) -> void:
 	if state == "playing" and event is InputEventMouseButton and event.pressed \
 			and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		if player:
+			player.hold_look()
 		get_viewport().set_input_as_handled()
 
 
