@@ -14,13 +14,13 @@ signal changed
 const WEAPONS := {
 	"pistol": {"damage": 25.0, "interval": 0.24, "auto": false, "spread": 0.022, "ads_spread": 0.003,
 		"range": 90.0, "sound": "pistol", "kick": 1.0,
-		"model": "res://assets/models/pistol.glb", "hip": Vector3(0.15, -0.17, -0.36), "ads": Vector3(0.0, -0.13, -0.33),
+		"model": "res://assets/models/pistol.glb", "hip": Vector3(0.16, -0.15, -0.4), "ads": Vector3(0.0, -0.085, -0.66),
 		# Arm poses in the weapon frame (Godot axes: -Z = barrel, +Y = up; origin = grip): [position, rotation deg].
-		"arm_r": [Vector3(0, 0, 0), Vector3(-14, 0, 0)], "arm_l": [Vector3(-0.045, -0.01, -0.035), Vector3(-10, 0, -25)]},
+		"arm_r": [Vector3(0, -0.02, 0.02), Vector3(-15, 0, 0)], "arm_l": []},  # one-handed
 	"rifle": {"damage": 12.0, "interval": 0.095, "auto": true, "spread": 0.035, "ads_spread": 0.009,
 		"range": 90.0, "sound": "rifle", "kick": 0.55, "mag": 30, "reload": 1.5,
-		"model": "res://assets/models/rifle.glb", "hip": Vector3(0.18, -0.24, -0.38), "ads": Vector3(0.0, -0.255, -0.4),
-		"arm_r": [Vector3(0, 0, 0), Vector3(-14, 0, 0)], "arm_l": [Vector3(-0.01, -0.06, -0.3), Vector3(-8, 0, 8)]},
+		"model": "res://assets/models/rifle.glb", "hip": Vector3(0.18, -0.2, -0.44), "ads": Vector3(0.0, -0.205, -0.48),
+		"arm_r": [Vector3(0, -0.03, 0.02), Vector3(-15, 0, 0)], "arm_l": [Vector3(0, -0.04, -0.27), Vector3(0, 0, 0)]},
 }
 const RESERVE_START := 60
 const RESERVE_MAX := 240
@@ -58,6 +58,8 @@ func setup(p: Player) -> void:
 		for mi in m.find_children("*", "MeshInstance3D", true, false):
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	view_model = models[current]
+	for k in models:
+		ViewmodelRig.adopt(models[k])
 
 	flash_light = OmniLight3D.new()
 	flash_light.light_color = Color(0.6, 0.95, 1.0)
@@ -80,6 +82,7 @@ func setup(p: Player) -> void:
 	flash_sprite.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	flash_sprite.visible = false
 	add_child(flash_sprite)
+	ViewmodelRig.adopt(flash_sprite)
 
 	tracer = MeshInstance3D.new()
 	var cyl := CylinderMesh.new()
@@ -234,9 +237,21 @@ func _shoot(w: Dictionary) -> void:
 		else:
 			Sfx.play_at("hit_wall", hit.position)
 			_impact(hit.position, hit.normal)
-	Enemy.aim_beam(tracer, muzzle().global_position, end, 0.007)
+	Enemy.aim_beam(tracer, _muzzle_in_world(), end, 0.007)
 	tracer.visible = true
 	fired.emit(current)
+
+
+## The muzzle is drawn by the viewmodel camera (different FOV): find the world point that
+## appears at the same spot on screen, so tracers leave the barrel you see.
+func _muzzle_in_world() -> Vector3:
+	var mz := muzzle().global_position
+	var rig: ViewmodelRig = player.viewmodel
+	if rig == null or rig.camera == null:
+		return mz
+	var screen := rig.camera.unproject_position(mz)
+	var depth := player.camera.global_position.distance_to(mz)
+	return player.camera.project_position(screen, depth)
 
 
 func _impact(p: Vector3, n: Vector3) -> void:
@@ -253,29 +268,27 @@ func _impact(p: Vector3, n: Vector3) -> void:
 	tw.tween_callback(spark.queue_free)
 
 
-const ARMS := "res://assets/models/arms.glb"
-static var _arms_scene: PackedScene
+const ARMS := {"R": "res://assets/models/arm_r.glb", "L": "res://assets/models/arm_l.glb"}
+static var _arm_scenes: Dictionary = {}
 
 
-## Gloved arms (blender/scripts/build_arms.py) posed on a weapon model: ArmR on the grip,
-## ArmL per weapon. Nodes ArmR/ArmL, Wrist*, Hand*, Forearm* stay addressable for animation.
+## Gloved arms (Quaternius Universal Base Characters, cut and posed by build_arms.py) on a
+## weapon model: ArmR on the grip, ArmL per weapon. Skeletons keep their bones (hand_r,
+## index_01_r, ...) for the motion-design step.
 func _attach_arms(model: Node3D, w: String) -> void:
-	if not ResourceLoader.exists(ARMS):
-		return
-	if _arms_scene == null:
-		_arms_scene = load(ARMS)
-	var inst := _arms_scene.instantiate()
-	MaterialLib.rebind_tree(inst)
 	for side in ["R", "L"]:
-		var a := inst.find_child("Arm" + side, true, false) as Node3D
-		if a == null:
-			continue
-		a.get_parent().remove_child(a)
-		model.add_child(a)
+		var path: String = ARMS[side]
 		var pose: Array = WEAPONS[w]["arm_" + side.to_lower()]
-		a.position = pose[0]
-		a.rotation_degrees = pose[1]
-	inst.free()
+		if pose.is_empty() or not ResourceLoader.exists(path):
+			continue
+		if not _arm_scenes.has(side):
+			_arm_scenes[side] = load(path)
+		var inst := (_arm_scenes[side] as PackedScene).instantiate() as Node3D
+		MaterialLib.rebind_tree(inst)
+		inst.name = "Arm" + side
+		model.add_child(inst)
+		inst.position = pose[0]
+		inst.rotation_degrees = pose[1]
 
 
 ## The Quaternius weapon (normalized) or the greybox fallback.

@@ -30,6 +30,7 @@ var _look_ready_ms := 0
 
 var head: Node3D
 var camera: Camera3D
+var viewmodel: ViewmodelRig
 var weapons: WeaponHolder
 
 
@@ -57,6 +58,11 @@ func _ready() -> void:
 	camera.far = 120.0
 	camera.current = true
 	head.add_child(camera)
+
+	viewmodel = ViewmodelRig.new()
+	viewmodel.name = "Viewmodel"
+	add_child(viewmodel)
+	viewmodel.setup(camera, get_world_3d().environment)
 
 	weapons = WeaponHolder.new()
 	weapons.name = "Weapons"
@@ -101,6 +107,9 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	var target_fov := FOV * (0.62 if ads else 1.0)
 	camera.fov = lerpf(camera.fov, target_fov, 1.0 - exp(-14.0 * delta))
+	if viewmodel and viewmodel.camera:
+		var vm_fov := ViewmodelRig.FOV * (0.85 if ads else 1.0)
+		viewmodel.camera.fov = lerpf(viewmodel.camera.fov, vm_fov, 1.0 - exp(-14.0 * delta))
 
 
 func _try_interact() -> void:

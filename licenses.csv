@@ -99,8 +99,10 @@ lowFrequency_explosion_000.ogg (connection lost (death)) from Kenney Sci-Fi Soun
 spaceEngineLow_001.ogg (facility ambience loop) from Kenney Sci-Fi Sounds,Kenney,https://kenney.nl/assets/sci-fi-sounds,CC0 1.0,2026-11-10
 impactMetal_heavy_000.ogg (container opens) from Kenney Impact Sounds,Kenney,https://kenney.nl/assets/impact-sounds,CC0 1.0,2026-11-10
 "Kenney Future.ttf (headings: title, menus, HUD numbers, map) from Kenney Fonts",Kenney,https://kenney.nl/assets/kenney-fonts,CC0 1.0,2026-11-10
-First-person arms: gloves and armoured sleeves (assets/models/arms.glb),modelled,blender/scripts/build_arms.py,Original work for this project (no third-party content),2026-11-10
 Exit portal gate ring and field disc (assets/models/portal.glb; base pad is Quaternius Platform_Round1),modelled,blender/scripts/build_props.py,Original work for this project (no third-party content),2026-11-10
 Neon shader (assets/shaders/neon.gdshader),modelled,assets/shaders/neon.gdshader,Original work for this project (no third-party content),2026-11-10
 Portal field shader (assets/shaders/portal.gdshader),modelled,assets/shaders/portal.gdshader,Original work for this project (no third-party content),2026-11-10
 "Title / end screen grid and HUD vignette shaders (assets/shaders/ui_grid.gdshader, ui_vignette.gdshader)",modelled,assets/shaders/ui_grid.gdshader,Original work for this project (no third-party content),2026-11-10
+"Superhero_Male_FullBody (forearms, hands and finger rig; cut, re-shaded as gloves/sleeves, posed) -> assets/models/arm_r.glb, arm_l.glb, from Quaternius Universal Base Characters",Quaternius,https://quaternius.itch.io/universal-base-characters,CC0 1.0,2026-11-10
+T_Superhero_Male_Normal texture (embedded in arm_r.glb / arm_l.glb) from Quaternius Universal Base Characters,Quaternius,https://quaternius.itch.io/universal-base-characters,CC0 1.0,2026-11-10
+Arm cuffs and vambrace plates added to the Quaternius forearms (arm_r.glb / arm_l.glb),modelled,blender/scripts/build_arms.py,Original work for this project (no third-party content),2026-11-10
