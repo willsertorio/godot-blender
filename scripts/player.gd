@@ -45,6 +45,7 @@ var _fall_speed := 0.0
 ## View punch (recoil kick on the camera, recovers by itself): pitch, yaw in radians.
 var punch := Vector2.ZERO
 var _punch_vel := Vector2.ZERO
+var _shake := 0.0
 var _shape: CapsuleShape3D
 var _shape_node: CollisionShape3D
 
@@ -154,7 +155,7 @@ func _physics_process(delta: float) -> void:
 	landed = move_toward(landed, 0.0, delta * 2.5)
 	move_speed_frac = Vector2(velocity.x, velocity.z).length() / WALK_SPEED if is_on_floor() else 0.0
 	_update_head(delta)
-	var target_fov := FOV * (0.62 if ads else 1.0)
+	var target_fov := FOV * (0.62 if ads else 1.0) * (1.0 - _shake * 0.025)
 	camera.fov = lerpf(camera.fov, target_fov, 1.0 - exp(-14.0 * delta))
 	if viewmodel and viewmodel.camera:
 		var vm_fov := ViewmodelRig.FOV * (0.85 if ads else 1.0)
@@ -182,12 +183,19 @@ func _update_head(delta: float) -> void:
 		left -= h
 		_punch_vel += (-punch * 180.0 - _punch_vel * 22.0) * h
 		punch += _punch_vel * h
-	camera.rotation = Vector3(punch.x, punch.y, -cos(_bob_phase * 0.5) * amp * 0.25 + sin(t * 0.8) * 0.002)
+	_shake = move_toward(_shake, 0.0, delta * 7.0)
+	var sh := Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)) * _shake * _shake * 0.012
+	camera.rotation = Vector3(punch.x, punch.y, -cos(_bob_phase * 0.5) * amp * 0.25 + sin(t * 0.8) * 0.002) + sh
 
 
 ## Recoil kick on the view (radians); recovers by itself.
 func add_punch(pitch: float, yaw: float) -> void:
 	_punch_vel += Vector2(pitch, yaw) * 30.0
+
+
+## Short camera shake (decays in ~0.15 s) and a small FOV punch.
+func add_shake(amount: float) -> void:
+	_shake = minf(_shake + amount, 1.0)
 
 
 func _try_interact() -> void:

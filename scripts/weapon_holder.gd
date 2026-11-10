@@ -322,11 +322,14 @@ func _load_model(w: String, fallback: Callable) -> Node3D:
 
 ## Recoil impulse: the gun kicks back and up with a little random twist; the view is punched up.
 func _recoil(w: Dictionary) -> void:
+	## Big, readable kick: the gun slams back into the hand, muzzle flips up with a random
+	## twist, the view climbs and shakes, and the FOV punches in a touch.
 	var k: float = w.kick
-	var ads_k := 0.55 if player.ads else 1.0
-	_rk_pos_v += Vector3(randf_range(-0.05, 0.05), 0.12, 0.9) * k * ads_k
-	_rk_rot_v += Vector3(5.5 * k, randf_range(-1.6, 1.6) * k, randf_range(-2.5, 2.5) * k) * ads_k
-	player.add_punch((0.012 if w.auto else 0.02) * ads_k, randf_range(-0.004, 0.004))
+	var ads_k := 0.6 if player.ads else 1.0
+	_rk_pos_v += Vector3(randf_range(-0.25, 0.25), 0.45, 3.4) * k * ads_k
+	_rk_rot_v += Vector3(26.0 * k, randf_range(-6.0, 6.0) * k, randf_range(-9.0, 9.0) * k) * ads_k
+	player.add_punch((0.05 if w.auto else 0.075) * ads_k, randf_range(-0.018, 0.018) * ads_k)
+	player.add_shake(0.35 * k * ads_k)
 	sprint_block = 0.35
 
 
@@ -415,13 +418,13 @@ func _animate(delta: float) -> void:
 	while left > 0.0:
 		var h := minf(left, 1.0 / 240.0)
 		left -= h
-		_rk_pos_v += (-_rk_pos * 260.0 - _rk_pos_v * 20.0) * h
+		_rk_pos_v += (-_rk_pos * 300.0 - _rk_pos_v * 24.0) * h
 		_rk_pos += _rk_pos_v * h
-		_rk_rot_v += (-_rk_rot * 220.0 - _rk_rot_v * 18.0) * h
+		_rk_rot_v += (-_rk_rot * 240.0 - _rk_rot_v * 20.0) * h
 		_rk_rot += _rk_rot_v * h
 
 	view_model.position = _pose_pos + bob + breath + land + Vector3(_sway.x, _sway.y, 0) * 0.5 \
-		+ Vector3(_rk_pos.x * 0.01, _rk_pos.y * 0.01, _rk_pos.z * 0.045)
+		+ Vector3(_rk_pos.x * 0.02, _rk_pos.y * 0.02, _rk_pos.z * 0.05)
 	view_model.rotation = _pose_rot + bob_rot + Vector3(_sway.y * 1.5 + deg_to_rad(_rk_rot.x), _sway.x * 2.0 + deg_to_rad(_rk_rot.y), -_sway.x * 1.5 + deg_to_rad(_rk_rot.z))
 
 
