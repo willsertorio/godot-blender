@@ -255,6 +255,24 @@ func _face(dir: Vector3, node: Node3D, delta: float, speed: float = 8.0) -> void
 
 # --- visuals helpers -------------------------------------------------------------
 
+## Instance a Blender enemy model with per-instance neon materials (so one enemy's
+## telegraph glow does not light up every other enemy). Returns null if missing.
+func _adopt_model(path: String) -> Node3D:
+	if not ResourceLoader.exists(path):
+		return null
+	var m := (load(path) as PackedScene).instantiate() as Node3D
+	MaterialLib.rebind_tree(m)
+	for mi: MeshInstance3D in m.find_children("*", "MeshInstance3D", true, false):
+		for i in mi.mesh.get_surface_count():
+			var mat := mi.mesh.surface_get_material(i)
+			if mat is ShaderMaterial:
+				var d := mat.duplicate() as ShaderMaterial
+				mi.set_surface_override_material(i, d)
+				_neon_mats.append(d)
+	add_child(m)
+	return m
+
+
 static func neon_red() -> ShaderMaterial:
 	return MaterialLib.neon(Color("#FF2D55"), 1.6)
 

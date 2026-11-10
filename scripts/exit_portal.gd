@@ -21,8 +21,29 @@ func _ready() -> void:
 	body_entered.connect(func(b): if b.is_in_group("player"): reached.emit())
 
 
-## Greybox look: a ring of violet light with a glowing disc. Replaced in the hero pass.
+## The Blender gate (assets/models/portal.glb, field driven by portal.gdshader) and a
+## violet light; falls back to the greybox ring if the model is missing.
 func build_greybox() -> void:
+	if ResourceLoader.exists("res://assets/models/portal.glb"):
+		var m := (load("res://assets/models/portal.glb") as PackedScene).instantiate() as Node3D
+		MaterialLib.rebind_tree(m)
+		add_child(m)
+		var light := OmniLight3D.new()
+		light.light_color = EXIT_VIOLET
+		light.light_energy = 2.4
+		light.omni_range = 8.0
+		light.position = Vector3(0, 1.45, 0)
+		add_child(light)
+		var hum := Sfx.loop_3d("pursuer_hover", self)
+		hum.position.y = 1.45
+		hum.pitch_scale = 0.55
+		hum.volume_db = -14.0
+		hum.autoplay = true
+		return
+	_build_ring()
+
+
+func _build_ring() -> void:
 	var m := StandardMaterial3D.new()
 	m.resource_name = "NeonViolet"
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED

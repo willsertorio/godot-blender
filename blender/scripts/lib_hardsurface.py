@@ -17,6 +17,8 @@ MATERIALS = {
     "DoorMetal": dict(color=(0.2, 0.21, 0.22), metallic=0.8, rough=0.4),
     "Floor": dict(color=(0.12, 0.12, 0.125), metallic=0.8, rough=0.45),
     "Ceiling": dict(color=(0.08, 0.085, 0.09), metallic=0.6, rough=0.55),
+    "CrateMetal": dict(color=(0.3, 0.32, 0.34), metallic=0.6, rough=0.45),
+    "PropMetal": dict(color=(0.06, 0.065, 0.07), metallic=0.7, rough=0.45),
     "LightPanel": dict(color=(0.85, 0.95, 1.0), emit=6.0),
     "NeonCyan": dict(color=(0x22 / 255, 0xE5 / 255, 1.0), emit=8.0),
     "NeonRed": dict(color=(1.0, 0x2D / 255, 0x55 / 255), emit=8.0),
@@ -53,14 +55,21 @@ def material(name):
 
 
 class Part:
-    """A cuboid (optionally rotated) with a material and a bevel width."""
+    """A primitive with a material and a bevel width.
+    kind "box": cuboid lo..hi (rot_z or rot=(x, y, z) radians about its centre)
+    kind "cyl": cylinder fitted to lo..hi along `axis` with `segments` sides
+    kind "gem": faceted icosphere fitted to lo..hi
+    kind "torus": ring in the XY plane fitted to lo..hi (x/y = outer size, z = tube thickness)"""
 
-    def __init__(self, lo, hi, mat, bevel=0.012, rot_z=0.0):
+    def __init__(self, lo, hi, mat, bevel=0.012, rot_z=0.0, rot=None, kind="box", segments=8, axis="Z"):
         self.lo = Vector(lo)
         self.hi = Vector(hi)
         self.mat = mat
         self.bevel = bevel
-        self.rot_z = rot_z
+        self.rot = rot if rot is not None else (0.0, 0.0, rot_z)
+        self.kind = kind
+        self.segments = segments
+        self.axis = axis
 
 
 def build(name, parts, segments=2):
@@ -72,8 +81,30 @@ def build(name, parts, segments=2):
         bm = bmesh.new()
         size = p.hi - p.lo
         centre = (p.hi + p.lo) * 0.5
-        mat = Matrix.Translation(centre) @ Matrix.Rotation(p.rot_z, 4, "Z") @ Matrix.Diagonal((*size, 1.0))
-        bmesh.ops.create_cube(bm, size=1.0, matrix=mat)
+        rot = Matrix.Rotation(p.rot[2], 4, "Z") @ Matrix.Rotation(p.rot[1], 4, "Y") @ Matrix.Rotation(p.rot[0], 4, "X")
+        if p.kind == "box":
+            mat = Matrix.Translation(centre) @ rot @ Matrix.Diagonal((*size, 1.0))
+            bmesh.ops.create_cube(bm, size=1.0, matrix=mat)
+        elif p.kind == "cyl":
+            # Unit cylinder along Z (radius 0.5, depth 1), then aligned to the axis and fitted.
+            align = {"Z": Matrix.Identity(4), "Y": Matrix.Rotation(math.pi / 2, 4, "X"), "X": Matrix.Rotation(math.pi / 2, 4, "Y")}[p.axis]
+            dims = {"Z": (size.x, size.y, size.z), "Y": (size.x, size.z, size.y), "X": (size.z, size.y, size.x)}[p.axis]
+            mat = Matrix.Translation(centre) @ rot @ align @ Matrix.Diagonal((*dims, 1.0))
+            bmesh.ops.create_cone(bm, cap_ends=True, segments=p.segments, radius1=0.5, radius2=0.5, depth=1.0, matrix=mat)
+        elif p.kind == "gem":
+            mat = Matrix.Translation(centre) @ rot @ Matrix.Diagonal((*(size * 0.5), 1.0))
+            bmesh.ops.create_icosphere(bm, subdivisions=1, radius=1.0, matrix=mat)
+        elif p.kind == "torus":
+            r_major = (size.x + size.y) * 0.25 - size.z * 0.5
+            r_minor = size.z * 0.5
+            bm.free()
+            bpy.ops.mesh.primitive_torus_add(major_radius=r_major, minor_radius=r_minor, major_segments=p.segments * 3,
+                                             minor_segments=6, location=centre, rotation=p.rot)
+            tob = bpy.context.active_object
+            tob.name = f"{name}_{i}"
+            tob.data.materials.append(material(p.mat))
+            pieces.append(tob)
+            continue
         bm.to_mesh(me)
         bm.free()
         ob = bpy.data.objects.new(f"{name}_{i}", me)
@@ -93,13 +124,15 @@ def build(name, parts, segments=2):
     for ob in pieces:
         ob.select_set(True)
     bpy.context.view_layer.objects.active = pieces[0]
-    bpy.ops.object.join()
+    if len(pieces) > 1:
+        bpy.ops.object.join()
     ob = bpy.context.view_layer.objects.active
     ob.name = name
     ob.data.name = name
     wn = ob.modifiers.new("WeightedNormal", "WEIGHTED_NORMAL")
     wn.keep_sharp = True
     wn.mode = "FACE_AREA"
+    ob.modifiers.new("Triangulate", "TRIANGULATE").keep_custom_normals = True  # n-gon caps -> tangents
     _apply_modifiers(ob)
     box_uv(ob)
     return ob
@@ -131,7 +164,7 @@ def box_uv(ob):
             uv.data[li].uv = u
 
 
-def export_glb(path, objects, animations=False):
+def export_glb(path, objects, animations=False, images=False):
     bpy.ops.object.select_all(action="DESELECT")
     for ob in objects:
         ob.select_set(True)
@@ -146,7 +179,7 @@ def export_glb(path, objects, animations=False):
         export_tangents=True,
         export_animations=animations,
         export_animation_mode="ACTIONS",
-        export_image_format="NONE",
+        export_image_format="JPEG" if images else "NONE",
         export_materials="EXPORT",
     )
     print("exported", path)

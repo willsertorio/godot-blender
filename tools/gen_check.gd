@@ -145,7 +145,17 @@ func _check_physics(s: int, g: DungeonGen) -> void:
 	for e in g.enemy_spawns:
 		_overlap(s, space, "enemy " + e.type, e.pos + Vector3.UP * 1.0, _sphere(0.7))
 	for l in g.loot_spawns:
-		_overlap(s, space, "container", l.pos + Vector3.UP * 0.5, _sphere(0.75))
+		# The crate's real box (LootCrate.SIZE), rotated as placed, shrunk 2 cm.
+		var bx := BoxShape3D.new()
+		bx.size = LootCrate.SIZE - Vector3.ONE * 0.04
+		var q := PhysicsShapeQueryParameters3D.new()
+		q.shape = bx
+		q.transform = Transform3D(Basis(Vector3.UP, l.yaw), l.pos + Vector3.UP * (LootCrate.SIZE.y * 0.5 + 0.03))
+		q.collision_mask = Layers.WORLD
+		q.exclude = [floor_rid]
+		for h in space.intersect_shape(q, 4):
+			_fail(s, "container intersects geometry (%s) at %s" % [h.collider.name, l.pos])
+			break
 	world.queue_free()
 	await process_frame
 

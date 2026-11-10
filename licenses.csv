@@ -39,3 +39,10 @@ confirmation_001.ogg (UI button) from Kenney Interface Sounds,Kenney,https://ken
 forceField_004.ogg (mission complete) from Kenney Sci-Fi Sounds,Kenney,https://kenney.nl/assets/sci-fi-sounds,CC0 1.0,2026-11-10
 lowFrequency_explosion_000.ogg (connection lost (death)) from Kenney Sci-Fi Sounds,Kenney,https://kenney.nl/assets/sci-fi-sounds,CC0 1.0,2026-11-10
 spaceEngineLow_001.ogg (facility ambience loop) from Kenney Sci-Fi Sounds,Kenney,https://kenney.nl/assets/sci-fi-sounds,CC0 1.0,2026-11-10
+impactMetal_heavy_000.ogg (container opens) from Kenney Impact Sounds,Kenney,https://kenney.nl/assets/impact-sounds,CC0 1.0,2026-11-10
+Loot container with Lid and Open animation (assets/models/container.glb),modelled,blender/scripts/build_props.py,Original work for this project (no third-party content),2026-11-10
+"Kenney Future.ttf (headings: title, menus, HUD numbers, map) from Kenney Fonts",Kenney,https://kenney.nl/assets/kenney-fonts,CC0 1.0,2026-11-10
+"Medical Box model, 1K textures (medical_box)",Poly Haven,https://polyhaven.com/a/medical_box,CC0 1.0,2026-11-10
+"Ammo Box model, 1K textures (ammo_box)",Poly Haven,https://polyhaven.com/a/ammo_box,CC0 1.0,2026-11-10
+"blaster-a.glb (pistol base model, re-textured) from Kenney Blaster Kit",Kenney,https://kenney.nl/assets/blaster-kit,CC0 1.0,2026-11-10
+"blaster-n.glb (rifle base model, re-textured) from Kenney Blaster Kit",Kenney,https://kenney.nl/assets/blaster-kit,CC0 1.0,2026-11-10

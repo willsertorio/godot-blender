@@ -54,6 +54,8 @@ func run(p_main, p_dir: String) -> void:
 	await shot("05_exit_room")
 
 	await _combat(g)
+	await _crate()
+	await _map_view(g)
 	await _overview(g)
 
 	# Walk into the portal: proves the trigger, then the end screen.
@@ -167,6 +169,30 @@ func _stage_enemy(g: DungeonGen, kind: String, d: float) -> Enemy:
 	if best_pos != Vector3.INF:
 		_place(best_pos, e.eye_position() + Vector3.DOWN * 0.15)
 	return e
+
+
+func _crate() -> void:
+	## A container before and after opening (payoff pops out of the lid).
+	var crates := get_tree().get_nodes_in_group("crates")
+	if crates.is_empty():
+		return
+	var c: LootCrate = crates[0]
+	var front := c.global_position - c.global_transform.basis.z * 2.8
+	front.y = 0
+	_place(front + c.global_transform.basis.x * 0.6, c.global_position + Vector3.UP * 0.5)
+	main.player.health = 60.0  # so a health payoff is taken, not left waiting
+	await shot("15_container_closed")
+	c.interact(main.player)
+	await _wait(0.25)
+	await shot("16_container_open", 1)
+	main.player.health = 100.0
+
+
+func _map_view(g: DungeonGen) -> void:
+	## Tab map after the tour so far (several rooms explored, exit found).
+	main.ui.map.visible = true
+	await shot("17_map")
+	main.ui.map.visible = false
 
 
 func _overview(g: DungeonGen) -> void:

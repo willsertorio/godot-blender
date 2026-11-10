@@ -34,6 +34,15 @@ func _build_visual() -> void:
 	cs.position.y = 0.7
 	add_child(cs)
 
+	var model := _adopt_model("res://assets/models/brawler.glb")
+	if model:
+		body = model.find_child("Body", true, false)
+	else:
+		_greybox_body()
+	_build_ring()
+
+
+func _greybox_body() -> void:
 	body = Node3D.new()
 	body.name = "Body"
 	add_child(body)
@@ -61,6 +70,8 @@ func _build_visual() -> void:
 	glow.outer_radius = 0.56
 	_mesh(glow, red, body, Vector3(0, 0.27, 0))
 
+
+func _build_ring() -> void:
 	ring = MeshInstance3D.new()
 	var tor := TorusMesh.new()
 	tor.inner_radius = 0.96

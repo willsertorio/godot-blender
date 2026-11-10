@@ -3,13 +3,18 @@ extends Area3D
 ## A loot payoff lying in the world: "kit" (carried health kit), "ammo" (rifle reserve)
 ## or "health" (immediate). Walk over it to take it. A pickup that would do nothing
 ## (kits full, health full, ammo reserve full) stays on the floor.
-## Greybox look: glowing loot-green shapes; replaced in the hero art pass.
+## Models: kit = Poly Haven medical_box, ammo = Poly Haven ammo_box, health = modelled
+## energy cell (assets/models/*.glb), spinning above a loot-green halo on the floor.
 
 const GREEN := Color("#39FF88")
 const HEALTH_AMOUNT := 35.0
 const AMMO_AMOUNT := 60
 
 var payoff := "health"
+## Radius of the walk-over trigger (crates use a larger one so it can be taken from beside the crate).
+var collect_radius := 0.7
+## Floor halo (off for payoffs that pop out of a crate).
+var show_halo := true
 var visual: Node3D
 var _t := 0.0
 
@@ -20,7 +25,7 @@ func _ready() -> void:
 	collision_mask = Layers.PLAYER
 	var cs := CollisionShape3D.new()
 	var sph := SphereShape3D.new()
-	sph.radius = 0.7
+	sph.radius = collect_radius
 	cs.shape = sph
 	cs.position.y = 0.6
 	add_child(cs)
@@ -31,10 +36,21 @@ func _ready() -> void:
 	body_entered.connect(_on_body)
 
 
+const MODELS := {"kit": "res://assets/models/kit.glb", "ammo": "res://assets/models/ammo.glb",
+	"health": "res://assets/models/health_cell.glb"}
+static var _scenes: Dictionary = {}
+
+
 func _process(delta: float) -> void:
 	_t += delta
-	visual.rotation.y += delta * 1.6
-	visual.position.y = 0.55 + sin(_t * 2.4) * 0.07
+	# body_entered only fires on entry; re-offer to a player already standing in range
+	# (e.g. health was full when they arrived and has dropped since).
+	if fmod(_t, 0.25) < delta:
+		for b in get_overlapping_bodies():
+			if b is Player and try_take(b):
+				return
+	visual.rotation.y += delta * 1.4
+	visual.position.y = 0.35 + sin(_t * 2.4) * 0.06
 
 
 func _on_body(b: Node) -> void:
@@ -66,6 +82,48 @@ func try_take(p: Player) -> bool:
 
 
 func _build() -> void:
+	if show_halo:
+		_halo()
+	var path: String = MODELS[payoff]
+	if ResourceLoader.exists(path):
+		if not _scenes.has(path):
+			_scenes[path] = load(path)
+		var m := (_scenes[path] as PackedScene).instantiate() as Node3D
+		MaterialLib.rebind_tree(m)
+		visual.add_child(m)
+		return
+	_build_greybox()
+
+
+func _halo() -> void:
+	## Glowing ring on the floor, so loot reads against the dark deck from across a room.
+	var ring := MeshInstance3D.new()
+	var tor := TorusMesh.new()
+	tor.inner_radius = 0.36
+	tor.outer_radius = 0.42
+	tor.rings = 32
+	ring.mesh = tor
+	ring.scale = Vector3(1, 0.15, 1)
+	ring.position.y = 0.02
+	ring.material_override = MaterialLib.neon(GREEN, 2.2)
+	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(ring)
+	var disc := MeshInstance3D.new()
+	var q := PlaneMesh.new()
+	q.size = Vector2(1.1, 1.1)
+	disc.mesh = q
+	disc.position.y = 0.015
+	var dm := StandardMaterial3D.new()
+	dm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	dm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	dm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	dm.albedo_texture = WeaponHolder._flash_texture()
+	dm.albedo_color = Color(GREEN, 1.0) * 0.45
+	disc.material_override = dm
+	add_child(disc)
+
+
+func _build_greybox() -> void:
 	var neon := MaterialLib.neon(GREEN, 2.4)
 	var metal := MaterialLib.get_material("PropMetal")
 	match payoff:
