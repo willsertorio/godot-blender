@@ -373,7 +373,10 @@ class WeaponPanel:
 			if on:
 				draw_rect(Rect2(x, 31, 80, 2), cyan)
 		if current == "pistol":
-			draw_string(font_head, Vector2(size.x - 14, 78), "∞", HORIZONTAL_ALIGNMENT_RIGHT, -1, 40, Color.WHITE)
+			# Infinity drawn as two loops: browsers have no system font to fall back on for "∞".
+			var c := Vector2(size.x - 44, 64)
+			draw_arc(c + Vector2(-11, 0), 10.0, 0.0, TAU, 32, Color.WHITE, 3.0, true)
+			draw_arc(c + Vector2(11, 0), 10.0, 0.0, TAU, 32, Color.WHITE, 3.0, true)
 		else:
 			var mc := red if mag == 0 else Color.WHITE
 			draw_string(font_head, Vector2(size.x - 92, 78), "%d" % mag, HORIZONTAL_ALIGNMENT_RIGHT, -1, 38, mc)

@@ -57,12 +57,15 @@ Run Blender scripts headless: `blender -b -P blender/scripts/<script>.py -- <arg
 project.godot        Godot 4.3, GL Compatibility renderer (web-exportable)
 assets/models/       normalized .glb output from Blender (committed)
 assets/textures/     PBR texture sets used by Godot (committed)
-assets/shaders/      Godot shaders (neon, portal, post)
+assets/shaders/      Godot shaders (neon, portal, UI grid, vignette)
+assets/audio/        Kenney CC0 sounds (.ogg)
+assets/fonts/        Kenney Future (CC0)
+build/               web export output (git-ignored)
 assets_src/          raw downloads (git-ignored; re-fetch with the fetch script)
 blender/scripts/     Blender Python: fetch, normalize, model, export
 scenes/              Godot scenes
 scripts/             GDScript
-tools/               capture command, generator check
+tools/               capture, checks (gen, playthrough, combat, fight bot), fetchers, export
 captures/            screenshot output (git-ignored)
 licenses.csv         asset licence log
 ```
@@ -74,11 +77,20 @@ godot --path .                                         # play (title screen)
 godot --path . -- --seed=123 --autostart               # reproduce a dungeon, skip title
 godot --headless -s tools/gen_check.gd -- --count=400  # generator check (must print PASS; ~100 s with the art kit)
 godot --headless -s tools/playthrough.gd -- --count=10 # bot walks spawn -> exit through real collision (enemies off)
-godot --headless -s tools/combat_check.gd              # 43 combat rule checks (lock timer, LOS, weapons, enemies, loot, sounds)
+godot --headless -s tools/combat_check.gd              # 48 rule checks (lock timer, LOS, weapons, enemies, loot, crates, scaling, sounds)
+godot --headless -s tools/fight_bot.gd -- --count=8 --difficulty=2   # balance bot: plays full runs, mortal (slow: ~1 min/run)
+tools/perf_probe.sh [seed]                             # draw calls / objects / triangles in play (FPS is software GL here)
+tools/export_web.sh                                    # web export -> build/web (then: python3 -m http.server 8060 -d build/web)
 tools/capture.sh [seed] [label]                        # capture tour -> captures/latest (old -> captures/prev)
 python3 tools/compare.py                               # prev vs latest contact sheet + change score
 python3 -I tools/fetch_textures.py                     # (re)fetch + pack ambientCG sets, logs licenses.csv
 blender -b -P blender/scripts/build_kit.py -- assets/models   # rebuild kit_env.glb + door.glb
+blender -b -P blender/scripts/build_props.py -- assets/models  # container.glb + portal.glb
+blender -b -P blender/scripts/build_enemies.py -- assets/models  # turret / brawler / pursuer
+blender -b -P blender/scripts/normalize_weapons.py -- assets_src/models/blaster-kit assets/models   # pistol / rifle
+blender -b -P blender/scripts/normalize_pickups.py -- assets_src/models/polyhaven assets/models   # kit / ammo / health_cell
+python3 -I tools/fetch_polyhaven.py medical_box ammo_box  # raw Poly Haven downloads (logs licenses.csv)
+python3 -I tools/set_texture_imports.py                # force VRAM compression + mipmaps on 3D textures (run after adding textures)
 ```
 Add `--greybox` to any run or capture to build with the greybox kit instead of the Blender kit.
 Browser builds take the same options as a URL query: `?seed=123&autostart=1`.
@@ -109,6 +121,35 @@ The ALSA `ERR_CANT_OPEN` error in container logs is the missing audio device; ha
 | `scripts/enemies/turret.gd` `brawler.gd` `pursuer.gd` | The three hostiles (greybox visuals built in code; nodes `Head`/`Muzzle` on the turret) |
 | `scripts/pickup.gd` | `Pickup`: kit / ammo / health payoff; stays on the floor if it would do nothing |
 | `scripts/sfx.gd` | `Sfx`: static sound API (`play`, `play_at`, `loop_3d`, ambience); keys -> Kenney files; `Sfx.log` for tests |
+| `scripts/loot_crate.gd` | `LootCrate`: container (E in 2 m, Lid/Open anim, payoff pops out and is taken if useful), green glow light |
+| `scripts/map_view.gd` | `MapView`: Tab map (explored rooms, hostile rooms + counts, exit once found, walked corridors, doors, player) |
+| `blender/scripts/build_props.py` `build_enemies.py` | Container, portal; turret/brawler/pursuer (node contract in each docstring) |
+| `blender/scripts/normalize_weapons.py` | Kenney blasters -> pistol/rifle: palette-colour face classification into GunMetal/GunPaint/GunGrip, +Y, real size, grip origin, Muzzle, neon |
+| `blender/scripts/normalize_pickups.py` | Poly Haven boxes -> kit/ammo (own textures kept, material `PH_*`), modelled health cell |
+| `tools/fight_bot.gd` | Balance bot (reaction 0.45 s, aim error, no cover; rifle/pistol/reload/kits/crates) |
+
+### HUD and flow
+- HUD: health bar + number, 3 kit slots, weapon panel (slots, mag / reserve, drawn infinity sign, reload bar), ROOMS n / N,
+  exit signal (5 bars by walking distance; metres once the portal was seen or its room entered), objective line,
+  crosshair (red on a lined-up hostile, hit marker), damage flash + low-health vignette. Tab toggles the map (no pause).
+- Fonts: Kenney Future for headings only. It draws K and X like H, so never use it for text with those letters;
+  body text uses the engine default font. Browsers have no system font fallback: avoid non-Latin glyphs (that is why
+  the infinity sign is drawn).
+- End screen: win/loss, score (kills only: turret 100, pursuer 150, brawler 200), kills, rooms explored, next threat level.
+
+### Economy and difficulty
+- Containers: 1-2 per room (1 in spawn), against a wall on a non-doorway edge cell, facing in. Payoffs: kit / ammo (+60) /
+  health (+35); kit weight 4 -> 1 with difficulty (34 % -> 10 % of containers at d0 -> d4).
+- Difficulty per completed mission: +0.5 hostiles per room, +20 % hostile HP. Bot results (8 runs each, no cover):
+  d0 8/8, d1 8/8, d2 8/8, d3 3/8, d4 3/8 wins.
+
+### Performance (web)
+- Build: index.pck 55.8 MB + index.wasm 35.4 MB (8 MB gzipped). Textures are the bulk: 2K albedo + normal (BC5) per set,
+  ORM at half resolution. Further cuts if needed: 1K normals (-21 MB) or Basis Universal.
+- Per frame in play (seed 123): ~210-270 draw calls, ~180-230 k triangles, <= 10 lights (one shadowed omni per nearby room).
+  Room shells don't cast shadows (only pillars, doors, props, enemies); area meshes cut at 64 m, props at 48 m.
+- No threads in the web export (works on any static server, no COOP/COEP headers). Audio starts on the title click.
+- FPS can't be measured in this container (SwiftShader / llvmpipe). Real-GPU frame rate is unverified.
 
 ### Combat rules (tuning lives in each script's `_init` / WEAPONS)
 | | HP | Damage | Lock (s) | Range (m) | Score | Telegraph |
@@ -159,6 +200,8 @@ The ALSA `ERR_CANT_OPEN` error in container logs is the missing audio device; ha
 ## How we work
 
 - Judge visuals in Godot captures, never Blender renders. The browser build is what counts.
+- Never call methods on (or compare against) a node that may have been freed: in the release build that can segfault, and a
+  freed object can compare equal to null. Use `is_instance_valid()`. GDScript lambdas capture locals by value.
 - One change, then capture, check, and move to the next. Commit after each working milestone.
 - GDD gaps are intentional; do not "fix" them: no pause, no interact prompt, ADS slowdown untaught,
   enemies undodgeable.
@@ -171,7 +214,7 @@ The ALSA `ERR_CANT_OPEN` error in container logs is the missing audio device; ha
 - [x] 3. Greybox loop (generator, controller, doors, pistol, portal, title/end screens, gen check, playthrough bot, capture)
 - [x] 4. Environment art (modelled kit + door, ambientCG materials, neon shader, lighting/post pass)
 - [x] 5. Combat + sound (rifle, switching, 3 enemies with telegraphs, damage, deaths, drops, kits, 31 sounds)
-- [ ] 6. Economy and flow
-- [ ] 7. HUD and map
-- [ ] 8. Hero art pass
-- [ ] 9. Web export
+- [x] 6. Economy and flow (containers, payoffs, kits, score, end screen, play again, difficulty curve, balance bot)
+- [x] 7. HUD and map
+- [x] 8. Hero art pass (enemies, weapons, container, pickups, portal)
+- [x] 9. Web export (tools/export_web.sh; tested in Chromium via Playwright)

@@ -39,6 +39,7 @@ func _ready() -> void:
 	MaterialLib.rebind_tree(model)
 	add_child(model)
 	anim = model.find_child("AnimationPlayer", true, false) as AnimationPlayer
+	DungeonBuilder.limit_view_range(self)
 	# Loot glows: a small green light so crates read in dim corners (culled with distance
 	# like the room lights; dims once the crate is empty).
 	glow = OmniLight3D.new()

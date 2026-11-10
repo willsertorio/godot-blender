@@ -74,6 +74,7 @@ func _ready() -> void:
 		if m is ShaderMaterial:
 			_neon_mats.append(m)
 	_hum = Sfx.loop_3d("telegraph", self)
+	DungeonBuilder.limit_view_range(self)
 	_hum.position.y = eye_height
 
 

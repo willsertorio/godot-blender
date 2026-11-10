@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://biy6buube8b06"
-path="res://.godot/imported/ammo_ammo_box_diff_1k.jpg-d619a639786cb3ecab1dfd132cce9385.ctex"
+path.s3tc="res://.godot/imported/ammo_ammo_box_diff_1k.jpg-d619a639786cb3ecab1dfd132cce9385.s3tc.ctex"
+path.etc2="res://.godot/imported/ammo_ammo_box_diff_1k.jpg-d619a639786cb3ecab1dfd132cce9385.etc2.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "6d9f60e4d6d139069126f05dba4ab31e"
@@ -14,15 +16,15 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/ammo_ammo_box_diff_1k.jpg"
-dest_files=["res://.godot/imported/ammo_ammo_box_diff_1k.jpg-d619a639786cb3ecab1dfd132cce9385.ctex"]
+dest_files=["res://.godot/imported/ammo_ammo_box_diff_1k.jpg-d619a639786cb3ecab1dfd132cce9385.s3tc.ctex", "res://.godot/imported/ammo_ammo_box_diff_1k.jpg-d619a639786cb3ecab1dfd132cce9385.etc2.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/hdr_compression=1
-compress/normal_map=0
+compress/normal_map=2
 compress/channel_pack=0
 mipmaps/generate=true
 mipmaps/limit=-1
@@ -34,4 +36,4 @@ process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
-detect_3d/compress_to=1
+detect_3d/compress_to=0

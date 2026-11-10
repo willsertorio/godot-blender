@@ -6,6 +6,7 @@ extends Node
 ##   --autostart     skip the title screen
 ##   --capture=DIR   run the capture tour (scripts/capture.gd) and quit
 ##   --greybox       build with greybox boxes instead of the Blender kit
+##   --perf          log FPS, draw calls, objects and triangles every 2 s (web: ?perf=1)
 ## In the browser the same options come from the URL query: ?seed=N&autostart=1
 
 const NEON_CYAN := Color("#22E5FF")
@@ -139,7 +140,27 @@ func _clear_world() -> void:
 		player = null
 
 
+var _perf_t := 0.0
+
+
+func _perf_log(delta: float) -> void:
+	_perf_t += delta
+	if _perf_t < 2.0:
+		return
+	_perf_t = 0.0
+	var rs := RenderingServer
+	print("[perf] fps=%d draw_calls=%d objects=%d primitives=%d lights=%d" % [
+		Engine.get_frames_per_second(),
+		rs.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),
+		rs.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_OBJECTS_IN_FRAME),
+		rs.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME),
+		get_tree().get_nodes_in_group("culled_lights").filter(func(l): return l.visible).size()
+			+ world.get_node("Lights").get_children().filter(func(l): return l.visible).size()])
+
+
 func _process(_delta: float) -> void:
+	if args.has("perf") and state == "playing":
+		_perf_log(_delta)
 	if state != "playing" or player == null:
 		return
 	var pc := DungeonGen.world_to_cell(player.global_position)
@@ -344,6 +365,8 @@ func _input(event: InputEvent) -> void:
 	if state == "playing" and event is InputEventMouseButton and event.pressed \
 			and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		if player:
+			player.hold_look()
 		get_viewport().set_input_as_handled()
 
 
