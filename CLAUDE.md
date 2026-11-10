@@ -56,7 +56,7 @@ rule no longer applies to the environment):
   (FOV 54, near 1 cm, SubViewport overlay under the HUD) with a key + rim light that only light that layer.
   Tracers start where the muzzle appears on screen (`WeaponHolder._muzzle_in_world`).
   Gun maps stay 2K; gun meshes are smooth-shaded by angle (35 deg).
-- Test room: `godot --path . -- --lab` (one room, three frozen targets, invulnerable);
+- Test room: the default when pressing Play (one room, three frozen targets, invulnerable); `--game` for the full game;
   `CAPTURE_ARGS=--lab tools/capture.sh 1 lab` captures hip / ADS / fire / low views of both guns.
 - Exit portal: `build_props.py` gate + MegaKit `Platform_Round1` pad; field = `portal.gdshader`.
 - Enemies (rigs + clips, names via `AnimUtil.play(prefix)`): Turret = `Enemy_Trilobite` (whole model yaws;
@@ -112,9 +112,9 @@ licenses.csv         asset licence log
 ## Commands
 
 ```
-godot --path .                                         # play (title screen)
+godot --path .                                         # TEST ROOM (polish-phase default: one room, frozen targets)
+godot --path . -- --game                               # full game (title screen + dungeon runs)
 godot --path . -- --seed=123 --autostart               # reproduce a dungeon, skip title
-godot --path . -- --lab                                # viewmodel test room
 godot --headless -s tools/gen_check.gd -- --count=400  # generator check (must print PASS; ~100 s with the art kit)
 godot --headless -s tools/playthrough.gd -- --count=10 # bot walks spawn -> exit through real collision (enemies off)
 godot --headless -s tools/combat_check.gd              # 48 rule checks (lock timer, LOS, weapons, enemies, loot, crates, scaling, sounds)

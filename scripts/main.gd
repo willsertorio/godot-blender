@@ -6,7 +6,9 @@ extends Node
 ##   --autostart     skip the title screen
 ##   --capture=DIR   run the capture tour (scripts/capture.gd) and quit
 ##   --greybox       build with greybox boxes instead of the Blender kit
-##   --lab           test room: one room, frozen targets, invulnerable (with --capture: the lab tour)
+##   (no args)       test room: one room, frozen targets, invulnerable (polish phase default)
+##   --game          title screen + full dungeon runs
+##   --lab           with --capture: the test-room capture tour
 ##   --perf          log FPS, draw calls, objects and triangles every 2 s (web: ?perf=1)
 ## In the browser the same options come from the URL query: ?seed=N&autostart=1
 
@@ -76,12 +78,14 @@ func _ready() -> void:
 			cap.run_lab(self, args.capture)
 		else:
 			cap.run(self, args.capture)
-	elif args.has("lab"):
-		start_lab()
 	elif args.has("autostart"):
 		start_run()
-	else:
+	elif args.has("game"):
 		ui.show_title()
+	else:
+		# Polish phase: pressing Play opens the one-room test room. `--game` (or ?game=1 on the
+		# web) restores the title screen and full dungeon runs.
+		start_lab()
 
 
 func current_seed() -> int:
