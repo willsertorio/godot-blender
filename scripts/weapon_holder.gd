@@ -15,14 +15,14 @@ const WEAPONS := {
 	"pistol": {"damage": 25.0, "interval": 0.24, "auto": false, "spread": 0.022, "ads_spread": 0.003,
 		"range": 90.0, "sound": "pistol", "kick": 1.0,
 		"model": "res://assets/models/pistol.glb", "hip": Vector3(0.16, -0.15, -0.4), "ads": Vector3(0.0, -0.085, -0.66),
-		# Arm poses in the weapon frame (Godot axes: -Z = barrel, +Y = up; origin = grip): [position, rotation deg].
-		"arm_r": [Vector3(0, -0.03, -0.045), Vector3(-20, 0, 0), 0.85], "arm_l": []},  # one-handed
+		# Grip markers (weapon frame: -Z barrel, +Y up): [position, rotation deg]; [] = no hand.
+		"grip_r": [Vector3(0, -0.03, 0.012), Vector3(-18, 0, 0), Vector3.LEFT], "grip_l": []},
 	"rifle": {"damage": 12.0, "interval": 0.095, "auto": true, "spread": 0.035, "ads_spread": 0.009,
 		"range": 90.0, "sound": "rifle", "kick": 0.55, "mag": 30, "reload": 1.5,
 		"model": "res://assets/models/rifle.glb", "hip": Vector3(0.18, -0.2, -0.44), "ads": Vector3(0.0, -0.205, -0.48),
-		"arm_r": [Vector3(0, -0.035, -0.04), Vector3(-15, 0, 0), 0.85],
-		# support hand under the handguard, palm up, grip axis along the barrel
-		"arm_l": [Vector3(0.035, 0.03, -0.3), Basis(Vector3(0, 0.85, 0), Vector3(0, 0, -0.85), Vector3(-0.85, 0, 0))]},
+		"grip_r": [Vector3(0, -0.035, 0.0), Vector3(-15, 0, 0), Vector3.LEFT],
+		# support hand under the handguard: handle axis along the barrel, palm up
+		"grip_l": [Vector3(0, -0.03, -0.3), Vector3(0, 0, 0), Vector3.UP]},
 }
 const RESERVE_START := 60
 const RESERVE_MAX := 240
@@ -74,6 +74,7 @@ func setup(p: Player) -> void:
 	view_model = models[current]
 	for k in models:
 		ViewmodelRig.adopt(models[k])
+
 
 	flash_light = OmniLight3D.new()
 	flash_light.light_color = Color(0.6, 0.95, 1.0)
@@ -274,26 +275,17 @@ func _impact(p: Vector3, n: Vector3) -> void:
 	tw.tween_callback(spark.queue_free)
 
 
-const ARMS := {"R": "res://assets/models/arm_r.glb", "L": "res://assets/models/arm_l.glb"}
-static var _arm_scenes: Dictionary = {}
-
-
-## Gloved arms (Quaternius Universal Base Characters, cut and posed by build_arms.py) on a
-## weapon model: ArmR on the grip, ArmL per weapon. Skeletons keep their bones (hand_r,
-## index_01_r, ...) for the motion-design step.
+## Arms baked onto each gun by blender/scripts/pose_wrad.py (WRAD ARMS, CC0). Parented to the
+## gun at -hip, so every gun motion (recoil, sway, reload tilt) carries the hands with it.
 func _attach_arms(model: Node3D, w: String) -> void:
-	for side in ["R", "L"]:
-		var path: String = ARMS[side]
-		var pose: Array = WEAPONS[w]["arm_" + side.to_lower()]
-		if pose.is_empty() or not ResourceLoader.exists(path):
-			continue
-		if not _arm_scenes.has(side):
-			_arm_scenes[side] = load(path)
-		var inst := (_arm_scenes[side] as PackedScene).instantiate() as Node3D
-		MaterialLib.rebind_tree(inst)
-		inst.name = "Arm" + side
-		model.add_child(inst)
-		set_arm_pose(inst, pose)
+	var path := "res://assets/models/arms_%s.glb" % w
+	if not ResourceLoader.exists(path):
+		return
+	var a := (load(path) as PackedScene).instantiate() as Node3D
+	a.name = "Arms"
+	model.add_child(a)
+	a.position = -(WEAPONS[w].hip as Vector3)
+	MaterialLib.rebind_tree(a)
 
 
 ## pose = [position, rotation(, scale)]: rotation is Euler degrees (Vector3) or a Basis.
@@ -348,19 +340,19 @@ func _reload_pose(f: float) -> Array:
 	return [pos, rot]
 
 
+## Reload: the support arm swings down out of view and back (rotation on its bicep bone).
 func _support_hand(f: float) -> void:
-	var arm := view_model.get_node_or_null("ArmL") as Node3D
-	if arm == null:
+	var sk := view_model.find_child("Skeleton3D", true, false) as Skeleton3D
+	if sk == null:
 		return
-	var pose: Array = WEAPONS[current].arm_l
-	if pose.is_empty():
+	var b := sk.find_bone("bicep.l")
+	if b < 0:
 		return
-	set_arm_pose(arm, pose)
-	if f > 0.0:
-		# Hand leaves for the mag pouch (out of view), comes back with the new one.
-		var away := smoothstep(0.15, 0.32, f) * (1.0 - smoothstep(0.48, 0.66, f))
-		arm.position += Vector3(-0.08, -0.22, 0.12) * away
-		arm.rotate_object_local(Vector3.FORWARD, deg_to_rad(40) * away)
+	if not has_meta("bicep_rest_%s" % current):
+		set_meta("bicep_rest_%s" % current, sk.get_bone_pose_rotation(b))
+	var rest: Quaternion = get_meta("bicep_rest_%s" % current)
+	var away := smoothstep(0.15, 0.32, f) * (1.0 - smoothstep(0.48, 0.66, f)) if f > 0.0 else 0.0
+	sk.set_bone_pose_rotation(b, Quaternion(Vector3(0.4, 0, 1).normalized(), deg_to_rad(-55) * away) * rest)
 
 
 func _animate(delta: float) -> void:

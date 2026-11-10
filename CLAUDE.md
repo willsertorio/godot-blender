@@ -46,12 +46,16 @@ rule no longer applies to the environment):
   (multiply operator; the default ADD operator makes the whole surface glow). Enemy glow/beams `#FF4A2B`.
 - Walls are 5 m (bottom strip + 3 m wall + 2 m top band); wall geometry reaches 0.45 m into the cell
   (`DungeonGen.WALL_DEPTH`). Rooms pick one wall style (astra / band / window) and one floor (A/B/C).
-- Player arms: `blender/scripts/build_arms.py -- assets_src/quaternius assets/models` cuts the forearms + hands
-  out of Quaternius **Universal Base Characters** (`Superhero_Male_FullBody`, UE-style rig with finger chains),
-  shades them as gloves/sleeves (character normal map kept), adds cuff + vambrace, curls the fingers around a
-  vertical grip, bends the wrist 60 deg (sleeve drops out of frame), bakes that as rest pose and exports
-  `arm_r.glb` / `arm_l.glb` (origin = fist centre, hand along +Y). Bones keep UE names (`hand_r`, `index_01_r`...)
-  for animation. Posed per weapon in `WeaponHolder.WEAPONS[*].arm_r/arm_l` (empty = hidden; the pistol is one-handed).
+- Player arms: **WRAD ARMS** by wriks (CC0, https://wriks.itch.io/wrad-arms; raw in `assets_src/wrad/`).
+  `normalize_wrad.py` scales it to metres (arm 0.55 m) with the `head` bone at the origin -> `arms_wrad.glb`.
+  `pose_wrad.py` bakes a hold pose per gun -> `arms_pistol.glb` / `arms_rifle.glb`: in camera space with the gun
+  at its hip offset, each grip gives a handle point, finger direction and knuckle line (index -> pinky); the hand
+  frame is measured from the bones, Blender IK (pole for the elbow) + copy-rotation put the wrist there, fingers
+  curl (negative rotation about the bone X axis on this rig), and the pose is baked as rest. Arms without a grip
+  are cut from that weapon's mesh. Off-screen cheat: the left shoulder is moved forward for the rifle handguard.
+  Hands use material ArmGlove, arms ArmSuit (fabric shader). In Godot the arms are children of the gun at -hip
+  (`WeaponHolder._attach_arms`), so recoil/sway/reload move both; the reload drops the left arm by rotating `bicep.l`.
+  The .blend in the pack is from a newer Blender (unreadable by 4.2); use its .glb.
 - Viewmodel (`scripts/viewmodel_rig.gd`): weapon + arms render on layer 5 through their own camera
   (FOV 54, near 1 cm, SubViewport overlay under the HUD) with a key + rim light that only light that layer.
   Tracers start where the muzzle appears on screen (`WeaponHolder._muzzle_in_world`).
@@ -138,7 +142,8 @@ python3 tools/compare.py                               # prev vs latest contact 
 blender -b -P blender/scripts/normalize_quaternius.py -- assets_src/quaternius assets/models  # all pack assets + q_materials.json
 python3 -I tools/pack_quaternius_textures.py           # resize/recompress the copied pack textures (run right after)
 blender -b -P blender/scripts/build_props.py -- assets/models  # portal.glb
-blender -b -P blender/scripts/build_arms.py -- assets_src/quaternius assets/models   # arm_r.glb + arm_l.glb
+blender -b -P blender/scripts/normalize_wrad.py -- assets_src/wrad/arms.glb assets/models   # arms_wrad.glb
+blender -b -P blender/scripts/pose_wrad.py -- assets/models   # arms_pistol.glb + arms_rifle.glb (hold poses)
 python3 -I tools/set_texture_imports.py                # force VRAM compression + mipmaps on 3D textures (run after adding textures)
 ```
 Add `--greybox` to any run or capture to build with the greybox kit instead of the Blender kit.
@@ -159,7 +164,7 @@ The ALSA `ERR_CANT_OPEN` error in container logs is the missing audio device; ha
 | `scripts/material_lib.gd` | `MaterialLib`: material name -> Godot material (Quaternius table + emissive masks; `Neon*` -> neon shader; `PortalField`) |
 | `blender/scripts/lib_hardsurface.py` | Blender helpers: bevelled cuboid parts, weighted normals, metre box-UVs, named materials, glb export |
 | `blender/scripts/normalize_quaternius.py` | Quaternius packs -> our glbs + material table (see Art direction) |
-| `blender/scripts/build_arms.py` | First-person arms |
+| `blender/scripts/normalize_wrad.py` `pose_wrad.py` | WRAD ARMS -> per-weapon posed arms |
 | `tools/pack_quaternius_textures.py` | Texture budget for the web build |
 | `scripts/player.gd` | `Player`: CharacterBody3D, WASD + mouse look, ADS (slow + narrow FOV), interact (nearest in range, no prompt) |
 | `scripts/weapon_holder.gd` | `WeaponHolder`: hitscan from camera, first hit on WORLD or HOSTILE only |

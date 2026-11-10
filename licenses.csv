@@ -103,8 +103,6 @@ Exit portal gate ring and field disc (assets/models/portal.glb; base pad is Quat
 Neon shader (assets/shaders/neon.gdshader),modelled,assets/shaders/neon.gdshader,Original work for this project (no third-party content),2026-11-10
 Portal field shader (assets/shaders/portal.gdshader),modelled,assets/shaders/portal.gdshader,Original work for this project (no third-party content),2026-11-10
 "Title / end screen grid and HUD vignette shaders (assets/shaders/ui_grid.gdshader, ui_vignette.gdshader)",modelled,assets/shaders/ui_grid.gdshader,Original work for this project (no third-party content),2026-11-10
-"Superhero_Male_FullBody (forearms, hands and finger rig; cut, re-shaded as gloves/sleeves, posed) -> assets/models/arm_r.glb, arm_l.glb, from Quaternius Universal Base Characters",Quaternius,https://quaternius.itch.io/universal-base-characters,CC0 1.0,2026-11-10
-T_Superhero_Male_Normal texture (embedded in arm_r.glb / arm_l.glb) from Quaternius Universal Base Characters,Quaternius,https://quaternius.itch.io/universal-base-characters,CC0 1.0,2026-11-10
-Arm cuffs and vambrace plates added to the Quaternius forearms (arm_r.glb / arm_l.glb),modelled,blender/scripts/build_arms.py,Original work for this project (no third-party content),2026-11-10
 "Fabric045 (1K PBR texture, sleeve fabric detail) -> assets/textures/fabric/Fabric045/",ambientCG,https://ambientcg.com/view?id=Fabric045,CC0 1.0,2026-11-10
 "Leather031 (1K PBR texture, glove leather detail) -> assets/textures/fabric/Leather031/",ambientCG,https://ambientcg.com/view?id=Leather031,CC0 1.0,2026-11-10
+"WRAD ARMS first-person arms (rig, mesh, UVs) -> assets/models/arms_wrad.glb, arms_pistol.glb, arms_rifle.glb (posed per weapon, re-shaded as gloves/sleeves)",wriks (itch.io),https://wriks.itch.io/wrad-arms,CC0 1.0,2026-11-10
