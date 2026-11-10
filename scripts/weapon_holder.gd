@@ -24,6 +24,8 @@ func setup(p: Player) -> void:
 	player = p
 	view_model = _greybox_pistol()
 	add_child(view_model)
+	for mi in view_model.find_children("*", "MeshInstance3D", true, false):
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	muzzle = view_model.get_node("Muzzle")
 	flash = OmniLight3D.new()
 	flash.light_color = Color("#22E5FF")

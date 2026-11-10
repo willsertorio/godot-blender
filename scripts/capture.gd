@@ -80,6 +80,8 @@ func _overview(g: DungeonGen) -> void:
 	cam.global_position = Vector3(mid.x, 60, mid.y)
 	cam.rotation_degrees.x = -90
 	cam.current = true
+	main.light_cull_enabled = false
+	main.cull_lights()
 	var env: Environment = main.get_node("WorldEnvironment").environment
 	var amb := env.ambient_light_energy
 	env.ambient_light_energy = 1.5
@@ -89,6 +91,7 @@ func _overview(g: DungeonGen) -> void:
 	env.ambient_light_energy = amb
 	cam.queue_free()
 	main.player.camera.current = true
+	main.light_cull_enabled = true
 
 
 func _place(pos: Vector3, look: Vector3) -> void:
@@ -96,6 +99,7 @@ func _place(pos: Vector3, look: Vector3) -> void:
 	p.global_position = pos
 	p.velocity = Vector3.ZERO
 	p.look_at_point(look)
+	main.cull_lights()
 
 
 func _open_doors() -> void:

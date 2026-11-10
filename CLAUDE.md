@@ -72,11 +72,14 @@ licenses.csv         asset licence log
 ```
 godot --path .                                         # play (title screen)
 godot --path . -- --seed=123 --autostart               # reproduce a dungeon, skip title
-godot --headless -s tools/gen_check.gd -- --count=400  # generator check (must print PASS)
+godot --headless -s tools/gen_check.gd -- --count=400  # generator check (must print PASS; ~100 s with the art kit)
 godot --headless -s tools/playthrough.gd -- --count=10 # bot walks spawn -> exit through real collision
 tools/capture.sh [seed] [label]                        # capture tour -> captures/latest (old -> captures/prev)
 python3 tools/compare.py                               # prev vs latest contact sheet + change score
+python3 -I tools/fetch_textures.py                     # (re)fetch + pack ambientCG sets, logs licenses.csv
+blender -b -P blender/scripts/build_kit.py -- assets/models   # rebuild kit_env.glb + door.glb
 ```
+Add `--greybox` to any run or capture to build with the greybox kit instead of the Blender kit.
 Browser builds take the same options as a URL query: `?seed=123&autostart=1`.
 Run `godot --headless --editor --quit` once after adding/changing assets so imports exist.
 The ALSA `ERR_CANT_OPEN` error in container logs is the missing audio device; harmless.
@@ -88,7 +91,12 @@ The ALSA `ERR_CANT_OPEN` error in container logs is the missing audio device; ha
 | `scenes/main.tscn` + `scripts/main.gd` | Game flow (title, run, end, again), input map, seed/args, run stats, difficulty, environment |
 | `scripts/dungeon_gen.gd` | `DungeonGen`: pure-data layout from (seed, difficulty): rooms, corridors, doorways, doors, pillars, spawns, exit |
 | `scripts/dungeon_builder.gd` | `DungeonBuilder`: layout -> nodes. Per-area merged meshes (Compatibility = max 8 lights per object), box collision, doors, lights, portal |
-| `scripts/kit_greybox.gd` | `KitGreybox`: greybox piece meshes + collision boxes. A Blender kit must expose the same `get_mesh(piece)` / `get_collision(piece)` |
+| `scripts/kit_art.gd` | `KitArt` (default kit): meshes from `kit_env.glb` by node name, `door_scene()` from `door.glb`, collision boxes |
+| `scripts/kit_greybox.gd` | `KitGreybox`: greybox stand-ins with the same interface (`--greybox`) |
+| `scripts/material_lib.gd` | `MaterialLib`: Blender material name -> Godot material (ambientCG ORM sets, tiling, tint; `Neon*` -> neon shader) |
+| `blender/scripts/lib_hardsurface.py` | Blender helpers: bevelled cuboid parts, weighted normals, metre box-UVs, named materials, glb export |
+| `blender/scripts/build_kit.py` | Environment kit + door |
+| `tools/fetch_textures.py` | ambientCG fetch (CC0 check on the asset page) and ORM packing into `assets/textures/<id>/` |
 | `scripts/player.gd` | `Player`: CharacterBody3D, WASD + mouse look, ADS (slow + narrow FOV), interact (nearest in range, no prompt) |
 | `scripts/weapon_holder.gd` | `WeaponHolder`: hitscan from camera, first hit on WORLD or HOSTILE only |
 | `scripts/door.gd` | `Door`: closed blocks WORLD layer; E opens, stays open |
@@ -104,11 +112,24 @@ The ALSA `ERR_CANT_OPEN` error in container logs is the missing audio device; ha
   half the corridors (always on the first corridor out of spawn). Pillars at the 4 inset vertices of rooms 5x5 and up.
 - Difficulty (missions completed): +1 hostile per room per level; health-kit loot weight falls 4 -> 1.
 
+### Materials and lighting (tuned in Godot)
+- Blender exports material *names* only (`export_image_format=NONE`); `MaterialLib` binds textures by name.
+  Current sets: WallPanel=Metal046A, WallTrim=Metal028, DoorMetal=Metal038, Floor=DiamondPlate008A,
+  Ceiling=MetalPlates015B, PropMetal=Metal029 (1K). Neon uses `assets/shaders/neon.gdshader` (unshaded HDR + slow shimmer).
+- Keep metalness moderate (0.3-0.45 on large surfaces): there are no reflection probes in Compatibility, so very
+  metallic surfaces go black. A dim procedural sky provides reflections only.
+- Tonemapper is Filmic. ACES crushed the dark midtones and washed the neon to white.
+- Lights: rooms of 4+ cells per side get 2 x 2 ceiling omnis, smaller rooms 1. The one nearest the centre casts shadows.
+  One unshadowed omni per corridor. `main.gd` hides lights beyond range+10 m of the player; the renderable-light
+  cap is raised to 96 as a backstop (Compatibility drops lights silently past the cap).
+- Ceiling fixtures (`ceiling_light`) sit on every other cell; plain `ceiling` elsewhere.
+
 ### Kit piece frames (Godot space; the Blender kit must match)
 - `floor`/`ceiling`: origin at cell centre; floor top y=0, ceiling underside y=4.
 - `wall`, `doorframe`: origin at the edge midpoint on the floor, spans x -2..2, local -Z faces into the cell
   (Blender: +Y faces into the room), thickness extends toward +Z (outside).
-- `pillar`: origin at the grid vertex. `door_panel`: 2.4 x 3 m, origin at the bottom centre of the opening.
+- `pillar`: origin at the grid vertex (0.9 m footprint). `door_panel`: 2.4 x 3 m, origin at the bottom centre of the opening.
+- Art-kit doorframes protrude 6 cm each side of the wall; collision boxes in `kit_art.gd` match.
 
 ## How we work
 
@@ -123,7 +144,7 @@ The ALSA `ERR_CANT_OPEN` error in container logs is the missing audio device; ha
 - [x] 2. Asset plan (approved: model the room/corridor kit, door, pillars, enemies, container, health cell, portal;
       Kenney Blaster Kit for the pistol and rifle; Poly Haven `medical_box` and `ammo_box` for pickups; ambientCG textures)
 - [x] 3. Greybox loop (generator, controller, doors, pistol, portal, title/end screens, gen check, playthrough bot, capture)
-- [ ] 4. Environment art
+- [x] 4. Environment art (modelled kit + door, ambientCG materials, neon shader, lighting/post pass)
 - [ ] 5. Combat
 - [ ] 6. Economy and flow
 - [ ] 7. HUD and map

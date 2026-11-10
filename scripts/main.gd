@@ -5,6 +5,7 @@ extends Node
 ##   --seed=N        first dungeon uses seed N (later runs use N+1, N+2, ...)
 ##   --autostart     skip the title screen
 ##   --capture=DIR   run the capture tour (scripts/capture.gd) and quit
+##   --greybox       build with greybox boxes instead of the Blender kit
 ## In the browser the same options come from the URL query: ?seed=N&autostart=1
 
 const NEON_CYAN := Color("#22E5FF")
@@ -21,6 +22,12 @@ var world: Node3D
 var layout: DungeonGen
 var player: Player
 var ui: GameUI
+
+## Lights further than this beyond their own range are hidden. The Compatibility
+## renderer has a global cap on renderable lights and every live light costs on the web.
+const LIGHT_CULL_MARGIN := 10.0
+var light_cull_enabled := true
+var _cull_timer := 0.0
 
 # Run stats
 var kills := 0
@@ -56,7 +63,7 @@ func current_seed() -> int:
 func start_run() -> void:
 	_clear_world()
 	layout = DungeonGen.new().generate(current_seed(), difficulty)
-	world = DungeonBuilder.new().build(layout)
+	world = DungeonBuilder.new(KitGreybox.new() if args.has("greybox") else null).build(layout)
 	add_child(world)
 	var portal: ExitPortal = world.get_node("ExitPortal")
 	portal.reached.connect(func(): end_run(true))
@@ -105,6 +112,19 @@ func _process(_delta: float) -> void:
 	if r >= 0 and not visited.has(r):
 		visited[r] = true
 	ui.update_hud(self)
+	_cull_timer -= _delta
+	if _cull_timer <= 0.0:
+		_cull_timer = 0.15
+		cull_lights()
+
+
+func cull_lights() -> void:
+	var lights := world.get_node_or_null("Lights")
+	if lights == null:
+		return
+	var eye := player.global_position
+	for l: OmniLight3D in lights.get_children():
+		l.visible = not light_cull_enabled or l.global_position.distance_to(eye) < l.omni_range + LIGHT_CULL_MARGIN
 
 
 func _input(event: InputEvent) -> void:
@@ -116,19 +136,42 @@ func _input(event: InputEvent) -> void:
 
 
 func _setup_environment() -> void:
+	## Lighting / post: dark background, cool ambient fill, a dim sky used only for
+	## metal reflections, depth fog, ACES tonemap and HDR glow so neon blooms.
 	var we := WorldEnvironment.new()
 	we.name = "WorldEnvironment"
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.01, 0.012, 0.018)
+	env.background_color = Color(0.008, 0.01, 0.016)
+	var sky := Sky.new()
+	var sm := ProceduralSkyMaterial.new()
+	sm.sky_top_color = Color(0.1, 0.16, 0.2)
+	sm.sky_horizon_color = Color(0.25, 0.32, 0.38)
+	sm.ground_bottom_color = Color(0.03, 0.035, 0.04)
+	sm.ground_horizon_color = Color(0.2, 0.26, 0.3)
+	sm.sun_angle_max = 0.0
+	sky.sky_material = sm
+	sky.radiance_size = Sky.RADIANCE_SIZE_64
+	env.sky = sky
+	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.35, 0.42, 0.5)
-	env.ambient_light_energy = 0.35
+	env.ambient_light_color = Color(0.3, 0.4, 0.48)
+	env.ambient_light_energy = 0.6
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.tonemap_exposure = 1.05
 	env.glow_enabled = true
-	env.glow_intensity = 0.8
-	env.glow_bloom = 0.05
-	env.glow_hdr_threshold = 0.9
+	env.glow_intensity = 0.7
+	env.glow_strength = 1.0
+	env.glow_bloom = 0.02
+	env.glow_hdr_threshold = 1.0
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
+	env.fog_enabled = true
+	env.fog_light_color = Color(0.03, 0.06, 0.08)
+	env.fog_density = 0.012
+	env.fog_sky_affect = 0.0
+	env.adjustment_enabled = true
+	env.adjustment_contrast = 1.06
+	env.adjustment_saturation = 1.05
 	we.environment = env
 	add_child(we)
 

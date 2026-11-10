@@ -35,6 +35,7 @@ func _init() -> void:
 
 	_meshes["floor"] = _build([[mat_floor, AABB(Vector3(-2, -0.2, -2), Vector3(4, 0.2, 4))]])
 	_meshes["ceiling"] = _build([[mat_wall, AABB(Vector3(-2, 4, -2), Vector3(4, 0.2, 4))]])
+	_meshes["ceiling_light"] = _meshes["ceiling"]
 	_meshes["wall"] = _build([
 		[mat_wall, AABB(Vector3(-2, 0, 0), Vector3(4, 4, 0.3))],
 		[mat_neon, AABB(Vector3(-2, 2.95, -0.03), Vector3(4, 0.06, 0.03))],

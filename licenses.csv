@@ -1,1 +1,10 @@
 name,source,url,license,date
+MetalPlates015B (2K PBR texture),ambientCG,https://ambientcg.com/view?id=MetalPlates015B,CC0 1.0,2026-11-10
+DiamondPlate008A (2K PBR texture),ambientCG,https://ambientcg.com/view?id=DiamondPlate008A,CC0 1.0,2026-11-10
+Metal029 (1K PBR texture),ambientCG,https://ambientcg.com/view?id=Metal029,CC0 1.0,2026-11-10
+Metal046A (2K PBR texture),ambientCG,https://ambientcg.com/view?id=Metal046A,CC0 1.0,2026-11-10
+Metal028 (2K PBR texture),ambientCG,https://ambientcg.com/view?id=Metal028,CC0 1.0,2026-11-10
+Metal038 (2K PBR texture),ambientCG,https://ambientcg.com/view?id=Metal038,CC0 1.0,2026-11-10
+"Environment kit: Floor, Ceiling, CeilingLight, Wall, Doorframe, Pillar (assets/models/kit_env.glb)",modelled,blender/scripts/build_kit.py,Original work for this project (no third-party content),2026-11-10
+Door with sliding Panel and Open animation (assets/models/door.glb),modelled,blender/scripts/build_kit.py,Original work for this project (no third-party content),2026-11-10
+Neon shader (assets/shaders/neon.gdshader),modelled,assets/shaders/neon.gdshader,Original work for this project (no third-party content),2026-11-10

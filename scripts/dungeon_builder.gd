@@ -10,11 +10,19 @@ extends RefCounted
 const CELL := DungeonGen.CELL
 const CEILING_LAYER := 2  # visual layer bit for ceiling meshes
 
-var kit  # KitGreybox or a later kit with get_mesh()/get_collision()
+var kit  # KitArt (default) or KitGreybox: get_mesh(), get_collision(), optional door_scene()
+
+static var _art_kit: KitArt
+
+
+static func default_kit():
+	if _art_kit == null:
+		_art_kit = KitArt.new()
+	return _art_kit
 
 
 func _init(p_kit = null) -> void:
-	kit = p_kit if p_kit != null else KitGreybox.new()
+	kit = p_kit if p_kit != null else default_kit()
 
 
 static func edge_transform(c: Vector2i, d: Vector2i) -> Transform3D:
@@ -38,7 +46,9 @@ func build(g: DungeonGen) -> Node3D:
 		var area := ("r%d" if e.t == DungeonGen.T_ROOM else "c%d") % e.id
 		var xf := Transform3D(Basis(), DungeonGen.cell_center(c))
 		_add(pieces, area, "floor", xf)
-		_add(pieces, "ceil_" + area, "ceiling", xf)
+		# Light fixtures on every other cell (checkerboard on both axes) to keep the ceiling calm.
+		var lit := posmod(c.x, 2) == 0 and posmod(c.y, 2) == 0 if e.t == DungeonGen.T_ROOM else posmod(c.x + c.y, 2) == 0
+		_add(pieces, "ceil_" + area, "ceiling_light" if lit else "ceiling", xf)
 		for d in DungeonGen.DIRS:
 			var n: Vector2i = c + d
 			if not g.is_floor(n):
@@ -158,9 +168,13 @@ func _build_doors(g: DungeonGen, root: Node3D) -> void:
 		var door := Door.new()
 		door.name = "Door%d" % dw.corridor
 		door.transform = edge_transform(c, d)
-		var panel := MeshInstance3D.new()
-		panel.name = "Panel"
-		panel.mesh = kit.get_mesh("door_panel")
+		var panel: Node3D
+		if kit.has_method("door_scene"):
+			panel = kit.door_scene()  # glb root holding Panel + AnimationPlayer("Open")
+		else:
+			panel = MeshInstance3D.new()
+			panel.name = "Panel"
+			panel.mesh = kit.get_mesh("door_panel")
 		door.setup(panel, kit.get_collision("door_panel"))
 		door.set_meta("corridor", dw.corridor)
 		door.set_meta("room", g.room_at(c))
@@ -168,24 +182,44 @@ func _build_doors(g: DungeonGen, root: Node3D) -> void:
 
 
 func _build_lights(g: DungeonGen, root: Node3D) -> void:
+	## Rooms: up to 2 x 2 ceiling lights (one per quadrant of larger rooms); the light
+	## nearest the centre casts shadows. Corridors: one unshadowed light at the midpoint.
+	## Keeps every area mesh under the Compatibility limit of 8 lights per object.
 	var lights := Node3D.new()
 	lights.name = "Lights"
 	root.add_child(lights)
 	for r in g.rooms:
-		var l := OmniLight3D.new()
-		l.name = "RoomLight%d" % r.id
-		l.position = r.center() + Vector3.UP * 3.4
-		l.omni_range = maxf(r.rect.size.x, r.rect.size.y) * CELL * 0.85
-		l.omni_attenuation = 1.2
-		l.light_energy = 1.6
-		l.light_color = Color(0.85, 0.93, 1.0)
-		lights.add_child(l)
+		var nx := 2 if r.rect.size.x >= 4 else 1
+		var nz := 2 if r.rect.size.y >= 4 else 1
+		var size := Vector2(r.rect.size) * CELL
+		var origin := Vector2(r.rect.position) * CELL
+		var centre := r.center()
+		var placed: Array[OmniLight3D] = []
+		for ix in nx:
+			for iz in nz:
+				var l := OmniLight3D.new()
+				l.name = "RoomLight%d_%d" % [r.id, placed.size()]
+				var px := origin.x + size.x * (ix + 0.5) / nx
+				var pz := origin.y + size.y * (iz + 0.5) / nz
+				l.position = Vector3(px, 3.55, pz)
+				var span := maxf(size.x / nx, size.y / nz)
+				l.omni_range = span * 1.15 + 3.0
+				l.omni_attenuation = 0.75
+				l.light_energy = 2.8
+				l.light_specular = 0.6
+				l.light_color = Color(0.82, 0.92, 1.0)
+				lights.add_child(l)
+				placed.append(l)
+		placed.sort_custom(func(a, b): return a.position.distance_to(centre) < b.position.distance_to(centre))
+		placed[0].shadow_enabled = true
+		placed[0].shadow_bias = 0.08
 	for co in g.corridors:
 		var mid: Vector2i = co.cells[co.cells.size() / 2]
 		var l := OmniLight3D.new()
 		l.name = "CorridorLight%d" % co.id
-		l.position = DungeonGen.cell_center(mid) + Vector3.UP * 3.4
-		l.omni_range = 9.0
-		l.light_energy = 0.9
-		l.light_color = Color(0.6, 0.9, 1.0)
+		l.position = DungeonGen.cell_center(mid) + Vector3.UP * 3.5
+		l.omni_range = co.cells.size() * CELL * 0.6 + 4.0
+		l.light_energy = 1.4
+		l.light_specular = 0.5
+		l.light_color = Color(0.7, 0.92, 1.0)
 		lights.add_child(l)
