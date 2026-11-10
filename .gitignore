@@ -1,0 +1,11 @@
+# Godot
+.godot/
+*.import.tmp
+export_presets.cfg.bak
+build/
+# Raw downloads (re-fetch with blender/scripts/fetch_assets.py); only normalized output is committed
+assets_src/
+# Capture output (regenerate with tools/capture.sh)
+captures/
+# Blender backups
+*.blend1
