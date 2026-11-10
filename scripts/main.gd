@@ -29,10 +29,22 @@ const LIGHT_CULL_MARGIN := 10.0
 var light_cull_enabled := true
 var _cull_timer := 0.0
 
+## Hostile toughness per completed mission (numbers grow in DungeonGen).
+const HP_PER_DIFFICULTY := 0.3
+const DROP_CHANCE := 0.35
+var ENEMY_SCRIPTS := {"turret": Turret, "brawler": Brawler, "pursuer": Pursuer}
+
+## Tests can turn enemies off (traversal bot) before start_run().
+var enemies_enabled := true
+var drop_rng := RandomNumberGenerator.new()
+## Door edges that are still closed: [cell_a, cell_b] both ways -> Door. Enemy pathing avoids them.
+var closed_edges: Dictionary = {}
+
 # Run stats
 var kills := 0
 var score := 0
 var visited: Dictionary = {}
+var kills_by_type := {"turret": 0, "brawler": 0, "pursuer": 0}
 
 
 func _ready() -> void:
@@ -42,8 +54,8 @@ func _ready() -> void:
 	ui = GameUI.new()
 	ui.name = "UI"
 	add_child(ui)
-	ui.start_pressed.connect(start_run)
-	ui.again_pressed.connect(start_run)
+	ui.start_pressed.connect(func(): Sfx.play("ui"); start_run())
+	ui.again_pressed.connect(func(): Sfx.play("ui"); start_run())
 	_setup_environment()
 	if args.has("capture"):
 		var cap := CaptureTour.new()
@@ -75,10 +87,17 @@ func start_run() -> void:
 	player.rotation.y = layout.player_yaw
 	player.died.connect(func(): end_run(false))
 	player.damaged.connect(func(_a): ui.flash_damage())
+	player.weapons.hit_hostile.connect(func(killed): ui.hit_marker(killed))
 
 	kills = 0
 	score = 0
 	visited = {}
+	kills_by_type = {"turret": 0, "brawler": 0, "pursuer": 0}
+	drop_rng.seed = hash(current_seed() * 31 + 7)
+	_index_doors()
+	if enemies_enabled:
+		spawn_enemies()
+	Sfx.start_ambience()
 	state = "playing"
 	ui.show_hud()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -90,6 +109,10 @@ func end_run(success: bool) -> void:
 		return
 	state = "ended"
 	player.input_enabled = false
+	Sfx.stop_ambience()
+	Sfx.play("win" if success else "lose")
+	for e in get_tree().get_nodes_in_group("hostiles"):
+		e.frozen = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	ui.show_end(success, score, kills, visited.size(), layout.rooms.size())
 	if success:
@@ -116,6 +139,110 @@ func _process(_delta: float) -> void:
 	if _cull_timer <= 0.0:
 		_cull_timer = 0.15
 		cull_lights()
+
+
+func spawn_enemies() -> void:
+	var holder := Node3D.new()
+	holder.name = "Enemies"
+	world.add_child(holder)
+	var mult := 1.0 + HP_PER_DIFFICULTY * difficulty
+	for sp in layout.enemy_spawns:
+		var e: Enemy = ENEMY_SCRIPTS[sp.type].new()
+		e.setup(self, sp.room, mult)
+		e.position = sp.pos
+		e.rotation.y = randf() * TAU
+		e.died.connect(_on_enemy_died)
+		holder.add_child(e)
+
+
+func spawn_enemy(kind: String, pos: Vector3, room: int = -1) -> Enemy:
+	var e: Enemy = ENEMY_SCRIPTS[kind].new()
+	e.setup(self, room, 1.0 + HP_PER_DIFFICULTY * difficulty)
+	e.position = pos
+	e.died.connect(_on_enemy_died)
+	var holder := world.get_node_or_null("Enemies")
+	if holder == null:
+		holder = Node3D.new()
+		holder.name = "Enemies"
+		world.add_child(holder)
+	holder.add_child(e)
+	return e
+
+
+func _on_enemy_died(e: Enemy) -> void:
+	kills += 1
+	score += e.score_value
+	kills_by_type[e.kind] += 1
+	if drop_rng.randf() < DROP_CHANCE:
+		spawn_pickup(roll_payoff(drop_rng), Vector3(e.global_position.x, 0, e.global_position.z))
+
+
+## Payoff table shared by drops (and containers in step 6): kits thin with difficulty.
+func roll_payoff(rng: RandomNumberGenerator) -> String:
+	var kit_w := maxi(1, 4 - difficulty)
+	var weights := [kit_w, 4, 3]
+	var roll := rng.randi_range(1, kit_w + 7)
+	for i in 3:
+		roll -= weights[i]
+		if roll <= 0:
+			return DungeonGen.LOOT_PAYOFFS[i]
+	return "health"
+
+
+func spawn_pickup(payoff: String, pos: Vector3) -> Pickup:
+	var p := Pickup.new()
+	p.payoff = payoff
+	p.position = pos
+	world.add_child(p)
+	return p
+
+
+func hostiles_alive() -> int:
+	var n := 0
+	for e in get_tree().get_nodes_in_group("hostiles"):
+		if not e.dead:
+			n += 1
+	return n
+
+
+func _index_doors() -> void:
+	closed_edges = {}
+	for door: Door in world.get_node("Doors").get_children():
+		var a: Vector2i = door.get_meta("room_cell")
+		var b: Vector2i = door.get_meta("corr_cell")
+		closed_edges[[a, b]] = door
+		closed_edges[[b, a]] = door
+		door.opened.connect(func():
+			closed_edges.erase([a, b])
+			closed_edges.erase([b, a])
+			Sfx.play_at("door", door.global_position + Vector3.UP * 1.5))
+
+
+## Next cell on a shortest floor path from `from` to `to`, not crossing closed doors.
+## Returns `from` when already there or unreachable.
+func nav_next_cell(from: Vector2i, to: Vector2i) -> Vector2i:
+	if from == to or not layout.is_floor(from) or not layout.is_floor(to):
+		return from
+	var prev := {from: from}
+	var q: Array[Vector2i] = [from]
+	var found := false
+	while q.size() > 0:
+		var c: Vector2i = q.pop_front()
+		if c == to:
+			found = true
+			break
+		for d in DungeonGen.DIRS:
+			var n: Vector2i = c + d
+			if prev.has(n) or not layout.is_floor(n) or closed_edges.has([c, n]):
+				continue
+			prev[n] = c
+			q.append(n)
+	if not found:
+		return from
+	var c := to
+	while prev[c] != from:
+		c = prev[c]
+	return c
 
 
 func cull_lights() -> void:

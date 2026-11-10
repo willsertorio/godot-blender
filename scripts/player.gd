@@ -5,6 +5,8 @@ extends CharacterBody3D
 
 signal died
 signal damaged(amount: float)
+signal picked_up(payoff: String)
+signal kit_used
 
 const EYE_HEIGHT := 1.6
 const WALK_SPEED := 6.0
@@ -12,12 +14,17 @@ const ADS_SPEED_MULT := 0.45
 const MOUSE_SENS := 0.0022
 const FOV := 80.0
 const RADIUS := 0.4
+const MAX_KITS := 3
+const KIT_HEAL := 40.0
 
 var max_health := 100.0
 var health := 100.0
 var alive := true
 var input_enabled := true
 var ads := false
+var kits := 0
+## Tests / capture tour: take no damage.
+var invulnerable := false
 
 var head: Node3D
 var camera: Camera3D
@@ -27,7 +34,7 @@ var weapons: WeaponHolder
 func _ready() -> void:
 	add_to_group("player")
 	collision_layer = Layers.PLAYER
-	collision_mask = Layers.WORLD
+	collision_mask = Layers.WORLD | Layers.HOSTILE
 	floor_snap_length = 0.3
 	var cs := CollisionShape3D.new()
 	var cap := CapsuleShape3D.new()
@@ -64,6 +71,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		head.rotation.x = clampf(head.rotation.x - event.relative.y * sens, -1.45, 1.45)
 	elif event.is_action_pressed("interact"):
 		_try_interact()
+	elif event.is_action_pressed("use_kit"):
+		use_kit()
 
 
 func _physics_process(delta: float) -> void:
@@ -99,10 +108,23 @@ func _try_interact() -> void:
 		best.interact(self)
 
 
-func take_damage(amount: float) -> void:
-	if not alive:
+## Spend a carried kit. Refused (no kit spent) at full health.
+func use_kit() -> bool:
+	if kits <= 0 or health >= max_health or not alive:
+		return false
+	kits -= 1
+	heal(KIT_HEAL)
+	Sfx.play("use_kit")
+	kit_used.emit()
+	return true
+
+
+func take_damage(amount: float, _source: Node = null) -> void:
+	if not alive or invulnerable:
 		return
 	health = maxf(0.0, health - amount)
+	Sfx.play("hurt")
+	Sfx.play("hurt_glitch")
 	damaged.emit(amount)
 	if health <= 0.0:
 		alive = false

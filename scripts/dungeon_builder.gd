@@ -178,6 +178,8 @@ func _build_doors(g: DungeonGen, root: Node3D) -> void:
 		door.setup(panel, kit.get_collision("door_panel"))
 		door.set_meta("corridor", dw.corridor)
 		door.set_meta("room", g.room_at(c))
+		door.set_meta("room_cell", dw.room_cell)
+		door.set_meta("corr_cell", dw.corr_cell)
 		doors.add_child(door)
 
 

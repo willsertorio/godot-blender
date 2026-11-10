@@ -73,7 +73,8 @@ licenses.csv         asset licence log
 godot --path .                                         # play (title screen)
 godot --path . -- --seed=123 --autostart               # reproduce a dungeon, skip title
 godot --headless -s tools/gen_check.gd -- --count=400  # generator check (must print PASS; ~100 s with the art kit)
-godot --headless -s tools/playthrough.gd -- --count=10 # bot walks spawn -> exit through real collision
+godot --headless -s tools/playthrough.gd -- --count=10 # bot walks spawn -> exit through real collision (enemies off)
+godot --headless -s tools/combat_check.gd              # 43 combat rule checks (lock timer, LOS, weapons, enemies, loot, sounds)
 tools/capture.sh [seed] [label]                        # capture tour -> captures/latest (old -> captures/prev)
 python3 tools/compare.py                               # prev vs latest contact sheet + change score
 python3 -I tools/fetch_textures.py                     # (re)fetch + pack ambientCG sets, logs licenses.csv
@@ -104,6 +105,30 @@ The ALSA `ERR_CANT_OPEN` error in container logs is the missing audio device; ha
 | `scripts/game_ui.gd` | `GameUI`: title, HUD, end screen |
 | `scripts/capture.gd` | `CaptureTour`: fixed views for `--capture=DIR` |
 | `scripts/layers.gd` | Physics layer bits (WORLD, PLAYER, HOSTILE, PICKUP) |
+| `scripts/enemies/enemy.gd` | `Enemy` base: LOS ray, lock timer -> instant damage, telegraph drive, hit/death fx, grid pathing via `main.nav_next_cell` |
+| `scripts/enemies/turret.gd` `brawler.gd` `pursuer.gd` | The three hostiles (greybox visuals built in code; nodes `Head`/`Muzzle` on the turret) |
+| `scripts/pickup.gd` | `Pickup`: kit / ammo / health payoff; stays on the floor if it would do nothing |
+| `scripts/sfx.gd` | `Sfx`: static sound API (`play`, `play_at`, `loop_3d`, ambience); keys -> Kenney files; `Sfx.log` for tests |
+
+### Combat rules (tuning lives in each script's `_init` / WEAPONS)
+| | HP | Damage | Lock (s) | Range (m) | Score | Telegraph |
+|---|---|---|---|---|---|---|
+| Turret | 70 | 13 | 1.5 | 34 | 100 | Red targeting beam from `Muzzle`, thickens + flickers; head neon charges; rising hum |
+| Brawler | 50 | 16 melee | 0.55 | 2 (reach) | 200 | Red floor ring = reach, closes in while locking; spikes flare; hum |
+| Pursuer | 55 | 9 | 1.05 | 22 | 150 | Pulsing red core + targeting beam; hovers at 2.1 m, holds 6-11 m |
+- Lock fills only with clear LOS (ray eye -> player chest on WORLD|PLAYER) and in range; damage re-checks LOS. LOS loss drains it 3x faster.
+- HP x (1 + 0.3 x difficulty). Drops: 35 % per kill, payoff table `main.roll_payoff` (kit weight falls with difficulty).
+- Pistol 25 dmg, 0.24 s, semi, infinite. Rifle 12 dmg, 0.095 s, auto, 30 mag, reserve 60 start / 240 max, 1.5 s reload (R).
+- ADS: spread hip 0.022/0.035 -> 0.003/0.009, FOV x0.62, walk x0.45. Kits: max 3, Q heals 40 (refused at full health).
+- Capture/test hooks: `Enemy.frozen` + `capture_frac`, `Player.invulnerable`, `WeaponHolder.hold_fx`, `main.enemies_enabled`.
+- Effects are real-time tweens. In the container's software GL a frame takes ~0.1 s, so capture short effects with `shot(name, 1)`.
+
+### Audio
+- 31 Kenney CC0 sounds (Sci-Fi, Impact, Interface packs) in `assets/audio/`, one `licenses.csv` row each.
+  Raw packs in `assets_src/audio/` (git-ignored). The kenney.nl download needs the page's cookie + Referer
+  (`/download-link/<id>` returns a signed URL).
+- `Sfx` is not an autoload (tool scripts run with `-s` can't see autoloads); it creates its own node on first use.
+- The container has no audio device (dummy driver), so sounds are verified via `Sfx.log` in combat_check, not by ear.
 
 ### Dungeon rules
 - Cells are 4 m. Rooms are 3..6 cells per side and never touch (1-cell margin). Corridors are straight and 1 cell wide,
@@ -145,7 +170,7 @@ The ALSA `ERR_CANT_OPEN` error in container logs is the missing audio device; ha
       Kenney Blaster Kit for the pistol and rifle; Poly Haven `medical_box` and `ammo_box` for pickups; ambientCG textures)
 - [x] 3. Greybox loop (generator, controller, doors, pistol, portal, title/end screens, gen check, playthrough bot, capture)
 - [x] 4. Environment art (modelled kit + door, ambientCG materials, neon shader, lighting/post pass)
-- [ ] 5. Combat
+- [x] 5. Combat + sound (rifle, switching, 3 enemies with telegraphs, damage, deaths, drops, kits, 31 sounds)
 - [ ] 6. Economy and flow
 - [ ] 7. HUD and map
 - [ ] 8. Hero art pass

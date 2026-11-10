@@ -31,7 +31,9 @@ func _run() -> void:
 		main.base_seed = s
 		main.run_index = 0
 		main.difficulty = 0
+		main.enemies_enabled = false  # traversal only; tools/combat_check.gd covers combat
 		main.start_run()
+		main.player.invulnerable = true
 		var ok: bool = await _drive(main, s)
 		print("seed %d: %s (%d rooms, visited %d)" % [s, "PASS" if ok else "FAIL", main.layout.rooms.size(), main.visited.size()])
 		if not ok:
