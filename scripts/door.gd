@@ -3,9 +3,8 @@ extends StaticBody3D
 ## A door in a doorway. Closed: blocks movement, bullets and sight (collision layer
 ## WORLD). E within INTERACT_RANGE opens it; it never closes again.
 ##
-## Expects a child Node3D named "Panel" (the moving part). If an AnimationPlayer
-## with an "Open" animation exists (Blender kit door), it is played; otherwise the
-## panel slides up with a tween (greybox).
+## Visual: PanelL + PanelR (Quaternius double door, slid apart by tween), or an
+## AnimationPlayer with "Open", or a single "Panel" that slides up (greybox).
 
 const INTERACT_RANGE := 2.6
 
@@ -47,7 +46,14 @@ func interact(_player: Node) -> void:
 		return
 	is_open = true
 	anim = find_child("AnimationPlayer", true, false) as AnimationPlayer
-	if anim and anim.has_animation("Open"):
+	var left := find_child("PanelL", true, false) as Node3D
+	var right := find_child("PanelR", true, false) as Node3D
+	if left and right:
+		# Quaternius double door: halves slide apart into the wall.
+		var tw := create_tween().set_parallel()
+		tw.tween_property(left, "position:x", left.position.x - 1.9, 0.6).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+		tw.tween_property(right, "position:x", right.position.x + 1.9, 0.6).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	elif anim and anim.has_animation("Open"):
 		anim.play("Open")
 	else:
 		var tw := create_tween()

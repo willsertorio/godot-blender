@@ -173,7 +173,8 @@ func _run() -> void:
 	await reset_player(near)
 	var pu: Pursuer = main.spawn_enemy("pursuer", Vector3(8, 0, 2.5), 0)
 	await frames(10)
-	ok(pu.body.global_position.y > 1.8, "pursuer hovers at %.1f m" % pu.body.global_position.y)
+	var hover_y: float = pu.body.global_position.y - pu.body_offset  # model centre
+	ok(hover_y > 1.8, "pursuer hovers at %.1f m" % hover_y)
 	dt = await wait_damage(4.0) + 10.0 / 60.0  # include the frames waited above
 	ok(dt >= pu.fire_time - 0.05, "pursuer hits after its lock (%.2fs since spawn)" % dt)
 	await clear_enemies()

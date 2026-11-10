@@ -20,22 +20,27 @@ func _init() -> void:
 	recover_time = 0.7
 	lock_range = 34.0
 	sight_range = 34.0
-	eye_height = 1.55
+	eye_height = 1.7
+	anim_names = {"idle": "Idle", "aware": "Look", "move": "Walk", "lock": "Look", "attack": "AttackAuto", "hit": "Hit", "die": "TurnOff"}
 
 
 func _build_visual() -> void:
 	var cs := CollisionShape3D.new()
 	var shape := CylinderShape3D.new()
-	shape.radius = 0.55
-	shape.height = 1.9
+	shape.radius = 0.95
+	shape.height = 2.4
 	cs.shape = shape
-	cs.position.y = 0.95
+	cs.position.y = 1.2
 	add_child(cs)
 
 	var model := _adopt_model("res://assets/models/turret.glb")
 	if model:
-		head = model.find_child("Head", true, false)
-		muzzle = model.find_child("Muzzle", true, false)
+		# The whole walker turns toward the player (its rig has no separate head node).
+		head = model
+		muzzle = Node3D.new()
+		muzzle.name = "Muzzle"
+		muzzle.position = Vector3(0, 1.75, -1.25)
+		model.add_child(muzzle)
 		beam = _make_beam(self)
 		return
 	var metal := body_metal()
@@ -81,8 +86,9 @@ func _move(delta: float, los: bool) -> void:
 	if los:
 		var target := player.global_position + Vector3.UP * 1.3
 		var local := head.global_position.direction_to(target)
-		_face(local, head, delta, 6.0)
-		head.rotation.x = lerp_angle(head.rotation.x, asin(clampf(local.y, -1, 1)), 1.0 - exp(-6.0 * delta))
+		_face(local, head, delta, 6.0 if head != model else 3.0)
+		if head != model:
+			head.rotation.x = lerp_angle(head.rotation.x, asin(clampf(local.y, -1, 1)), 1.0 - exp(-6.0 * delta))
 
 
 func _fire() -> void:

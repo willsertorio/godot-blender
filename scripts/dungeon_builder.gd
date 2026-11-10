@@ -12,14 +12,14 @@ const CEILING_LAYER := 2  # visual layer bit for ceiling meshes
 ## Area meshes beyond this distance (from their bounds) are not drawn.
 const VIEW_RANGE := 64.0
 
-var kit  # KitArt (default) or KitGreybox: get_mesh(), get_collision(), optional door_scene()
+var kit  # KitQuaternius (default) or KitGreybox: get_mesh(piece, variant), get_collision(), optional door_scene()
 
-static var _art_kit: KitArt
+static var _art_kit: KitQuaternius
 
 
 static func default_kit():
 	if _art_kit == null:
-		_art_kit = KitArt.new()
+		_art_kit = KitQuaternius.new()
 	return _art_kit
 
 
@@ -43,11 +43,20 @@ func build(g: DungeonGen) -> Node3D:
 	var pieces: Dictionary = {}  # area -> Array of [piece, Transform3D]
 	var collide: Array = []  # [piece, Transform3D]
 
+	# Per-area look: each room gets one wall style and one floor; corridors use band walls.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(g.seed_value * 977 + 3)
+	var wall_style := {}
+	var floor_style := {}
+	for r in g.rooms:
+		wall_style["r%d" % r.id] = KitQuaternius.WALL_STYLES[rng.randi() % 3]
+		floor_style["r%d" % r.id] = KitQuaternius.FLOOR_STYLES[rng.randi() % 3]
+
 	for c in g.cells:
 		var e = g.cells[c]
 		var area := ("r%d" if e.t == DungeonGen.T_ROOM else "c%d") % e.id
 		var xf := Transform3D(Basis(), DungeonGen.cell_center(c))
-		_add(pieces, area, "floor", xf)
+		_add(pieces, area, "floor", xf, floor_style.get(area, "B"))
 		# Light fixtures on every other cell (checkerboard on both axes) to keep the ceiling calm.
 		var lit := posmod(c.x, 2) == 0 and posmod(c.y, 2) == 0 if e.t == DungeonGen.T_ROOM else posmod(c.x + c.y, 2) == 0
 		_add(pieces, "ceil_" + area, "ceiling_light" if lit else "ceiling", xf)
@@ -55,7 +64,7 @@ func build(g: DungeonGen) -> Node3D:
 			var n: Vector2i = c + d
 			if not g.is_floor(n):
 				var wx := edge_transform(c, d)
-				_add(pieces, area, "wall", wx)
+				_add(pieces, area, "wall", wx, wall_style.get(area, "band"))
 				collide.append(["wall", wx])
 			elif e.t == DungeonGen.T_ROOM and g.cells[n].t == DungeonGen.T_CORRIDOR:
 				var fx := edge_transform(c, d)
@@ -67,6 +76,11 @@ func build(g: DungeonGen) -> Node3D:
 		var r := g.room_at(v)  # vertex v is the min-corner of cell v, inside the room
 		_add(pieces, "cast_r%d" % r, "pillar", px)
 		collide.append(["pillar", px])
+
+	for dz in g.deco_spawns:
+		var dxf := Transform3D(Basis(Vector3.UP, dz.yaw), dz.pos)
+		_add(pieces, "cast_r%d" % dz.room, "deco_" + dz.kind, dxf)
+		collide.append(["deco_" + dz.kind, dxf])
 
 	var geo := Node3D.new()
 	geo.name = "Geometry"
@@ -107,17 +121,17 @@ static func limit_view_range(root: Node, distance: float = 48.0) -> void:
 		(gi as GeometryInstance3D).visibility_range_end = distance
 
 
-func _add(pieces: Dictionary, area: String, piece: String, xf: Transform3D) -> void:
+func _add(pieces: Dictionary, area: String, piece: String, xf: Transform3D, variant: String = "") -> void:
 	if not pieces.has(area):
 		pieces[area] = []
-	pieces[area].append([piece, xf])
+	pieces[area].append([piece, xf, variant])
 
 
 func _merge(list: Array) -> ArrayMesh:
 	## Bake every placed piece into one mesh, one surface per material.
 	var tools: Dictionary = {}  # Material -> SurfaceTool
 	for p in list:
-		var mesh: Mesh = kit.get_mesh(p[0])
+		var mesh: Mesh = kit.get_mesh(p[0], p[2])
 		for s in mesh.get_surface_count():
 			var mat := mesh.surface_get_material(s)
 			if not tools.has(mat):
@@ -218,13 +232,13 @@ func _build_lights(g: DungeonGen, root: Node3D) -> void:
 				l.name = "RoomLight%d_%d" % [r.id, placed.size()]
 				var px := origin.x + size.x * (ix + 0.5) / nx
 				var pz := origin.y + size.y * (iz + 0.5) / nz
-				l.position = Vector3(px, 3.55, pz)
+				l.position = Vector3(px, DungeonGen.WALL_H - 0.6, pz)
 				var span := maxf(size.x / nx, size.y / nz)
 				l.omni_range = span * 1.15 + 3.0
 				l.omni_attenuation = 0.75
-				l.light_energy = 2.8
+				l.light_energy = 2.0
 				l.light_specular = 0.6
-				l.light_color = Color(0.82, 0.92, 1.0)
+				l.light_color = Color(1.0, 0.97, 0.92)
 				lights.add_child(l)
 				placed.append(l)
 		placed.sort_custom(func(a, b): return a.position.distance_to(centre) < b.position.distance_to(centre))
@@ -234,9 +248,9 @@ func _build_lights(g: DungeonGen, root: Node3D) -> void:
 		var mid: Vector2i = co.cells[co.cells.size() / 2]
 		var l := OmniLight3D.new()
 		l.name = "CorridorLight%d" % co.id
-		l.position = DungeonGen.cell_center(mid) + Vector3.UP * 3.5
+		l.position = DungeonGen.cell_center(mid) + Vector3.UP * (DungeonGen.WALL_H - 0.6)
 		l.omni_range = co.cells.size() * CELL * 0.6 + 4.0
-		l.light_energy = 1.4
+		l.light_energy = 1.3
 		l.light_specular = 0.5
-		l.light_color = Color(0.7, 0.92, 1.0)
+		l.light_color = Color(0.92, 0.96, 1.0)
 		lights.add_child(l)

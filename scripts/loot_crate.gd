@@ -10,7 +10,7 @@ signal opened(payoff: String)
 
 const SCENE := "res://assets/models/container.glb"
 const INTERACT_RANGE := 2.0
-const SIZE := Vector3(1.0, 0.76, 0.7)
+const SIZE := Vector3(1.14, 0.9, 0.9)  # Quaternius Prop_Chest, normalized
 
 static var _scene: PackedScene
 
@@ -19,7 +19,6 @@ var is_open := false
 var main
 var model: Node3D
 var anim: AnimationPlayer
-var glow: OmniLight3D
 
 
 func _ready() -> void:
@@ -40,15 +39,8 @@ func _ready() -> void:
 	add_child(model)
 	anim = model.find_child("AnimationPlayer", true, false) as AnimationPlayer
 	DungeonBuilder.limit_view_range(self)
-	# Loot glows: a small green light so crates read in dim corners (culled with distance
-	# like the room lights; dims once the crate is empty).
-	glow = OmniLight3D.new()
-	glow.light_color = Color("#39FF88")
-	glow.light_energy = 0.9
-	glow.omni_range = 2.6
-	glow.position = Vector3(0, 0.9, -0.55)
-	glow.add_to_group("culled_lights")
-	add_child(glow)
+	# No light of its own: the Quaternius chest glows through its emissive map, and extra
+	# lights push room meshes past Compatibility's 8-lights-per-object limit.
 
 
 func interact_point() -> Vector3:
@@ -67,20 +59,19 @@ func interact(player: Node) -> void:
 	if is_open:
 		return
 	is_open = true
-	create_tween().tween_property(glow, "light_energy", 0.25, 1.2)
-	if anim and anim.has_animation("Open"):
+	if not AnimUtil.play(anim, "Open", 0.1) and anim and anim.has_animation("Open"):
 		anim.play("Open")
 	Sfx.play_at("crate_open", global_position + Vector3.UP * 0.5)
 	var p := Pickup.new()
 	p.payoff = payoff
 	p.collect_radius = 1.35
 	p.show_halo = false
-	p.position = Vector3(0, 0.62, 0)
+	p.position = Vector3(0, 0.7, 0)
 	add_child(p)
 	opened.emit(payoff)
 	# Pop up out of the crate, then pay out if it helps right now.
 	var tw := p.create_tween()
-	tw.tween_property(p, "position:y", 1.05, 0.35).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	tw.tween_property(p, "position:y", 1.2, 0.35).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 	tw.tween_callback(func():
 		if is_instance_valid(p) and player is Player:
 			p.try_take(player))

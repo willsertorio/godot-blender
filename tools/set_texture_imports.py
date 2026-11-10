@@ -19,7 +19,7 @@ WANT = {
 n = 0
 for imp in list(ROOT.glob("assets/textures/**/*.import")) + list(ROOT.glob("assets/models/*.jpg.import")) + list(ROOT.glob("assets/models/*.png.import")):
     s = imp.read_text()
-    is_normal = bool(re.search(r"normal|nor_gl", imp.name))
+    is_normal = bool(re.search(r"normal|nor_gl", imp.name, re.I))
     want = dict(WANT, **{"compress/normal_map": "1" if is_normal else "2"})  # 2 = disabled
     for k, v in want.items():
         pat = re.compile(rf"^{re.escape(k)}=.*$", re.M)

@@ -23,20 +23,21 @@ func _init() -> void:
 	lock_range = REACH
 	sight_range = 30.0
 	eye_height = 0.8
+	anim_names = {"idle": "Idle", "aware": "Look", "move": "Run", "lock": "Charge", "attack": "Attack", "hit": "Hit", "die": "TurnOff"}
 
 
 func _build_visual() -> void:
 	var cs := CollisionShape3D.new()
 	var shape := CapsuleShape3D.new()
-	shape.radius = 0.5
-	shape.height = 1.4
+	shape.radius = 0.62
+	shape.height = 1.3
 	cs.shape = shape
-	cs.position.y = 0.7
+	cs.position.y = 0.65
 	add_child(cs)
 
 	var model := _adopt_model("res://assets/models/brawler.glb")
 	if model:
-		body = model.find_child("Body", true, false)
+		body = model
 	else:
 		_greybox_body()
 	_build_ring()
@@ -78,7 +79,7 @@ func _build_ring() -> void:
 	tor.outer_radius = 1.0
 	tor.rings = 32
 	ring.mesh = tor
-	ring.material_override = MaterialLib.neon(Color("#FF2D55"), 1.5)
+	ring.material_override = MaterialLib.neon(Enemy.HOSTILE, 1.5)
 	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	ring.position.y = 0.03
 	ring.scale = Vector3(REACH, 0.2, REACH)

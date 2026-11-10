@@ -5,22 +5,10 @@ class_name MaterialLib
 ##
 ## UVs are in metres, so `tile` is metres per texture repeat.
 
-const TEX := "res://assets/textures/%s/%s.jpg"
 
+## Plain materials for greybox fallbacks (the art comes from Quaternius materials).
 const SURFACES := {
-	"WallPanel": {"set": "Metal046A", "tile": 2.0, "tint": Color(0.7, 0.74, 0.8), "rough": 1.0, "metal": 0.3},
-	"WallTrim": {"set": "Metal028", "tile": 2.0, "tint": Color(0.75, 0.78, 0.82), "rough": 0.85, "metal": 0.35},
-	"DoorMetal": {"set": "Metal038", "tile": 2.0, "tint": Color(0.62, 0.66, 0.72), "rough": 0.85, "metal": 0.7},
-	"Floor": {"set": "DiamondPlate008A", "tile": 1.0, "tint": Color(0.55, 0.57, 0.6), "rough": 0.9, "metal": 0.45},
-	"Ceiling": {"set": "MetalPlates015B", "tile": 2.0, "tint": Color(0.5, 0.52, 0.56), "rough": 1.0, "metal": 0.3},
-	"CrateMetal": {"set": "Metal038", "tile": 1.0, "tint": Color(0.78, 0.82, 0.86), "rough": 0.8, "metal": 0.45},
-	"GunMetal": {"set": "Metal038", "tile": 0.5, "tint": Color(0.72, 0.75, 0.8), "rough": 0.7, "metal": 0.75},
-	"GunPaint": {"set": "Metal028", "tile": 0.5, "tint": Color(0.5, 0.52, 0.56), "rough": 0.8, "metal": 0.4},
-	"GunGrip": {"set": "Metal029", "tile": 0.5, "tint": Color(0.4, 0.4, 0.42), "rough": 1.0, "metal": 0.1},
-	"EnemyArmor": {"set": "Metal028", "tile": 1.0, "tint": Color(0.95, 0.72, 0.76), "rough": 0.7, "metal": 0.35},
-	"EnemyMetal": {"set": "Metal038", "tile": 1.0, "tint": Color(0.5, 0.52, 0.56), "rough": 0.8, "metal": 0.6},
-	"FrameMetal": {"set": "Metal038", "tile": 1.0, "tint": Color(0.55, 0.57, 0.62), "rough": 0.7, "metal": 0.6},
-	"PropMetal": {"set": "Metal029", "tile": 1.0, "tint": Color(0.85, 0.88, 0.92), "rough": 0.9, "metal": 0.5},
+	"PropMetal": {"tint": Color(0.18, 0.19, 0.21), "rough": 0.6, "metal": 0.4},
 }
 
 const NEON := {
@@ -30,14 +18,77 @@ const NEON := {
 	"NeonViolet": Color("#B48CFF"),
 }
 
+## Quaternius materials (glbs carry names only; see blender/scripts/normalize_quaternius.py).
+const Q_TABLE := "res://assets/models/q_materials.json"
+const QDIR := "res://assets/textures/quaternius/"
+## Glow the free glTFs drop (the paid packs add it with custom shaders):
+## material name -> [emissive mask (or ""), colour, energy].
+const EMISSIVE := {
+	"MI_Trim_01": ["T_Trim_01_Emissive", Color(0.55, 0.85, 1.0), 2.2],
+	"MI_PaddedWall": ["T_PaddingWall_Emissive", Color(0.55, 0.85, 1.0), 1.8],
+	"MI_Enemies": ["T_Enemies_Emissive", Color("#FF4A2B"), 3.0],
+	"MI_Enemies_Large": ["T_Enemies_Large_Emissive", Color("#FF4A2B"), 3.0],
+	"MI_Guns_Batch1": ["T_Guns_Batch1_Emissive", Color(1.0, 0.55, 0.15), 1.6],
+	"MI_Props_Batch2": ["T_Props_Batch2_Emissive", Color(0.35, 1.0, 0.55), 2.0],
+	"M_Light": ["", Color(0.85, 0.93, 1.0), 2.6],
+}
+
 static var _cache: Dictionary = {}
+static var _q: Dictionary = {}
+
+
+static func _qtex(name: String) -> Texture2D:
+	for ext in [".jpg", ".png"]:
+		if ResourceLoader.exists(QDIR + name + ext):
+			return load(QDIR + name + ext)
+	return null
+
+
+static func _quaternius(name: String) -> Material:
+	if _q.is_empty() and ResourceLoader.exists(Q_TABLE):
+		_q = JSON.parse_string(FileAccess.get_file_as_string(Q_TABLE))
+	if not _q.has(name):
+		return null
+	var spec: Dictionary = _q[name]
+	var m := ORMMaterial3D.new()
+	var c: Array = spec.color
+	m.albedo_color = Color(c[0], c[1], c[2], c[3])
+	if spec.base != "":
+		m.albedo_texture = _qtex(spec.base)
+	if spec.orm != "":
+		m.orm_texture = _qtex(spec.orm)
+		m.roughness = 1.0
+		m.metallic = 1.0
+	else:
+		m.roughness = spec.roughness
+		m.metallic = spec.metallic
+	if spec.normal != "":
+		m.normal_enabled = true
+		m.normal_texture = _qtex(spec.normal)
+	# Blender flags every imported material as blended; only decals and glass really are.
+	if name.contains("Decal") or name == "M_Glass" or float(spec.get("alpha_value", 1.0)) < 0.999:
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED if name == "M_Glass" else BaseMaterial3D.CULL_BACK
+	if EMISSIVE.has(name):
+		var e: Array = EMISSIVE[name]
+		m.emission_enabled = true
+		m.emission = e[1]
+		m.emission_energy_multiplier = e[2]
+		if e[0] != "":
+			m.emission_texture = _qtex(e[0])
+			# Default operator ADDs colour + texture; the mask must multiply the colour.
+			m.emission_operator = BaseMaterial3D.EMISSION_OP_MULTIPLY
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	return m
 
 
 static func get_material(name: String) -> Material:
 	if _cache.has(name):
 		return _cache[name]
-	var m: Material = null
-	if SURFACES.has(name):
+	var m: Material = _quaternius(name)
+	if m:
+		pass
+	elif SURFACES.has(name):
 		m = _surface(SURFACES[name])
 	elif name.begins_with("Neon"):
 		m = neon(NEON.get(name, NEON.NeonCyan))
@@ -64,19 +115,11 @@ static func neon(c: Color, energy: float = 2.6) -> ShaderMaterial:
 	return sm
 
 
-static func _surface(spec: Dictionary) -> ORMMaterial3D:
-	var m := ORMMaterial3D.new()
-	var s: String = spec.set
-	m.albedo_texture = load(TEX % [s, "albedo"])
+static func _surface(spec: Dictionary) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
 	m.albedo_color = spec.tint
-	m.orm_texture = load(TEX % [s, "orm"])
-	m.normal_enabled = true
-	m.normal_texture = load(TEX % [s, "normal"])
 	m.roughness = spec.rough
 	m.metallic = spec.metal
-	var k := 1.0 / float(spec.tile)
-	m.uv1_scale = Vector3(k, k, k)
-	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	return m
 
 
@@ -87,13 +130,11 @@ static func rebind(mesh: Mesh) -> Mesh:
 		var src := out.surface_get_material(i)
 		if src == null:
 			continue
-		if src.resource_name.begins_with("PH_"):
-			continue  # Poly Haven prop: keeps its own photoreal textures from the glb
-		var lib := get_material(src.resource_name)
+		# Only names the library owns are replaced (Neon*, PortalField, ...); anything else
+		# (Quaternius MI_* materials with their own textures) is kept as imported.
+		var lib := get_material(src.resource_name.get_slice(".", 0))
 		if lib:
 			out.surface_set_material(i, lib)
-		else:
-			push_warning("MaterialLib: no material named '%s'" % src.resource_name)
 	return out
 
 

@@ -10,7 +10,9 @@ extends RefCounted
 ## on every edge between a room cell and a corridor cell.
 
 const CELL := 4.0
-const WALL_H := 4.0
+const WALL_H := 5.0  # Quaternius MegaKit: bottom strip + 3 m wall + 2 m top band
+## How far wall geometry reaches into a cell from its edge (Astra panels / trims).
+const WALL_DEPTH := 0.45
 const DIRS: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 
 const T_ROOM := 1
@@ -65,6 +67,12 @@ var exit_pos := Vector3.ZERO
 var enemy_spawns: Array = []
 ## Each: {"pos": Vector3, "yaw": float, "room": int, "payoff": String}
 var loot_spawns: Array = []
+## Decor against walls. Each: {"kind": String, "pos": Vector3, "yaw": float, "room": int}
+var deco_spawns: Array = []
+## Decor kinds -> half depth (m, toward the room). All shallow enough that their front stays
+## >= 0.5 m from the cell centre, so walking lanes through cell centres stay clear.
+const DECO_KINDS := {"crate3": 0.5, "barrel_large": 0.27, "computer": 0.28, "barrel": 0.36,
+	"locker": 0.25, "shelves": 0.27}
 
 
 static func cell_center(c: Vector2i) -> Vector3:
@@ -114,6 +122,7 @@ func generate(p_seed: int, p_difficulty: int = 0) -> DungeonGen:
 	_place_exit()
 	_place_enemies()
 	_place_loot()
+	_place_deco()
 	return self
 
 
@@ -326,7 +335,8 @@ func _place_loot() -> void:
 			var payoff: String = LOOT_PAYOFFS[_weighted([kit_w, 4, 3])]
 			var out := Vector3(d.x, 0, d.y)
 			var along := Vector3(-d.y, 0, d.x) * rng.randf_range(-0.9, 0.9)
-			var pos := cell_center(c) + out * 1.25 + along
+			# Crate (0.9 deep) stands just clear of the wall trim.
+			var pos := cell_center(c) + out * (CELL * 0.5 - WALL_DEPTH - 0.5) + along
 			loot_spawns.append({"pos": pos, "yaw": yaw_facing(-out), "room": r.id, "payoff": payoff})
 
 
@@ -343,6 +353,39 @@ func _weighted(weights: Array) -> int:
 
 
 ## Stable fingerprint of the layout (cell set), used to verify runs don't repeat.
+func _place_deco() -> void:
+	## 1-3 decor props per room on free wall-side edge cells (not doorways or their neighbours,
+	## not cells already holding an enemy or a crate).
+	var kinds := DECO_KINDS.keys()
+	for r in rooms:
+		var n := rng.randi_range(1, 3)
+		var spots: Array = []
+		for c in _free_cells(r, _used):
+			var near_door := false
+			for dc in r.doorway_cells:
+				if absi(dc.x - c.x) + absi(dc.y - c.y) <= 1:
+					near_door = true
+			if near_door:
+				continue
+			for d in DIRS:
+				if not is_floor(c + d):
+					spots.append([c, d])
+		for i in n:
+			if spots.is_empty():
+				break
+			var pick: Array = spots[rng.randi() % spots.size()]
+			var c: Vector2i = pick[0]
+			var d: Vector2i = pick[1]
+			_used[c] = true
+			spots = spots.filter(func(s): return s[0] != c)
+			var kind: String = kinds[rng.randi() % kinds.size()]
+			var out := Vector3(d.x, 0, d.y)
+			var along := Vector3(-d.y, 0, d.x) * rng.randf_range(-0.8, 0.8)
+			var half: float = DECO_KINDS[kind]
+			var pos := cell_center(c) + out * (CELL * 0.5 - WALL_DEPTH - 0.05 - half) + along
+			deco_spawns.append({"kind": kind, "pos": pos, "yaw": yaw_facing(-out), "room": r.id})
+
+
 func layout_hash() -> int:
 	var keys := cells.keys()
 	keys.sort()

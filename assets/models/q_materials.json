@@ -1,0 +1,287 @@
+{
+ "MI_Decal_Red": {
+  "alpha": true,
+  "alpha_value": 1.0,
+  "base": "T_Decals",
+  "color": [
+   0.800000011920929,
+   0.800000011920929,
+   0.800000011920929,
+   1.0
+  ],
+  "metallic": 0.0,
+  "normal": "",
+  "orm": "",
+  "roughness": 0.5
+ },
+ "MI_Enemies": {
+  "alpha": true,
+  "alpha_value": 1.0,
+  "base": "T_Enemies_BaseColor",
+  "color": [
+   0.800000011920929,
+   0.800000011920929,
+   0.800000011920929,
+   1.0
+  ],
+  "metallic": 0.0,
+  "normal": "T_Enemies_Normal",
+  "orm": "T_Enemies_ORM",
+  "roughness": 0.5
+ },
+ "MI_Enemies_Large": {
+  "alpha": true,
+  "alpha_value": 1.0,
+  "base": "T_Enemies_Large_BaseColor",
+  "color": [
+   0.800000011920929,
+   0.800000011920929,
+   0.800000011920929,
+   1.0
+  ],
+  "metallic": 0.0,
+  "normal": "T_Enemies_Large_Normal",
+  "orm": "T_Enemies_Large_ORM",
+  "roughness": 0.5
+ },
+ "MI_Guns_Batch1": {
+  "alpha": true,
+  "alpha_value": 1.0,
+  "base": "T_Guns_Batch1_BaseColor",
+  "color": [
+   0.800000011920929,
+   0.800000011920929,
+   0.800000011920929,
+   1.0
+  ],
+  "metallic": 0.0,
+  "normal": "T_Guns_Batch1_Normal",
+  "orm": "T_Guns_Batch1_ORM",
+  "roughness": 0.5
+ },
+ "MI_PaddedWall": {
+  "alpha": true,
+  "alpha_value": 1.0,
+  "base": "T_PaddedWall_BaseColor",
+  "color": [
+   0.800000011920929,
+   0.800000011920929,
+   0.800000011920929,
+   1.0
+  ],
+  "metallic": 0.0,
+  "normal": "T_PaddedWall_Normal",
+  "orm": "T_PaddedWall_ORM",
+  "roughness": 0.5
+ },
+ "MI_Props_Batch1": {
+  "alpha": true,
+  "alpha_value": 1.0,
+  "base": "T_Props_Batch1_BaseColor",
+  "color": [
+   0.800000011920929,
+   0.800000011920929,
+   0.800000011920929,
+   1.0
+  ],
+  "metallic": 0.0,
+  "normal": "T_Props_Batch1_Normal",
+  "orm": "T_Props_Batch1_ORM",
+  "roughness": 0.5
+ },
+ "MI_Props_Batch2": {
+  "alpha": true,
+  "alpha_value": 1.0,
+  "base": "T_Props_Batch2_BaseColor",
+  "color": [
+   0.800000011920929,
+   0.800000011920929,
+   0.800000011920929,
+   1.0
+  ],
+  "metallic": 0.0,
+  "normal": "T_Props_Batch2_Normal",
+  "orm": "T_Props_Batch2_ORM",
+  "roughness": 0.5
+ },
+ "MI_Trim_01": {
+  "alpha": true,
+  "alpha_value": 1.0,
+  "base": "T_Trim_01_BaseColor_Red",
+  "color": [
+   0.800000011920929,
+   0.800000011920929,
+   0.800000011920929,
+   1.0
+  ],
+  "metallic": 0.0,
+  "normal": "T_Trim_01_Normal",
+  "orm": "T_Trim_01_ORM",
+  "roughness": 0.5
+ },
+ "MI_Trim_02": {
+  "alpha": true,
+  "alpha_value": 1.0,
+  "base": "T_Trim_02_BaseColor_Red",
+  "color": [
+   0.800000011920929,
+   0.800000011920929,
+   0.800000011920929,
+   1.0
+  ],
+  "metallic": 0.0,
+  "normal": "T_Trim_02_Normal",
+  "orm": "T_Trim_02_ORM",
+  "roughness": 0.5
+ },
+ "MI_Trim_02_Floor": {
+  "alpha": true,
+  "alpha_value": 1.0,
+  "base": "T_Trim_02_BaseColor",
+  "color": [
+   0.800000011920929,
+   0.800000011920929,
+   0.800000011920929,
+   1.0
+  ],
+  "metallic": 0.0,
+  "normal": "T_Trim_02_Normal",
+  "orm": "T_Trim_02_ORM",
+  "roughness": 0.5
+ },
+ "MI_Trim_02_Variation": {
+  "alpha": true,
+  "alpha_value": 1.0,
+  "base": "T_Trim_02_BaseColor",
+  "color": [
+   0.800000011920929,
+   0.800000011920929,
+   0.800000011920929,
+   1.0
+  ],
+  "metallic": 0.0,
+  "normal": "T_Trim_02_Normal",
+  "orm": "T_Trim_02_ORM",
+  "roughness": 0.5
+ },
+ "MI_Trim_03": {
+  "alpha": true,
+  "alpha_value": 1.0,
+  "base": "T_Trim_03_BaseColor",
+  "color": [
+   0.800000011920929,
+   0.800000011920929,
+   0.800000011920929,
+   1.0
+  ],
+  "metallic": 0.0,
+  "normal": "T_Trim_03_Normal",
+  "orm": "T_Trim_03_ORM",
+  "roughness": 0.5
+ },
+ "MI_Trim_03_Cables_Blue": {
+  "alpha": true,
+  "alpha_value": 1.0,
+  "base": "T_Trim_03_Cables",
+  "color": [
+   0.800000011920929,
+   0.800000011920929,
+   0.800000011920929,
+   1.0
+  ],
+  "metallic": 0.0,
+  "normal": "T_Trim_03_Normal",
+  "orm": "T_Trim_03_ORM",
+  "roughness": 0.5
+ },
+ "MI_Trim_03_Dark": {
+  "alpha": true,
+  "alpha_value": 1.0,
+  "base": "T_Trim_03_Cables",
+  "color": [
+   0.800000011920929,
+   0.800000011920929,
+   0.800000011920929,
+   1.0
+  ],
+  "metallic": 0.0,
+  "normal": "T_Trim_03_Normal",
+  "orm": "T_Trim_03_ORM",
+  "roughness": 0.5
+ },
+ "M_Black": {
+  "alpha": true,
+  "alpha_value": 1.0,
+  "base": "",
+  "color": [
+   0.800000011920929,
+   0.800000011920929,
+   0.800000011920929,
+   1.0
+  ],
+  "metallic": 0.0,
+  "normal": "",
+  "orm": "",
+  "roughness": 0.5
+ },
+ "M_Decal_Screen": {
+  "alpha": true,
+  "alpha_value": 1.0,
+  "base": "T_Decals",
+  "color": [
+   0.800000011920929,
+   0.800000011920929,
+   0.800000011920929,
+   1.0
+  ],
+  "metallic": 0.0,
+  "normal": "",
+  "orm": "",
+  "roughness": 0.5
+ },
+ "M_Decal_White": {
+  "alpha": true,
+  "alpha_value": 1.0,
+  "base": "T_Decals",
+  "color": [
+   0.800000011920929,
+   0.800000011920929,
+   0.800000011920929,
+   1.0
+  ],
+  "metallic": 0.0,
+  "normal": "",
+  "orm": "",
+  "roughness": 0.5
+ },
+ "M_Glass": {
+  "alpha": true,
+  "alpha_value": 1.0,
+  "base": "",
+  "color": [
+   0.800000011920929,
+   0.800000011920929,
+   0.800000011920929,
+   1.0
+  ],
+  "metallic": 0.0,
+  "normal": "",
+  "orm": "",
+  "roughness": 0.5
+ },
+ "M_Light": {
+  "alpha": true,
+  "alpha_value": 1.0,
+  "base": "",
+  "color": [
+   0.0,
+   0.0,
+   0.0,
+   1.0
+  ],
+  "metallic": 1.0,
+  "normal": "",
+  "orm": "",
+  "roughness": 1.0
+ }
+}
