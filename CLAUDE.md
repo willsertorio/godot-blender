@@ -69,7 +69,46 @@ licenses.csv         asset licence log
 
 ## Commands
 
-(Filled in as they are built: run, capture, generator check, web export.)
+```
+godot --path .                                         # play (title screen)
+godot --path . -- --seed=123 --autostart               # reproduce a dungeon, skip title
+godot --headless -s tools/gen_check.gd -- --count=400  # generator check (must print PASS)
+godot --headless -s tools/playthrough.gd -- --count=10 # bot walks spawn -> exit through real collision
+tools/capture.sh [seed] [label]                        # capture tour -> captures/latest (old -> captures/prev)
+python3 tools/compare.py                               # prev vs latest contact sheet + change score
+```
+Browser builds take the same options as a URL query: `?seed=123&autostart=1`.
+Run `godot --headless --editor --quit` once after adding/changing assets so imports exist.
+The ALSA `ERR_CANT_OPEN` error in container logs is the missing audio device; harmless.
+
+## Code map
+
+| File | Role |
+|---|---|
+| `scenes/main.tscn` + `scripts/main.gd` | Game flow (title, run, end, again), input map, seed/args, run stats, difficulty, environment |
+| `scripts/dungeon_gen.gd` | `DungeonGen`: pure-data layout from (seed, difficulty): rooms, corridors, doorways, doors, pillars, spawns, exit |
+| `scripts/dungeon_builder.gd` | `DungeonBuilder`: layout -> nodes. Per-area merged meshes (Compatibility = max 8 lights per object), box collision, doors, lights, portal |
+| `scripts/kit_greybox.gd` | `KitGreybox`: greybox piece meshes + collision boxes. A Blender kit must expose the same `get_mesh(piece)` / `get_collision(piece)` |
+| `scripts/player.gd` | `Player`: CharacterBody3D, WASD + mouse look, ADS (slow + narrow FOV), interact (nearest in range, no prompt) |
+| `scripts/weapon_holder.gd` | `WeaponHolder`: hitscan from camera, first hit on WORLD or HOSTILE only |
+| `scripts/door.gd` | `Door`: closed blocks WORLD layer; E opens, stays open |
+| `scripts/exit_portal.gd` | `ExitPortal`: Area3D, player enters -> success |
+| `scripts/game_ui.gd` | `GameUI`: title, HUD, end screen |
+| `scripts/capture.gd` | `CaptureTour`: fixed views for `--capture=DIR` |
+| `scripts/layers.gd` | Physics layer bits (WORLD, PLAYER, HOSTILE, PICKUP) |
+
+### Dungeon rules
+- Cells are 4 m. Rooms are 3..6 cells per side and never touch (1-cell margin). Corridors are straight and 1 cell wide,
+  2..4 cells long. The room graph is a tree from spawn (room 0), and the exit room is the deepest one.
+- Walls on floor/empty edges. Doorframes (2.4 x 3 m opening) on room/corridor edges. Doors on the child-room end of about
+  half the corridors (always on the first corridor out of spawn). Pillars at the 4 inset vertices of rooms 5x5 and up.
+- Difficulty (missions completed): +1 hostile per room per level; health-kit loot weight falls 4 -> 1.
+
+### Kit piece frames (Godot space; the Blender kit must match)
+- `floor`/`ceiling`: origin at cell centre; floor top y=0, ceiling underside y=4.
+- `wall`, `doorframe`: origin at the edge midpoint on the floor, spans x -2..2, local -Z faces into the cell
+  (Blender: +Y faces into the room), thickness extends toward +Z (outside).
+- `pillar`: origin at the grid vertex. `door_panel`: 2.4 x 3 m, origin at the bottom centre of the opening.
 
 ## How we work
 
@@ -81,8 +120,9 @@ licenses.csv         asset licence log
 ## Status
 
 - [x] 1. Environment check, scaffold
-- [ ] 2. Asset plan (awaiting approval)
-- [ ] 3. Greybox loop
+- [x] 2. Asset plan (approved: model the room/corridor kit, door, pillars, enemies, container, health cell, portal;
+      Kenney Blaster Kit for the pistol and rifle; Poly Haven `medical_box` and `ammo_box` for pickups; ambientCG textures)
+- [x] 3. Greybox loop (generator, controller, doors, pistol, portal, title/end screens, gen check, playthrough bot, capture)
 - [ ] 4. Environment art
 - [ ] 5. Combat
 - [ ] 6. Economy and flow

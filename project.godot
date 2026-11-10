@@ -3,6 +3,8 @@ config_version=5
 
 [application]
 
+run/main_scene="res://scenes/main.tscn"
+
 config/name="Project Firewall"
 config/features=PackedStringArray("4.3", "GL Compatibility")
 
