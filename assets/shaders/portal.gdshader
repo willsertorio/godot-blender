@@ -7,7 +7,7 @@ render_mode unshaded, blend_add, cull_disabled, depth_draw_never, shadows_disabl
 uniform vec4 tint : source_color = vec4(0.706, 0.549, 1.0, 1.0);
 uniform float radius = 1.08;
 uniform float centre_y = 1.45;
-uniform float energy = 0.85;
+uniform float energy = 0.28;
 
 varying vec3 local_pos;
 

@@ -11,6 +11,8 @@ extends CharacterBody3D
 signal died(enemy: Enemy)
 
 const SIGHT_MASK := Layers.WORLD | Layers.PLAYER
+## Hostile glow (eyes, beams, bursts): warm red-orange, in the Quaternius palette.
+const HOSTILE := Color("#FF4A2B")
 const DORMANT_DISTANCE := 48.0
 
 var kind := "enemy"
@@ -35,6 +37,15 @@ var dead := false
 ## the telegraph to that fraction so a still frame shows it.
 var frozen := false
 var capture_frac := -1.0
+
+## Animated model (Quaternius rig) and clip names per state; subclasses override names.
+var model: Node3D
+## Extra yaw if the model's face is not along -Z (Godot forward).
+var model_yaw := 0.0
+var anim: AnimationPlayer
+var anim_names := {"idle": "Idle", "aware": "Look", "move": "Run", "lock": "Look", "attack": "Attack", "hit": "Hit", "die": "TurnOff"}
+var _attack_t := 0.0
+var _hit_t := 0.0
 
 var _path_timer := 0.0
 var _next_cell := Vector2i(-9999, -9999)
@@ -82,9 +93,12 @@ func _physics_process(delta: float) -> void:
 	if dead or player == null:
 		return
 	_hit_flash = maxf(0.0, _hit_flash - delta * 6.0)
+	_attack_t = maxf(0.0, _attack_t - delta)
+	_hit_t = maxf(0.0, _hit_t - delta)
 	if frozen:
 		_telegraph(maxf(capture_frac, 0.0), capture_frac >= 0.0)
 		_update_hum(maxf(capture_frac, 0.0), capture_frac >= 0.0)
+		_update_anim(maxf(capture_frac, 0.0), capture_frac >= 0.0)
 		return
 	var to_player := player.global_position - global_position
 	if to_player.length() > DORMANT_DISTANCE:
@@ -109,6 +123,25 @@ func _physics_process(delta: float) -> void:
 	var frac := clampf(lock / fire_time, 0.0, 1.0)
 	_telegraph(frac, in_range)
 	_update_hum(frac, in_range)
+	_update_anim(frac, in_range)
+
+
+func _update_anim(frac: float, locking: bool) -> void:
+	if anim == null:
+		return
+	var state := "idle"
+	if _hit_t > 0.0:
+		state = "hit"
+	elif _attack_t > 0.0:
+		state = "attack"
+	elif locking and frac > 0.02:
+		state = "lock"
+	elif Vector2(velocity.x, velocity.z).length() > 0.6:
+		state = "move"
+	elif aggro:
+		state = "aware"
+	if not AnimUtil.play(anim, anim_names[state]):
+		AnimUtil.play(anim, "Idle")
 
 
 func eye_position() -> Vector3:
@@ -131,6 +164,7 @@ func has_los() -> bool:
 
 func _fire() -> void:
 	player.take_damage(damage, self)
+	_attack_t = 0.45
 
 
 func take_damage(amount: float) -> void:
@@ -138,6 +172,7 @@ func take_damage(amount: float) -> void:
 		return
 	hp -= amount
 	_hit_flash = 1.0
+	_hit_t = 0.22
 	aggro = true
 	last_seen = player.global_position
 	Sfx.play_at("hit_enemy", eye_position())
@@ -153,15 +188,34 @@ func _die() -> void:
 		_hum.stop()
 	Sfx.play_at("enemy_die", eye_position())
 	_shatter()
+	_leave_wreck()
 	died.emit(self)
 	queue_free()
+
+
+func _leave_wreck() -> void:
+	## The model stays behind playing its switch-off clip, then shrinks away.
+	if model == null or not is_instance_valid(model):
+		return
+	var xf := model.global_transform
+	remove_child(model)
+	fx_root().add_child(model)
+	model.global_transform = xf
+	if not AnimUtil.play(anim, anim_names.die, 0.05):
+		AnimUtil.play(anim, "Hit", 0.05)
+	var wreck := model
+	var tw := wreck.create_tween()
+	tw.tween_interval(1.1)
+	tw.tween_property(wreck, "scale", Vector3.ONE * 0.01, 0.35).set_ease(Tween.EASE_IN)
+	tw.tween_callback(wreck.queue_free)
+	model = null
 
 
 func _shatter() -> void:
 	## Red shards burst out and fade; a short red flash lights the room.
 	var root := fx_root()
 	var origin := eye_position()
-	var mat := MaterialLib.neon(Color("#FF2D55"), 3.0)
+	var mat := MaterialLib.neon(HOSTILE, 3.0)
 	# Expanding shell: reads as a burst even from across a room.
 	var shell := MeshInstance3D.new()
 	var sm := SphereMesh.new()
@@ -197,7 +251,7 @@ func _shatter() -> void:
 		tw.tween_property(s, "scale", Vector3.ONE * 0.05, 0.7).set_ease(Tween.EASE_IN)
 		tw.chain().tween_callback(s.queue_free)
 	var l := OmniLight3D.new()
-	l.light_color = Color("#FF2D55")
+	l.light_color = HOSTILE
 	l.light_energy = 4.0
 	l.omni_range = 7.0
 	root.add_child(l)
@@ -247,10 +301,21 @@ func _steer_dir(target: Vector3, los: bool, delta: float) -> Vector3:
 	return c.normalized()
 
 
+## Turn the model (or its yawing part) to the player at once (capture tour / spawn).
+func face_player_now() -> void:
+	var node: Node3D = get("head") if get("head") != null else get("body")
+	if node == null:
+		node = model
+	if node == null:
+		return
+	var d := player.global_position - global_position
+	node.rotation.y = atan2(-d.x, -d.z) + model_yaw
+
+
 func _face(dir: Vector3, node: Node3D, delta: float, speed: float = 8.0) -> void:
 	if dir.length() < 0.01:
 		return
-	var want := atan2(-dir.x, -dir.z)
+	var want := atan2(-dir.x, -dir.z) + (model_yaw if node == model else 0.0)
 	node.rotation.y = lerp_angle(node.rotation.y, want, 1.0 - exp(-speed * delta))
 
 
@@ -271,11 +336,14 @@ func _adopt_model(path: String) -> Node3D:
 				mi.set_surface_override_material(i, d)
 				_neon_mats.append(d)
 	add_child(m)
+	model = m
+	anim = m.find_child("AnimationPlayer", true, false) as AnimationPlayer
+	AnimUtil.play(anim, "Idle", 0.0)
 	return m
 
 
 static func neon_red() -> ShaderMaterial:
-	return MaterialLib.neon(Color("#FF2D55"), 1.6)
+	return MaterialLib.neon(HOSTILE, 1.6)
 
 
 static func body_metal() -> Material:
@@ -302,7 +370,7 @@ func _make_beam(parent: Node3D) -> MeshInstance3D:
 	cyl.rings = 1
 	var mi := MeshInstance3D.new()
 	mi.mesh = cyl
-	mi.material_override = MaterialLib.neon(Color("#FF2D55"), 2.0)
+	mi.material_override = MaterialLib.neon(HOSTILE, 2.0)
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mi.visible = false
 	parent.add_child(mi)

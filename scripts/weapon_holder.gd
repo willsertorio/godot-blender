@@ -14,10 +14,13 @@ signal changed
 const WEAPONS := {
 	"pistol": {"damage": 25.0, "interval": 0.24, "auto": false, "spread": 0.022, "ads_spread": 0.003,
 		"range": 90.0, "sound": "pistol", "kick": 1.0,
-		"model": "res://assets/models/pistol.glb", "hip": Vector3(0.15, -0.19, -0.36), "ads": Vector3(0.0, -0.1, -0.32)},
+		"model": "res://assets/models/pistol.glb", "hip": Vector3(0.15, -0.17, -0.36), "ads": Vector3(0.0, -0.13, -0.33),
+		# Arm poses in the weapon frame (Godot axes: -Z = barrel, +Y = up; origin = grip): [position, rotation deg].
+		"arm_r": [Vector3(0, 0, 0), Vector3(-14, 0, 0)], "arm_l": [Vector3(-0.045, -0.01, -0.035), Vector3(-10, 0, -25)]},
 	"rifle": {"damage": 12.0, "interval": 0.095, "auto": true, "spread": 0.035, "ads_spread": 0.009,
 		"range": 90.0, "sound": "rifle", "kick": 0.55, "mag": 30, "reload": 1.5,
-		"model": "res://assets/models/rifle.glb", "hip": Vector3(0.19, -0.25, -0.42), "ads": Vector3(0.0, -0.215, -0.42)},
+		"model": "res://assets/models/rifle.glb", "hip": Vector3(0.18, -0.24, -0.38), "ads": Vector3(0.0, -0.255, -0.4),
+		"arm_r": [Vector3(0, 0, 0), Vector3(-14, 0, 0)], "arm_l": [Vector3(-0.01, -0.06, -0.3), Vector3(-8, 0, 8)]},
 }
 const RESERVE_START := 60
 const RESERVE_MAX := 240
@@ -250,7 +253,32 @@ func _impact(p: Vector3, n: Vector3) -> void:
 	tw.tween_callback(spark.queue_free)
 
 
-## The Blender weapon (Kenney Blaster Kit, normalized) or the greybox fallback.
+const ARMS := "res://assets/models/arms.glb"
+static var _arms_scene: PackedScene
+
+
+## Gloved arms (blender/scripts/build_arms.py) posed on a weapon model: ArmR on the grip,
+## ArmL per weapon. Nodes ArmR/ArmL, Wrist*, Hand*, Forearm* stay addressable for animation.
+func _attach_arms(model: Node3D, w: String) -> void:
+	if not ResourceLoader.exists(ARMS):
+		return
+	if _arms_scene == null:
+		_arms_scene = load(ARMS)
+	var inst := _arms_scene.instantiate()
+	MaterialLib.rebind_tree(inst)
+	for side in ["R", "L"]:
+		var a := inst.find_child("Arm" + side, true, false) as Node3D
+		if a == null:
+			continue
+		a.get_parent().remove_child(a)
+		model.add_child(a)
+		var pose: Array = WEAPONS[w]["arm_" + side.to_lower()]
+		a.position = pose[0]
+		a.rotation_degrees = pose[1]
+	inst.free()
+
+
+## The Quaternius weapon (normalized) or the greybox fallback.
 func _load_model(w: String, fallback: Callable) -> Node3D:
 	var path: String = WEAPONS[w].model
 	if not ResourceLoader.exists(path):
@@ -259,6 +287,7 @@ func _load_model(w: String, fallback: Callable) -> Node3D:
 	MaterialLib.rebind_tree(m)
 	assert(m.find_child("Muzzle", true, false) != null, path + " has no Muzzle")
 	m.position = WEAPONS[w].hip
+	_attach_arms(m, w)
 	return m
 
 

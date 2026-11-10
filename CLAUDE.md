@@ -13,8 +13,9 @@ conventions, commands and code map so a new session can pick up where the last o
 
 None of this is in the base image. A fresh container needs them reinstalled (see "Reinstall" below).
 Network: the session runs on the personal cloud environment `godot-blender`, which allows Poly Haven,
-ambientCG, Quaternius, Kenney (send a browser User-Agent, or it returns 403), download.blender.org and GitHub.
-itch.io and Google Drive (where Quaternius hosts its packs) are **not** allowed.
+ambientCG, Quaternius, Kenney (send a browser User-Agent, or it returns 403), download.blender.org, GitHub,
+itch.io + quaternius.itch.io and itch's file host `itchio-mirror.cb031a832f44726753d6267436f3b414.r2.cloudflarestorage.com`.
+Blender's viewport renderer (thumbnails) needs `libegl1` (`apt-get install -y libegl1`) and `xvfb-run`.
 
 ### Reinstall
 ```
@@ -27,6 +28,34 @@ ln -sf /opt/godot/Godot_v4.3-stable_linux.x86_64 /usr/local/bin/godot
 ln -sf /opt/blender-4.2.23-linux-x64/blender /usr/local/bin/blender
 ```
 
+## Art direction (since the polish pass)
+
+Everything visible comes from two CC0 Quaternius packs, in their own colours (the GDD's single-hostile-red
+rule no longer applies to the environment):
+- **Modular Sci-Fi MegaKit** (levels, doors, columns, props) and **Sci-Fi Essentials Kit** (guns, enemies,
+  chest, pickups, decor). Raw packs: `assets_src/quaternius/` (git-ignored). Fetch: the free itch.io flow
+  (`/download_url` -> download page -> `/file/<upload_id>` returns a signed R2 URL); the glTFs expect their
+  textures next to them, so copy each pack's `Textures/` into every glTF folder before importing.
+- `blender/scripts/normalize_quaternius.py` re-frames every piece (walls: cell -X edge -> our edge frame;
+  guns: barrel -X -> +Y, grip origin, `Muzzle`; rigs kept with their actions), drops untextured helper
+  spheres, merges duplicate materials (`MI_Trim_01.003` -> `MI_Trim_01`), exports glbs **without images** and
+  writes `assets/models/q_materials.json` (material -> textures). `MaterialLib` builds each material once from
+  that table + `assets/textures/quaternius/` (no per-glb texture copies).
+- `tools/pack_quaternius_textures.py`: trim-sheet base colours 2K, everything else 1K, JPEG (PNG if alpha).
+- Glow: the free glTFs drop emissive; `MaterialLib.EMISSIVE` restores it from the packs' emissive masks
+  (multiply operator; the default ADD operator makes the whole surface glow). Enemy glow/beams `#FF4A2B`.
+- Walls are 5 m (bottom strip + 3 m wall + 2 m top band); wall geometry reaches 0.45 m into the cell
+  (`DungeonGen.WALL_DEPTH`). Rooms pick one wall style (astra / band / window) and one floor (A/B/C).
+- Player arms: `blender/scripts/build_arms.py` (flat colours from the gun palette), rigid-part rig
+  `ArmR/ArmL > Hand*, Wrist* > Forearm*`, posed per weapon in `WeaponHolder.WEAPONS[*].arm_r/arm_l`.
+- Exit portal: `build_props.py` gate + MegaKit `Platform_Round1` pad; field = `portal.gdshader`.
+- Enemies (rigs + clips, names via `AnimUtil.play(prefix)`): Turret = `Enemy_Trilobite` (whole model yaws;
+  Look while locking, AttackAuto on fire), Brawler = `Enemy_QuadShell` (Run, Charge, Attack), Pursuer =
+  `Enemy_EyeDrone` (model faces +Z: `model_yaw = PI`; Charging while locking). Hit on damage, TurnOff/BackFlip
+  wreck on death. Chest = `Prop_Chest` (Open clip).
+- Lights: no OmniLights on props (they push room meshes past the 8-lights-per-object limit). Room lights 2.0,
+  corridor 1.3, ambient 0.6 neutral, exposure 1.0, glow 0.35 @ 1.3.
+
 ## Conventions (fixed on day one; do not drift)
 
 - Units: 1 Blender unit = 1 m. Blender is Z-up, Godot is Y-up. Blender +Y (forward) becomes Godot -Z
@@ -36,14 +65,14 @@ ln -sf /opt/blender-4.2.23-linux-x64/blender /usr/local/bin/blender
 - Node names Godot code looks up: turret `Head`, `Muzzle`; container `Lid` + animation `Open`;
   door `Panel` + animation `Open`; weapons `Muzzle`. Emissive materials are prefixed `Neon`
   (e.g. `NeonCyan`, `NeonRed`) so Godot can swap in the animated neon shader.
-- Palette: environment neon cyan `#22E5FF`, hostile red `#FF2D55` (enemies only), loot green `#39FF88`,
-  exit violet `#B48CFF`.
-- Textures: OpenGL normal maps (`NormalGL`), 2K for walls/floors, 1K for small props.
+- Palette: Quaternius pack colours for the world. HUD keeps cyan `#22E5FF`, loot green `#39FF88`, exit violet
+  `#B48CFF`; hostile glow `#FF4A2B`.
+- Textures: the packs' own maps (see Art direction for sizes).
 - Hard-surface models get bevelled edges + hardened (weighted) normals, UVs at real-world scale.
 
 ## Asset pipeline
 
-1. CC0 only (Poly Haven, ambientCG, Quaternius, Kenney). No CC-BY, personal-use or unclear licences.
+1. CC0 only (currently Quaternius + Kenney). No CC-BY, personal-use or unclear licences.
 2. If nothing fits, model it in Blender via a Python script in `blender/scripts/`.
 3. Everything passes through Blender (normalize scale/axes/origin/names/materials) and is exported as `.glb`
    into `assets/models/`. Never import a downloaded model into Godot directly.
@@ -83,13 +112,10 @@ tools/perf_probe.sh [seed]                             # draw calls / objects / 
 tools/export_web.sh                                    # web export -> build/web (then: python3 -m http.server 8060 -d build/web)
 tools/capture.sh [seed] [label]                        # capture tour -> captures/latest (old -> captures/prev)
 python3 tools/compare.py                               # prev vs latest contact sheet + change score
-python3 -I tools/fetch_textures.py                     # (re)fetch + pack ambientCG sets, logs licenses.csv
-blender -b -P blender/scripts/build_kit.py -- assets/models   # rebuild kit_env.glb + door.glb
-blender -b -P blender/scripts/build_props.py -- assets/models  # container.glb + portal.glb
-blender -b -P blender/scripts/build_enemies.py -- assets/models  # turret / brawler / pursuer
-blender -b -P blender/scripts/normalize_weapons.py -- assets_src/models/blaster-kit assets/models   # pistol / rifle
-blender -b -P blender/scripts/normalize_pickups.py -- assets_src/models/polyhaven assets/models   # kit / ammo / health_cell
-python3 -I tools/fetch_polyhaven.py medical_box ammo_box  # raw Poly Haven downloads (logs licenses.csv)
+blender -b -P blender/scripts/normalize_quaternius.py -- assets_src/quaternius assets/models  # all pack assets + q_materials.json
+python3 -I tools/pack_quaternius_textures.py           # resize/recompress the copied pack textures (run right after)
+blender -b -P blender/scripts/build_props.py -- assets/models  # portal.glb
+blender -b -P blender/scripts/build_arms.py -- assets/models   # arms.glb
 python3 -I tools/set_texture_imports.py                # force VRAM compression + mipmaps on 3D textures (run after adding textures)
 ```
 Add `--greybox` to any run or capture to build with the greybox kit instead of the Blender kit.
@@ -104,12 +130,14 @@ The ALSA `ERR_CANT_OPEN` error in container logs is the missing audio device; ha
 | `scenes/main.tscn` + `scripts/main.gd` | Game flow (title, run, end, again), input map, seed/args, run stats, difficulty, environment |
 | `scripts/dungeon_gen.gd` | `DungeonGen`: pure-data layout from (seed, difficulty): rooms, corridors, doorways, doors, pillars, spawns, exit |
 | `scripts/dungeon_builder.gd` | `DungeonBuilder`: layout -> nodes. Per-area merged meshes (Compatibility = max 8 lights per object), box collision, doors, lights, portal |
-| `scripts/kit_art.gd` | `KitArt` (default kit): meshes from `kit_env.glb` by node name, `door_scene()` from `door.glb`, collision boxes |
+| `scripts/kit_q.gd` | `KitQuaternius` (default kit): pieces from `q_kit.glb` by node name + variant (wall style, floor), `door_scene()` from `q_door.glb`, collision boxes |
+| `scripts/anim_util.gd` | `AnimUtil`: play pack clips by prefix, loops cyclic ones |
 | `scripts/kit_greybox.gd` | `KitGreybox`: greybox stand-ins with the same interface (`--greybox`) |
-| `scripts/material_lib.gd` | `MaterialLib`: Blender material name -> Godot material (ambientCG ORM sets, tiling, tint; `Neon*` -> neon shader) |
+| `scripts/material_lib.gd` | `MaterialLib`: material name -> Godot material (Quaternius table + emissive masks; `Neon*` -> neon shader; `PortalField`) |
 | `blender/scripts/lib_hardsurface.py` | Blender helpers: bevelled cuboid parts, weighted normals, metre box-UVs, named materials, glb export |
-| `blender/scripts/build_kit.py` | Environment kit + door |
-| `tools/fetch_textures.py` | ambientCG fetch (CC0 check on the asset page) and ORM packing into `assets/textures/<id>/` |
+| `blender/scripts/normalize_quaternius.py` | Quaternius packs -> our glbs + material table (see Art direction) |
+| `blender/scripts/build_arms.py` | First-person arms |
+| `tools/pack_quaternius_textures.py` | Texture budget for the web build |
 | `scripts/player.gd` | `Player`: CharacterBody3D, WASD + mouse look, ADS (slow + narrow FOV), interact (nearest in range, no prompt) |
 | `scripts/weapon_holder.gd` | `WeaponHolder`: hitscan from camera, first hit on WORLD or HOSTILE only |
 | `scripts/door.gd` | `Door`: closed blocks WORLD layer; E opens, stays open |
@@ -118,14 +146,12 @@ The ALSA `ERR_CANT_OPEN` error in container logs is the missing audio device; ha
 | `scripts/capture.gd` | `CaptureTour`: fixed views for `--capture=DIR` |
 | `scripts/layers.gd` | Physics layer bits (WORLD, PLAYER, HOSTILE, PICKUP) |
 | `scripts/enemies/enemy.gd` | `Enemy` base: LOS ray, lock timer -> instant damage, telegraph drive, hit/death fx, grid pathing via `main.nav_next_cell` |
-| `scripts/enemies/turret.gd` `brawler.gd` `pursuer.gd` | The three hostiles (greybox visuals built in code; nodes `Head`/`Muzzle` on the turret) |
+| `scripts/enemies/turret.gd` `brawler.gd` `pursuer.gd` | The three hostiles (Quaternius rigs; greybox fallback built in code) |
 | `scripts/pickup.gd` | `Pickup`: kit / ammo / health payoff; stays on the floor if it would do nothing |
 | `scripts/sfx.gd` | `Sfx`: static sound API (`play`, `play_at`, `loop_3d`, ambience); keys -> Kenney files; `Sfx.log` for tests |
 | `scripts/loot_crate.gd` | `LootCrate`: container (E in 2 m, Lid/Open anim, payoff pops out and is taken if useful), green glow light |
 | `scripts/map_view.gd` | `MapView`: Tab map (explored rooms, hostile rooms + counts, exit once found, walked corridors, doors, player) |
-| `blender/scripts/build_props.py` `build_enemies.py` | Container, portal; turret/brawler/pursuer (node contract in each docstring) |
-| `blender/scripts/normalize_weapons.py` | Kenney blasters -> pistol/rifle: palette-colour face classification into GunMetal/GunPaint/GunGrip, +Y, real size, grip origin, Muzzle, neon |
-| `blender/scripts/normalize_pickups.py` | Poly Haven boxes -> kit/ammo (own textures kept, material `PH_*`), modelled health cell |
+| `blender/scripts/build_props.py` | Exit portal gate |
 | `tools/fight_bot.gd` | Balance bot (reaction 0.45 s, aim error, no cover; rifle/pistol/reload/kits/crates) |
 
 ### HUD and flow
@@ -138,7 +164,8 @@ The ALSA `ERR_CANT_OPEN` error in container logs is the missing audio device; ha
 - End screen: win/loss, score (kills only: turret 100, pursuer 150, brawler 200), kills, rooms explored, next threat level.
 
 ### Economy and difficulty
-- Containers: 1-2 per room (1 in spawn), against a wall on a non-doorway edge cell, facing in. Payoffs: kit / ammo (+60) /
+- Containers: 1-2 per room (1 in spawn), against a wall on a non-doorway edge cell, facing in. Decor: 1-3
+  shallow props per room on other free wall cells (DECO_KINDS), with collision. Payoffs: kit / ammo (+60) /
   health (+35); kit weight 4 -> 1 with difficulty (34 % -> 10 % of containers at d0 -> d4).
 - Difficulty per completed mission: +0.5 hostiles per room, +20 % hostile HP. Bot results (8 runs each, no cover):
   d0 8/8, d1 8/8, d2 8/8, d3 3/8, d4 3/8 wins.
@@ -178,24 +205,16 @@ The ALSA `ERR_CANT_OPEN` error in container logs is the missing audio device; ha
   half the corridors (always on the first corridor out of spawn). Pillars at the 4 inset vertices of rooms 5x5 and up.
 - Difficulty (missions completed): +1 hostile per room per level; health-kit loot weight falls 4 -> 1.
 
-### Materials and lighting (tuned in Godot)
-- Blender exports material *names* only (`export_image_format=NONE`); `MaterialLib` binds textures by name.
-  Current sets: WallPanel=Metal046A, WallTrim=Metal028, DoorMetal=Metal038, Floor=DiamondPlate008A,
-  Ceiling=MetalPlates015B, PropMetal=Metal029 (1K). Neon uses `assets/shaders/neon.gdshader` (unshaded HDR + slow shimmer).
-- Keep metalness moderate (0.3-0.45 on large surfaces): there are no reflection probes in Compatibility, so very
-  metallic surfaces go black. A dim procedural sky provides reflections only.
-- Tonemapper is Filmic. ACES crushed the dark midtones and washed the neon to white.
-- Lights: rooms of 4+ cells per side get 2 x 2 ceiling omnis, smaller rooms 1. The one nearest the centre casts shadows.
-  One unshadowed omni per corridor. `main.gd` hides lights beyond range+10 m of the player; the renderable-light
-  cap is raised to 96 as a backstop (Compatibility drops lights silently past the cap).
-- Ceiling fixtures (`ceiling_light`) sit on every other cell; plain `ceiling` elsewhere.
+### Materials and lighting
+See "Art direction" above. Tonemapper stays Filmic; there are no reflection probes in Compatibility, and the
+renderable-light cap is raised to 96 with distance culling in `main.gd` (Compatibility drops lights past the cap).
 
 ### Kit piece frames (Godot space; the Blender kit must match)
-- `floor`/`ceiling`: origin at cell centre; floor top y=0, ceiling underside y=4.
+- `floor`/`ceiling`: origin at cell centre; floor top y=0, ceiling underside y=5 (Quaternius kit).
 - `wall`, `doorframe`: origin at the edge midpoint on the floor, spans x -2..2, local -Z faces into the cell
   (Blender: +Y faces into the room), thickness extends toward +Z (outside).
-- `pillar`: origin at the grid vertex (0.9 m footprint). `door_panel`: 2.4 x 3 m, origin at the bottom centre of the opening.
-- Art-kit doorframes protrude 6 cm each side of the wall; collision boxes in `kit_art.gd` match.
+- `pillar`: origin at the grid vertex (Column_Hollow, 1.2 m). Doorframe: opening 2.46 x 3.5 m, frame 4.86 x 5 x 0.5 m;
+  door = PanelL/PanelR (4.2 x 4.05 m), slid apart 1.9 m each by `Door.gd`. Collision boxes in `kit_q.gd`.
 
 ## How we work
 
@@ -218,3 +237,5 @@ The ALSA `ERR_CANT_OPEN` error in container logs is the missing audio device; ha
 - [x] 7. HUD and map
 - [x] 8. Hero art pass (enemies, weapons, container, pickups, portal)
 - [x] 9. Web export (tools/export_web.sh; tested in Chromium via Playwright)
+
+Polish (user's plan): [x] 1 art direction (Quaternius packs, arms)  [ ] 2 motion design  [ ] 3 sound  [ ] 4 UI

@@ -168,6 +168,7 @@ func _stage_enemy(g: DungeonGen, kind: String, d: float) -> Enemy:
 			best_pos = pos
 	if best_pos != Vector3.INF:
 		_place(best_pos, e.eye_position() + Vector3.DOWN * 0.15)
+	e.face_player_now()
 	return e
 
 

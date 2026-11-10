@@ -17,6 +17,7 @@ var _shot_flash := 0.0
 var _strafe := 1.0
 var _strafe_t := 0.0
 var _hover_sfx: AudioStreamPlayer3D
+var body_offset := 0.0
 
 
 func _init() -> void:
@@ -29,6 +30,7 @@ func _init() -> void:
 	lock_range = 22.0
 	sight_range = 30.0
 	eye_height = HOVER
+	anim_names = {"idle": "Idle", "aware": "Look", "move": "Idle", "lock": "Charging", "attack": "Attack", "hit": "Hit", "die": "BackFlip"}
 
 
 func _build_visual() -> void:
@@ -41,9 +43,15 @@ func _build_visual() -> void:
 
 	var model := _adopt_model("res://assets/models/pursuer.glb")
 	if model:
-		body = model.find_child("Body", true, false)
-		core = model.find_child("Core", true, false)
-		muzzle = model.find_child("Muzzle", true, false)
+		# EyeDrone: 1 m tall with its origin at the base; the code hovers the model's centre.
+		body = model
+		body_offset = -0.5
+		model_yaw = PI  # the EyeDrone's lens faces +Z in the pack
+		core = null
+		muzzle = Node3D.new()
+		muzzle.name = "Muzzle"
+		muzzle.position = Vector3(0, 0.5, 0.5)  # lens side (model-local +Z)
+		model.add_child(muzzle)
 		beam = _make_beam(self)
 		_hover_sfx = Sfx.loop_3d("pursuer_hover", body)
 		return
@@ -114,7 +122,7 @@ func _move(delta: float, los: bool) -> void:
 	velocity.y = 0.0
 	move_and_slide()
 	global_position.y = 0.0
-	body.position.y = HOVER + sin(Time.get_ticks_msec() * 0.003 + get_instance_id()) * 0.12
+	body.position.y = HOVER + body_offset + sin(Time.get_ticks_msec() * 0.003 + get_instance_id()) * 0.12
 	var look := player.global_position + Vector3.UP * 1.3 - body.global_position
 	_face(look, body, delta, 6.0)
 
@@ -128,7 +136,8 @@ func _fire() -> void:
 func _telegraph(frac: float, active: bool) -> void:
 	_glow(frac)
 	var pulse := 1.0 + frac * 0.6 * (0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.03 * (1.0 + frac * 2.0)))
-	core.scale = Vector3.ONE * pulse
+	if core:
+		core.scale = Vector3.ONE * pulse
 	_shot_flash = maxf(0.0, _shot_flash - get_physics_process_delta_time() * 7.0)
 	if (active and frac > 0.01) or _shot_flash > 0.0:
 		var r := 0.005 + frac * 0.014 + _shot_flash * 0.04

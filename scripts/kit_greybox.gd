@@ -56,7 +56,9 @@ func _init() -> void:
 	])
 
 
-func get_mesh(piece: String) -> Mesh:
+func get_mesh(piece: String, _variant: String = "") -> Mesh:
+	if piece.begins_with("deco_"):
+		return _meshes["pillar"]
 	return _meshes[piece]
 
 
