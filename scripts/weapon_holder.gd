@@ -146,6 +146,8 @@ func _process(delta: float) -> void:
 		switch_to("rifle")
 	if Input.is_action_just_pressed("reload"):
 		start_reload()
+	if Input.is_action_just_pressed("arm_style"):
+		cycle_arm_mode()
 	var w: Dictionary = WEAPONS[current]
 	var want := Input.is_action_pressed("fire") if w.auto else Input.is_action_just_pressed("fire")
 	if want:
@@ -275,17 +277,39 @@ func _impact(p: Vector3, n: Vector3) -> void:
 	tw.tween_callback(spark.queue_free)
 
 
-## Arms baked onto each gun by blender/scripts/pose_wrad.py (WRAD ARMS, CC0). Parented to the
-## gun at -hip, so every gun motion (recoil, sway, reload tilt) carries the hands with it.
+## Arm styles (H cycles them in the lab; --arms=hands|full|none):
+##   hands: gloved hands built around each handle (blender/scripts/build_hands.py), gun frame
+##   full:  WRAD ARMS posed per gun (blender/scripts/pose_wrad.py), camera frame -> placed at -hip
+##   none:  floating guns
+const ARM_MODES := ["hands", "full", "none"]
+static var arm_mode := "hands"
+
+
 func _attach_arms(model: Node3D, w: String) -> void:
-	var path := "res://assets/models/arms_%s.glb" % w
-	if not ResourceLoader.exists(path):
-		return
-	var a := (load(path) as PackedScene).instantiate() as Node3D
-	a.name = "Arms"
-	model.add_child(a)
-	a.position = -(WEAPONS[w].hip as Vector3)
-	MaterialLib.rebind_tree(a)
+	for spec in [["hands", "res://assets/models/hands_%s.glb" % w, Vector3.ZERO],
+			["full", "res://assets/models/arms_%s.glb" % w, -(WEAPONS[w].hip as Vector3)]]:
+		if not ResourceLoader.exists(spec[1]):
+			continue
+		var a := (load(spec[1]) as PackedScene).instantiate() as Node3D
+		a.name = "Arms_" + spec[0]
+		model.add_child(a)
+		a.position = spec[2]
+		MaterialLib.rebind_tree(a)
+	_apply_arm_mode(model)
+
+
+func _apply_arm_mode(model: Node3D) -> void:
+	for m in ARM_MODES:
+		var n := model.get_node_or_null("Arms_" + m) as Node3D
+		if n:
+			n.visible = m == arm_mode
+
+
+func cycle_arm_mode() -> void:
+	arm_mode = ARM_MODES[(ARM_MODES.find(arm_mode) + 1) % ARM_MODES.size()]
+	for k in models:
+		_apply_arm_mode(models[k])
+	print("[arms] ", arm_mode)
 
 
 ## pose = [position, rotation(, scale)]: rotation is Euler degrees (Vector3) or a Basis.
@@ -342,6 +366,15 @@ func _reload_pose(f: float) -> Array:
 
 ## Reload: the support arm swings down out of view and back (rotation on its bicep bone).
 func _support_hand(f: float) -> void:
+	var away := smoothstep(0.15, 0.32, f) * (1.0 - smoothstep(0.48, 0.66, f)) if f > 0.0 else 0.0
+	var hands := view_model.get_node_or_null("Arms_hands")
+	if hands:
+		for n in hands.get_children():
+			if n is Node3D and String(n.name).begins_with("HandL"):
+				if not n.has_meta("rest"):
+					n.set_meta("rest", n.transform)
+				n.transform = n.get_meta("rest")
+				n.position += Vector3(-0.12, -0.3, 0.15) * away
 	var sk := view_model.find_child("Skeleton3D", true, false) as Skeleton3D
 	if sk == null:
 		return
@@ -351,7 +384,6 @@ func _support_hand(f: float) -> void:
 	if not has_meta("bicep_rest_%s" % current):
 		set_meta("bicep_rest_%s" % current, sk.get_bone_pose_rotation(b))
 	var rest: Quaternion = get_meta("bicep_rest_%s" % current)
-	var away := smoothstep(0.15, 0.32, f) * (1.0 - smoothstep(0.48, 0.66, f)) if f > 0.0 else 0.0
 	sk.set_bone_pose_rotation(b, Quaternion(Vector3(0.4, 0, 1).normalized(), deg_to_rad(-55) * away) * rest)
 
 

@@ -56,6 +56,11 @@ rule no longer applies to the environment):
   Hands use material ArmGlove, arms ArmSuit (fabric shader). In Godot the arms are children of the gun at -hip
   (`WeaponHolder._attach_arms`), so recoil/sway/reload move both; the reload drops the left arm by rotating `bicep.l`.
   The .blend in the pack is from a newer Blender (unreadable by 4.2); use its .glb.
+- Hand styles (H cycles in game, `--arms=hands|full|none`): **hands** (default) = `build_hands.py`: gloves grown
+  from metaballs around each handle (handle measured from the gun mesh: box -> centre, PCA axis, cross-section),
+  fingers follow the cross-section so they always wrap it; parented to the gun at the origin. **full** = WRAD arms
+  (`pose_wrad.py`). Pack-with-hands option (Quaternius Animated Guns / Sci-Fi Gun Pack) is blocked: Google Drive
+  returns "Quota exceeded" to this container; download in a browser and drop into `incoming/` to try it.
 - Viewmodel (`scripts/viewmodel_rig.gd`): weapon + arms render on layer 5 through their own camera
   (FOV 54, near 1 cm, SubViewport overlay under the HUD) with a key + rim light that only light that layer.
   Tracers start where the muzzle appears on screen (`WeaponHolder._muzzle_in_world`).
@@ -144,6 +149,7 @@ python3 -I tools/pack_quaternius_textures.py           # resize/recompress the c
 blender -b -P blender/scripts/build_props.py -- assets/models  # portal.glb
 blender -b -P blender/scripts/normalize_wrad.py -- assets_src/wrad/arms.glb assets/models   # arms_wrad.glb
 blender -b -P blender/scripts/pose_wrad.py -- assets/models   # arms_pistol.glb + arms_rifle.glb (hold poses)
+blender -b -P blender/scripts/build_hands.py -- assets/models  # hands_pistol.glb + hands_rifle.glb (default hand style)
 python3 -I tools/set_texture_imports.py                # force VRAM compression + mipmaps on 3D textures (run after adding textures)
 ```
 Add `--greybox` to any run or capture to build with the greybox kit instead of the Blender kit.

@@ -124,6 +124,11 @@ static func get_material(name: String) -> Material:
 		m = _surface(SURFACES[name])
 	elif name.begins_with("Neon"):
 		m = neon(NEON.get(name, NEON.NeonCyan))
+	elif name == "ArmAccent":
+		var ac := StandardMaterial3D.new()
+		ac.albedo_color = Color(0.62, 0.27, 0.05)
+		ac.roughness = 0.55
+		m = ac
 	elif name == "PortalField":
 		var pm := ShaderMaterial.new()
 		pm.shader = load("res://assets/shaders/portal.gdshader")

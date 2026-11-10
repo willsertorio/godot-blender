@@ -74,6 +74,8 @@ func _ready() -> void:
 	_setup_input()
 	args = _parse_args()
 	base_seed = int(args.seed) if args.has("seed") else int(Time.get_unix_time_from_system()) % 1000000
+	if args.has("arms") and args.arms in WeaponHolder.ARM_MODES:
+		WeaponHolder.arm_mode = args.arms
 	ui = GameUI.new()
 	ui.name = "UI"
 	add_child(ui)
@@ -506,7 +508,7 @@ static func _setup_input() -> void:
 		"move_forward": KEY_W, "move_back": KEY_S, "move_left": KEY_A, "move_right": KEY_D,
 		"reload": KEY_R, "interact": KEY_E, "use_kit": KEY_Q,
 		"weapon_1": KEY_1, "weapon_2": KEY_2, "map": KEY_TAB,
-		"sprint": KEY_SHIFT, "jump": KEY_SPACE, "pause": KEY_ESCAPE,
+		"sprint": KEY_SHIFT, "jump": KEY_SPACE, "pause": KEY_ESCAPE, "arm_style": KEY_H,
 	}
 	for action in keys:
 		if not InputMap.has_action(action):

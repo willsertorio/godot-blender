@@ -82,6 +82,32 @@ def hand_frame(arm, side):
     return basis, (i + m + r + p) / 4 - w, c.normalized()
 
 
+def _cut_to_hands(body, arm, keep_back=0.07):
+    """Hands-only variant: drop arm geometry more than keep_back metres behind each wrist."""
+    import bmesh
+    names = {g.index: g.name for g in body.vertex_groups}
+    wr = {sd: arm.matrix_world @ arm.data.bones[f"wrist.{sd}"].head_local for sd in ("r", "l")}
+    fdir = {sd: (arm.matrix_world @ arm.data.bones[f"finger_middle1.{sd}"].head_local - wr[sd]).normalized() for sd in ("r", "l")}
+    bm = bmesh.new()
+    bm.from_mesh(body.data)
+    bm.verts.ensure_lookup_table()
+    dl = body.data.vertices
+    kill = []
+    for i, v in enumerate(dl):
+        best = max(v.groups, key=lambda g: g.weight, default=None)
+        n = names.get(best.group, "") if best else ""
+        sd = n[-1] if n[-2:] in (".r", ".l") else None
+        if sd is None:
+            kill.append(bm.verts[i])
+            continue
+        if (body.matrix_world @ v.co - wr[sd]).dot(fdir[sd]) < -keep_back:
+            kill.append(bm.verts[i])
+    bmesh.ops.delete(bm, geom=kill, context="VERTS")
+    bmesh.ops.holes_fill(bm, edges=[e for e in bm.edges if e.is_boundary], sides=0)
+    bm.to_mesh(body.data)
+    bm.free()
+
+
 def _split_materials(body, drop_sides):
     """Gloves on the hands, sleeves on the arms (MaterialLib binds ArmGlove / ArmSuit to the
     fabric shader); arms with no grip on this weapon are removed."""
@@ -111,7 +137,7 @@ def _split_materials(body, drop_sides):
         poly.material_index = 1 if hand * 2 >= len(poly.vertices) else 0
 
 
-def build(weapon):
+def build(weapon, hands_only=False):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.ops.import_scene.gltf(filepath=ARMS)
     arm = next(o for o in bpy.data.objects if o.type == "ARMATURE")
@@ -170,6 +196,8 @@ def build(weapon):
         if t:
             got = arm.matrix_world @ arm.pose.bones[f"wrist.{side}"].head
             print(f"  {weapon}.{side}: wrist error {(got - t.matrix_world.translation).length * 100:.1f} cm")
+    if hands_only:
+        _cut_to_hands(body, arm)
     # Bake pose -> rest (mesh first, then skeleton), keep skinning.
     mod = next(m for m in body.modifiers if m.type == "ARMATURE")
     bpy.context.view_layer.objects.active = body
@@ -189,7 +217,7 @@ def build(weapon):
     bpy.ops.object.select_all(action="DESELECT")
     arm.select_set(True)
     body.select_set(True)
-    path = os.path.join(OUT, f"arms_{weapon}.glb")
+    path = os.path.join(OUT, f"{'hands' if hands_only else 'arms'}_{weapon}.glb")
     bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", use_selection=True, export_yup=True,
                               export_skins=True, export_animations=False, export_image_format="AUTO")
     print("exported", path)
@@ -197,3 +225,4 @@ def build(weapon):
 
 for w in GUNS:
     build(w)
+    build(w, hands_only=True)
