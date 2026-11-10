@@ -9,7 +9,12 @@ signal picked_up(payoff: String)
 signal kit_used
 
 const EYE_HEIGHT := 1.6
+const CROUCH_EYE := 1.05
 const WALK_SPEED := 6.0
+const RUN_MULT := 1.6
+const CROUCH_MULT := 0.5
+const JUMP_VELOCITY := 5.0
+const GRAVITY := 15.0
 const ADS_SPEED_MULT := 0.45
 const MOUSE_SENS := 0.0022
 const FOV := 80.0
@@ -27,6 +32,21 @@ var kits := 0
 var invulnerable := false
 ## Mouse look starts this many ms after spawn / re-capture (see _unhandled_input).
 var _look_ready_ms := 0
+## Movement state, read by WeaponHolder for viewmodel motion.
+var running := false
+var crouching := false
+var move_speed_frac := 0.0  # horizontal speed / walk speed
+var look_delta := Vector2.ZERO  # mouse motion since last frame (sway)
+var landed := 0.0  # impact strength of the last landing (decays)
+var _bob_phase := 0.0
+var _eye := EYE_HEIGHT
+var _was_on_floor := true
+var _fall_speed := 0.0
+## View punch (recoil kick on the camera, recovers by itself): pitch, yaw in radians.
+var punch := Vector2.ZERO
+var _punch_vel := Vector2.ZERO
+var _shape: CapsuleShape3D
+var _shape_node: CollisionShape3D
 
 var head: Node3D
 var camera: Camera3D
@@ -46,6 +66,8 @@ func _ready() -> void:
 	cs.shape = cap
 	cs.position.y = 0.9
 	add_child(cs)
+	_shape = cap
+	_shape_node = cs
 
 	head = Node3D.new()
 	head.name = "Head"
@@ -79,6 +101,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if Time.get_ticks_msec() < _look_ready_ms:
 			return
 		var rel: Vector2 = event.relative.limit_length(250.0)
+		look_delta += rel
 		var sens := MOUSE_SENS * (0.6 if ads else 1.0)
 		rotate_y(-rel.x * sens)
 		head.rotation.x = clampf(head.rotation.x - rel.y * sens, -1.45, 1.45)
@@ -100,16 +123,71 @@ func _physics_process(delta: float) -> void:
 	var dir := (transform.basis * Vector3(wish.x, 0, wish.y))
 	dir.y = 0
 	dir = dir.normalized() if dir.length() > 0.01 else Vector3.ZERO
-	var speed := WALK_SPEED * (ADS_SPEED_MULT if ads else 1.0)
-	velocity.x = dir.x * speed
-	velocity.z = dir.z * speed
-	velocity.y = 0.0 if is_on_floor() else velocity.y - 20.0 * delta
+	var can_act := input_enabled and alive
+	crouching = can_act and Input.is_action_pressed("crouch")
+	# Run: forward-ish only, not while aiming, crouching or firing (see WeaponHolder.sprint_block).
+	running = can_act and Input.is_action_pressed("sprint") and wish.y < -0.3 and not ads and not crouching \
+		and weapons.sprint_block <= 0.0
+	var speed := WALK_SPEED
+	if ads:
+		speed *= ADS_SPEED_MULT
+	elif crouching:
+		speed *= CROUCH_MULT
+	elif running:
+		speed *= RUN_MULT
+	# A little acceleration so starts and stops don't snap.
+	var accel := 40.0 if is_on_floor() else 8.0
+	velocity.x = move_toward(velocity.x, dir.x * speed, accel * delta)
+	velocity.z = move_toward(velocity.z, dir.z * speed, accel * delta)
+	if is_on_floor():
+		velocity.y = 0.0
+		if can_act and Input.is_action_just_pressed("jump") and not crouching:
+			velocity.y = JUMP_VELOCITY
+	else:
+		velocity.y -= GRAVITY * delta
+		_fall_speed = maxf(_fall_speed, -velocity.y)
 	move_and_slide()
+	if is_on_floor() and not _was_on_floor:
+		landed = clampf(_fall_speed / 7.0, 0.25, 1.0)
+		_fall_speed = 0.0
+	_was_on_floor = is_on_floor()
+	landed = move_toward(landed, 0.0, delta * 2.5)
+	move_speed_frac = Vector2(velocity.x, velocity.z).length() / WALK_SPEED if is_on_floor() else 0.0
+	_update_head(delta)
 	var target_fov := FOV * (0.62 if ads else 1.0)
 	camera.fov = lerpf(camera.fov, target_fov, 1.0 - exp(-14.0 * delta))
 	if viewmodel and viewmodel.camera:
 		var vm_fov := ViewmodelRig.FOV * (0.85 if ads else 1.0)
 		viewmodel.camera.fov = lerpf(viewmodel.camera.fov, vm_fov, 1.0 - exp(-14.0 * delta))
+
+
+## Crouch height, head bob, breathing, landing dip and view punch on the camera.
+func _update_head(delta: float) -> void:
+	var target_eye := CROUCH_EYE if crouching else EYE_HEIGHT
+	_eye = lerpf(_eye, target_eye, 1.0 - exp(-10.0 * delta))
+	_shape.height = lerpf(_shape.height, 1.25 if crouching else 1.8, 1.0 - exp(-10.0 * delta))
+	_shape_node.position.y = _shape.height * 0.5
+	var t := Time.get_ticks_msec() / 1000.0
+	# Steps: phase advances with distance walked (stride ~ 2.2 m per cycle).
+	_bob_phase += move_speed_frac * WALK_SPEED * delta / 2.2 * TAU
+	var amp := (0.035 if running else 0.022) * clampf(move_speed_frac, 0.0, 1.4) * (0.3 if ads else 1.0)
+	var bob := Vector3(cos(_bob_phase * 0.5) * amp * 0.8, -absf(sin(_bob_phase * 0.5)) * amp * 1.6, 0)
+	# Breathing: always on, smaller when aiming.
+	var breath := sin(t * 1.6) * 0.006 * (0.4 if ads else 1.0)
+	head.position = Vector3(0, _eye - landed * 0.12, 0) + bob + Vector3(0, breath, 0)
+	# Punch spring (critically damped-ish).
+	var left := minf(delta, 0.1)
+	while left > 0.0:
+		var h := minf(left, 1.0 / 240.0)
+		left -= h
+		_punch_vel += (-punch * 180.0 - _punch_vel * 22.0) * h
+		punch += _punch_vel * h
+	camera.rotation = Vector3(punch.x, punch.y, -cos(_bob_phase * 0.5) * amp * 0.25 + sin(t * 0.8) * 0.002)
+
+
+## Recoil kick on the view (radians); recovers by itself.
+func add_punch(pitch: float, yaw: float) -> void:
+	_punch_vel += Vector2(pitch, yaw) * 30.0
 
 
 func _try_interact() -> void:

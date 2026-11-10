@@ -34,6 +34,38 @@ const EMISSIVE := {
 }
 
 static var _cache: Dictionary = {}
+
+## Glove / sleeve fabric (arm_r.glb / arm_l.glb materials), see assets/shaders/fabric.gdshader.
+const FABRIC := {
+	"ArmSuit": {"set": "Fabric045", "tint": Color(0.085, 0.09, 0.11), "tile": 9.0, "mean": 0.765, "contrast": 0.9, "normal": 1.6, "rough": 0.0, "sheen": 0.3},
+	"ArmGlove": {"set": "Leather031", "tint": Color(0.06, 0.06, 0.065), "tile": 6.0, "mean": 0.14, "contrast": 0.5, "normal": 2.5, "rough": -0.15, "sheen": 0.15},
+}
+
+
+static func fabric(name: String, src: Material) -> ShaderMaterial:
+	var key := name + str(src.get_instance_id() if src else 0)
+	if _cache.has(key):
+		return _cache[key]
+	var spec: Dictionary = FABRIC[name]
+	var m := ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/fabric.gdshader")
+	var dir := "res://assets/textures/fabric/%s/" % spec.set
+	m.set_shader_parameter("detail_albedo", load(dir + "albedo.jpg"))
+	m.set_shader_parameter("detail_normal", load(dir + "normal.jpg"))
+	m.set_shader_parameter("detail_rough", load(dir + "rough.jpg"))
+	m.set_shader_parameter("tint", spec.tint)
+	m.set_shader_parameter("tile", spec.tile)
+	m.set_shader_parameter("detail_mean", spec.mean)
+	m.set_shader_parameter("albedo_contrast", spec.contrast)
+	m.set_shader_parameter("normal_strength", spec.normal)
+	m.set_shader_parameter("rough_bias", spec.rough)
+	m.set_shader_parameter("sheen", spec.sheen)
+	if src is BaseMaterial3D and (src as BaseMaterial3D).normal_texture:
+		m.set_shader_parameter("base_normal", (src as BaseMaterial3D).normal_texture)
+		m.set_shader_parameter("has_base_normal", true)
+	m.resource_name = name
+	_cache[key] = m
+	return m
 static var _q: Dictionary = {}
 
 
@@ -132,6 +164,9 @@ static func rebind(mesh: Mesh) -> Mesh:
 			continue
 		# Only names the library owns are replaced (Neon*, PortalField, ...); anything else
 		# (Quaternius MI_* materials with their own textures) is kept as imported.
+		if FABRIC.has(src.resource_name.get_slice(".", 0)):
+			out.surface_set_material(i, fabric(src.resource_name.get_slice(".", 0), src))
+			continue
 		var lib := get_material(src.resource_name.get_slice(".", 0))
 		if lib:
 			out.surface_set_material(i, lib)

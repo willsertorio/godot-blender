@@ -194,21 +194,50 @@ func _die() -> void:
 
 
 func _leave_wreck() -> void:
-	## The model stays behind playing its switch-off clip, then shrinks away.
+	## The body stays where it fell: switch-off clip, glow fades out, flying ones drop to the floor.
 	if model == null or not is_instance_valid(model):
 		return
 	var xf := model.global_transform
 	remove_child(model)
-	fx_root().add_child(model)
+	var holder := get_parent() if get_parent() else fx_root()
+	holder.add_child(model)
 	model.global_transform = xf
+	model.add_to_group("wrecks")
 	if not AnimUtil.play(anim, anim_names.die, 0.05):
 		AnimUtil.play(anim, "Hit", 0.05)
+	if anim:
+		# Hold the last frame of the death clip instead of looping back to idle.
+		anim.animation_finished.connect(func(_n): anim.pause(), CONNECT_ONE_SHOT)
 	var wreck := model
-	var tw := wreck.create_tween()
-	tw.tween_interval(1.1)
-	tw.tween_property(wreck, "scale", Vector3.ONE * 0.01, 0.35).set_ease(Tween.EASE_IN)
-	tw.tween_callback(wreck.queue_free)
+	_dim_glow(wreck)
+	var lift := wreck.global_position.y - global_position.y
+	if lift > 0.05 or wreck.position.y > 0.05:
+		# Drone: tumble down and settle with a small bounce.
+		var floor_y := global_position.y
+		var tw := wreck.create_tween()
+		tw.tween_property(wreck, "global_position:y", floor_y, 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		tw.tween_property(wreck, "global_position:y", floor_y + 0.12, 0.12).set_ease(Tween.EASE_OUT)
+		tw.tween_property(wreck, "global_position:y", floor_y, 0.12).set_ease(Tween.EASE_IN)
+		var rt := wreck.create_tween()
+		rt.tween_property(wreck, "rotation", wreck.rotation + Vector3(randf_range(0.6, 1.2), randf_range(-1, 1), randf_range(-0.5, 0.5)), 0.6)
 	model = null
+
+
+## Per-wreck copies of glowing materials, faded to a dull ember.
+func _dim_glow(root: Node) -> void:
+	for mi: MeshInstance3D in root.find_children("*", "MeshInstance3D", true, false):
+		for i in mi.mesh.get_surface_count():
+			var m := mi.get_surface_override_material(i)
+			if m == null:
+				m = mi.mesh.surface_get_material(i)
+			if m is BaseMaterial3D and (m as BaseMaterial3D).emission_enabled:
+				var d := (m as BaseMaterial3D).duplicate() as BaseMaterial3D
+				mi.set_surface_override_material(i, d)
+				mi.create_tween().tween_property(d, "emission_energy_multiplier", 0.08, 1.5)
+			elif m is ShaderMaterial:
+				var d2 := (m as ShaderMaterial).duplicate() as ShaderMaterial
+				mi.set_surface_override_material(i, d2)
+				d2.set_shader_parameter("energy", 0.15)
 
 
 func _shatter() -> void:

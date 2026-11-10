@@ -14,6 +14,8 @@ var container: SubViewportContainer
 var viewport: SubViewport
 var camera: Camera3D
 var canvas: CanvasLayer
+## Capture tour: when false the viewmodel camera stays where it was put (inspection shots).
+var follow := true
 
 
 func setup(p_world_camera: Camera3D, world_env: Environment) -> void:
@@ -68,5 +70,5 @@ static func adopt(root: Node) -> void:
 
 
 func _process(_delta: float) -> void:
-	if camera and world_camera and is_instance_valid(world_camera):
+	if follow and camera and world_camera and is_instance_valid(world_camera):
 		camera.global_transform = world_camera.global_transform

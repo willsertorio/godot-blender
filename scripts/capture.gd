@@ -98,9 +98,62 @@ func run_lab(p_main, p_dir: String) -> void:
 		w.try_fire()
 		await shot("lab_%s_fire" % weapon, 2)
 		w.hold_fx = false
+		# Close-ups of the hand on the grip (viewmodel camera only).
+		var rig: ViewmodelRig = p.viewmodel
+		rig.follow = false
+		var gun := w.view_model
+		var c := gun.global_position
+		for side in [["side", gun.global_transform.basis.x], ["front", (-gun.global_transform.basis.z * 0.8 + gun.global_transform.basis.x * 0.5)]]:
+			rig.camera.global_position = c + (side[1] as Vector3).normalized() * 0.4
+			rig.camera.look_at(c, Vector3.UP)
+			await shot("lab_%s_grip_%s" % [weapon, side[0]])
+		rig.follow = true
 		# Looking down a little shows the arms and the gun's underside.
 		p.look_at_point(target + Vector3.DOWN * 1.6)
 		await shot("lab_%s_low" % weapon)
+	# Motion: recoil mid-kick, reload stages, sprint, crouch.
+	w.switch_to("rifle")
+	await _wait(0.5)
+	p.global_position = main.layout.player_spawn
+	p.look_at_point(target)
+	await _wait(0.3)
+	w.cooldown = 0.0
+	w.try_fire()
+	await shot("lab_motion_recoil", 1)
+	await _wait(0.4)
+	w.mag = 5
+	w.start_reload()
+	await _wait(0.25)
+	await shot("lab_motion_reload_tilt", 1)
+	await _wait(0.3)
+	await shot("lab_motion_reload_hand_away", 1)
+	await _wait(1.2)
+	p.input_enabled = true
+	Input.action_press("move_forward")
+	Input.action_press("sprint")
+	await _wait(0.6)
+	await shot("lab_motion_sprint", 1)
+	Input.action_release("sprint")
+	Input.action_release("move_forward")
+	Input.action_press("crouch")
+	await _wait(0.6)
+	await shot("lab_motion_crouch", 1)
+	Input.action_release("crouch")
+	p.input_enabled = false
+	await _wait(0.4)
+	# Kill all three targets; their bodies stay down.
+	for h in get_tree().get_nodes_in_group("hostiles"):
+		if not h.dead:
+			h.take_damage(9999)
+	await _wait(2.0)
+	p.global_position = DungeonGen.cell_center(Vector2i(2, 3))
+	p.look_at_point(DungeonGen.cell_center(Vector2i(2, 1)))
+	await shot("lab_wrecks")
+	# Pause screen.
+	main.set_paused(true)
+	await shot("lab_pause")
+	main.set_paused(false)
+
 	# The three targets from the back of the room.
 	w.switch_to("rifle")
 	await _wait(0.4)
@@ -108,6 +161,43 @@ func run_lab(p_main, p_dir: String) -> void:
 	p.look_at_point(target)
 	await shot("lab_targets")
 	print("[capture] done -> ", dir)
+	get_tree().quit()
+
+
+## Pose tour (`--lab --poses=FILE`): FILE is JSON [{"name","weapon","side","pos":[x,y,z],
+## "basis":[[x],[y],[z]] or "rot":[rx,ry,rz]}]; shoots side / front / player views for each.
+func run_poses(p_main, p_dir: String, file: String) -> void:
+	main = p_main
+	dir = p_dir
+	DirAccess.make_dir_recursive_absolute(dir)
+	await _settle(4)
+	await main.start_lab()
+	var p: Player = main.player
+	p.input_enabled = false
+	await _settle(6)
+	var w: WeaponHolder = p.weapons
+	var rig: ViewmodelRig = p.viewmodel
+	var target: Vector3 = DungeonGen.cell_center(Vector2i(2, 1)) + Vector3.UP * 1.0
+	for v in JSON.parse_string(FileAccess.get_file_as_string(file)):
+		w.switch_to(v.weapon)
+		await _wait(0.5)
+		p.global_position = main.layout.player_spawn
+		p.look_at_point(target)
+		var arm := w.view_model.get_node_or_null("Arm" + v.side) as Node3D
+		if arm == null:
+			continue
+		var rot: Variant = Vector3(v.rot[0], v.rot[1], v.rot[2]) if v.has("rot") else \
+			Basis(Vector3(v.basis[0][0], v.basis[0][1], v.basis[0][2]), Vector3(v.basis[1][0], v.basis[1][1], v.basis[1][2]), Vector3(v.basis[2][0], v.basis[2][1], v.basis[2][2]))
+		WeaponHolder.set_arm_pose(arm, [Vector3(v.pos[0], v.pos[1], v.pos[2]), rot, v.get("scale", 1.0)])
+		await shot("pose_%s_player" % v.name)
+		rig.follow = false
+		var gun := w.view_model
+		var c := gun.global_position + gun.global_transform.basis * Vector3(0, -0.02, -0.1 if v.weapon == "rifle" else 0.0)
+		for side in [["side", gun.global_transform.basis.x], ["front", (-gun.global_transform.basis.z * 0.8 + gun.global_transform.basis.x * 0.5)], ["under", (-gun.global_transform.basis.y + gun.global_transform.basis.x * 0.6)]]:
+			rig.camera.global_position = c + (side[1] as Vector3).normalized() * 0.45
+			rig.camera.look_at(c, Vector3.UP if side[0] != "under" else Vector3.FORWARD)
+			await shot("pose_%s_%s" % [v.name, side[0]], 2)
+		rig.follow = true
 	get_tree().quit()
 
 

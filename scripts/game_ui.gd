@@ -7,6 +7,8 @@ extends CanvasLayer
 
 signal start_pressed
 signal again_pressed
+signal resume_pressed
+signal quit_pressed
 
 const CYAN := Color("#22E5FF")
 const RED := Color("#FF2D55")
@@ -34,6 +36,7 @@ var objective_label: Label
 var end_title: Label
 var end_stats: Label
 var end_next: Label
+var pause_panel: Control
 
 
 func _ready() -> void:
@@ -47,6 +50,7 @@ func _ready() -> void:
 	_build_title()
 	_build_hud()
 	_build_end()
+	_build_pause()
 	title.hide()
 	hud.hide()
 	end.hide()
@@ -56,6 +60,35 @@ func _unhandled_input(event: InputEvent) -> void:
 	if hud.visible and event.is_action_pressed("map"):
 		map.visible = not map.visible
 		get_viewport().set_input_as_handled()
+
+
+func show_pause(on: bool) -> void:
+	pause_panel.visible = on
+
+
+func _build_pause() -> void:
+	pause_panel = _full()
+	pause_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	var bg := ColorRect.new()
+	bg.color = Color(0.0, 0.02, 0.03, 0.72)
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pause_panel.add_child(bg)
+	var v := _centered_column(pause_panel)
+	var t := _label("PAUSED", 56, CYAN, true)
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(t)
+	var hint := _label("Lab  ·  Esc to resume", 17, Color(CYAN, 0.75))
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(hint)
+	var b1 := _button("RESUME")
+	b1.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	b1.pressed.connect(func(): resume_pressed.emit())
+	v.add_child(b1)
+	var b2 := _button("QUIT")
+	b2.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	b2.pressed.connect(func(): quit_pressed.emit())
+	v.add_child(b2)
+	pause_panel.hide()
 
 
 func show_title() -> void:
@@ -194,8 +227,8 @@ func _build_title() -> void:
 	spacer.custom_minimum_size.y = 26
 	v.add_child(spacer)
 	# Every control in two short lines (GDD onboarding).
-	var l1 := _label("WASD move  ·  Mouse look  ·  Left click fire  ·  Right click aim  ·  1 / 2 weapon  ·  R reload", 19)
-	var l2 := _label("E open doors and containers  ·  Q use health kit  ·  Tab map", 19)
+	var l1 := _label("WASD move  ·  Shift run  ·  Space jump  ·  Ctrl / Cmd crouch  ·  Mouse look  ·  Left click fire  ·  Right click aim", 19)
+	var l2 := _label("1 / 2 weapon  ·  R reload  ·  E open doors and containers  ·  Q use health kit  ·  Tab map", 19)
 	for l in [l1, l2]:
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		v.add_child(l)

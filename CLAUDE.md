@@ -56,6 +56,17 @@ rule no longer applies to the environment):
   (FOV 54, near 1 cm, SubViewport overlay under the HUD) with a key + rim light that only light that layer.
   Tracers start where the muzzle appears on screen (`WeaponHolder._muzzle_in_world`).
   Gun maps stay 2K; gun meshes are smooth-shaded by angle (35 deg).
+- Lab gloves/sleeves: `assets/shaders/fabric.gdshader` = tint + ambientCG `Leather031` (glove) / `Fabric045` (sleeve)
+  detail tiled over the character normal map (`MaterialLib.FABRIC`). Hand poses: `[pos, rot (deg or Basis), scale]`;
+  tune with the pose tour (`--lab --poses=FILE.json --capture=DIR`, see `CaptureTour.run_poses`).
+- Motion (all procedural, `WeaponHolder._animate` + `Player._update_head`): recoil = two springs (position, rotation)
+  plus a camera view punch, sub-stepped at 1/240 s (explicit springs explode on long frames); look sway; figure-8
+  walk bob (bigger running), breathing when still, landing dip; sprint pose (Shift, forward only, blocked 0.35 s
+  after firing), crouch (Cmd/Ctrl/C, eye 1.05 m, capsule 1.25 m), jump (Space, 5 m/s, gravity 15).
+  Rifle reload timeline: tilt in, support hand leaves with the mag (0.15-0.48), returns, slam + mag-in sound at 0.7.
+- Dead enemies leave wrecks (death clip held on its last frame, glow dimmed, drones fall); group `wrecks`.
+- Lab: Esc pauses (Resume / Quit; mouse freed). The real game keeps the GDD's no-pause rule.
+  Lab targets respawn beside their wreck 3 s after a kill.
 - Test room: the default when pressing Play (one room, three frozen targets, invulnerable); `--game` for the full game;
   `CAPTURE_ARGS=--lab tools/capture.sh 1 lab` captures hip / ADS / fire / low views of both guns.
 - Exit portal: `build_props.py` gate + MegaKit `Platform_Round1` pad; field = `portal.gdshader`.
@@ -117,6 +128,7 @@ godot --path . -- --game                               # full game (title screen
 godot --path . -- --seed=123 --autostart               # reproduce a dungeon, skip title
 godot --headless -s tools/gen_check.gd -- --count=400  # generator check (must print PASS; ~100 s with the art kit)
 godot --headless -s tools/playthrough.gd -- --count=10 # bot walks spawn -> exit through real collision (enemies off)
+godot --headless -s tools/motion_check.gd              # lab: run/crouch/jump, recoil settles, reload, wrecks, pause
 godot --headless -s tools/combat_check.gd              # 48 rule checks (lock timer, LOS, weapons, enemies, loot, crates, scaling, sounds)
 godot --headless -s tools/fight_bot.gd -- --count=8 --difficulty=2   # balance bot: plays full runs, mortal (slow: ~1 min/run)
 tools/perf_probe.sh [seed]                             # draw calls / objects / triangles in play (FPS is software GL here)

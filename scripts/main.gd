@@ -60,7 +60,17 @@ var _exit_timer := 0.0
 var kills_by_type := {"turret": 0, "brawler": 0, "pursuer": 0}
 
 
+func set_paused(on: bool) -> void:
+	get_tree().paused = on
+	ui.show_pause(on)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if on else Input.MOUSE_MODE_CAPTURED
+	if not on and player:
+		player.hold_look()
+
+
 func _ready() -> void:
+	# Main keeps running while paused (input, UI); the world below it is pausable.
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	_setup_input()
 	args = _parse_args()
 	base_seed = int(args.seed) if args.has("seed") else int(Time.get_unix_time_from_system()) % 1000000
@@ -69,12 +79,16 @@ func _ready() -> void:
 	add_child(ui)
 	ui.start_pressed.connect(func(): Sfx.play("ui"); start_run())
 	ui.again_pressed.connect(func(): Sfx.play("ui"); start_run())
+	ui.resume_pressed.connect(func(): set_paused(false))
+	ui.quit_pressed.connect(func(): get_tree().quit())
 	_setup_environment()
 	if args.has("capture"):
 		var cap := CaptureTour.new()
 		cap.name = "CaptureTour"
 		add_child(cap)
-		if args.has("lab"):
+		if args.has("poses"):
+			cap.run_poses(self, args.capture, args.poses)
+		elif args.has("lab"):
 			cap.run_lab(self, args.capture)
 		else:
 			cap.run(self, args.capture)
@@ -99,11 +113,32 @@ func start_lab() -> void:
 	player.invulnerable = true
 	var c := DungeonGen.cell_center
 	for spec in [["turret", Vector2i(0, 1)], ["brawler", Vector2i(2, 1)], ["pursuer", Vector2i(4, 1)]]:
-		var e := spawn_enemy(spec[0], c.call(spec[1]), 0)
-		e.frozen = true
+		_lab_target(spec[0], c.call(spec[1]))
 	await get_tree().process_frame
 	for e in get_tree().get_nodes_in_group("hostiles"):
 		e.face_player_now()
+
+
+## A frozen lab target; when killed, its wreck stays and a new one appears 1.5 m to the side
+## after 3 s (the previous wreck at that spot, if any, is cleared first).
+func _lab_target(kind: String, pos: Vector3, offset: int = 0) -> void:
+	var e := spawn_enemy(kind, pos + Vector3(1.5 * (offset % 2), 0, 0), 0)
+	e.frozen = true
+	e.died.connect(func(_e):
+		await get_tree().create_timer(3.0).timeout
+		if lab and state == "playing":
+			var target := _lab_target_spot(pos, offset + 1)
+			for wreck in get_tree().get_nodes_in_group("wrecks"):
+				if is_instance_valid(wreck) and Vector2(wreck.global_position.x - target.x, wreck.global_position.z - target.z).length() < 0.8:
+					wreck.queue_free()
+			_lab_target(kind, pos, offset + 1)
+			for h in get_tree().get_nodes_in_group("hostiles"):
+				if not h.dead:
+					h.face_player_now())
+
+
+func _lab_target_spot(pos: Vector3, offset: int) -> Vector3:
+	return pos + Vector3(1.5 * (offset % 2), 0, 0)
 
 
 func start_run() -> void:
@@ -115,6 +150,7 @@ func _begin(p_layout: DungeonGen) -> void:
 	_clear_world()
 	layout = p_layout
 	world = DungeonBuilder.new(KitGreybox.new() if args.has("greybox") else null).build(layout)
+	world.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(world)
 	var portal: ExitPortal = world.get_node("ExitPortal")
 	portal.reached.connect(func(): end_run(true))
@@ -392,6 +428,13 @@ func cull_lights() -> void:
 
 
 func _input(event: InputEvent) -> void:
+	# Lab only (the GDD game has no pause): Esc pauses and frees the mouse.
+	if lab and state == "playing" and event.is_action_pressed("pause"):
+		set_paused(not get_tree().paused)
+		get_viewport().set_input_as_handled()
+		return
+	if get_tree().paused:
+		return
 	# Browsers release pointer lock on Esc; a click while playing takes it back.
 	if state == "playing" and event is InputEventMouseButton and event.pressed \
 			and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
@@ -463,6 +506,7 @@ static func _setup_input() -> void:
 		"move_forward": KEY_W, "move_back": KEY_S, "move_left": KEY_A, "move_right": KEY_D,
 		"reload": KEY_R, "interact": KEY_E, "use_kit": KEY_Q,
 		"weapon_1": KEY_1, "weapon_2": KEY_2, "map": KEY_TAB,
+		"sprint": KEY_SHIFT, "jump": KEY_SPACE, "pause": KEY_ESCAPE,
 	}
 	for action in keys:
 		if not InputMap.has_action(action):
@@ -470,6 +514,13 @@ static func _setup_input() -> void:
 			var ev := InputEventKey.new()
 			ev.physical_keycode = keys[action]
 			InputMap.action_add_event(action, ev)
+	# Crouch: Cmd (Mac), Ctrl or C.
+	if not InputMap.has_action("crouch"):
+		InputMap.add_action("crouch")
+		for k in [KEY_META, KEY_CTRL, KEY_C]:
+			var ev := InputEventKey.new()
+			ev.physical_keycode = k
+			InputMap.action_add_event("crouch", ev)
 	var mouse := {"fire": MOUSE_BUTTON_LEFT, "aim": MOUSE_BUTTON_RIGHT}
 	for action in mouse:
 		if not InputMap.has_action(action):
