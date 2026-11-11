@@ -277,16 +277,19 @@ func _impact(p: Vector3, n: Vector3) -> void:
 	tw.tween_callback(spark.queue_free)
 
 
-## Arm styles (H cycles them in the lab; --arms=hands|full|none):
+## Arm styles (H cycles them in the lab; --arms=model|hands|full|none):
+##   model: the rigid hand model posed on each grip (blender/scripts/pose_rigid_hand.py + the poses tuned
+##          in blender/hands_<gun>.blend), gun frame
 ##   hands: gloved hands built around each handle (blender/scripts/build_hands.py), gun frame
 ##   full:  WRAD ARMS posed per gun (blender/scripts/pose_wrad.py), camera frame -> placed at -hip
 ##   none:  floating guns
-const ARM_MODES := ["hands", "full", "none"]
-static var arm_mode := "hands"
+const ARM_MODES := ["model", "hands", "full", "none"]
+static var arm_mode := "model"
 
 
 func _attach_arms(model: Node3D, w: String) -> void:
-	for spec in [["hands", "res://assets/models/hands_%s.glb" % w, Vector3.ZERO],
+	for spec in [["model", "res://assets/models/rigid_%s.glb" % w, Vector3.ZERO],
+			["hands", "res://assets/models/hands_%s.glb" % w, Vector3.ZERO],
 			["full", "res://assets/models/arms_%s.glb" % w, -(WEAPONS[w].hip as Vector3)]]:
 		if not ResourceLoader.exists(spec[1]):
 			continue
@@ -367,10 +370,11 @@ func _reload_pose(f: float) -> Array:
 ## Reload: the support arm swings down out of view and back (rotation on its bicep bone).
 func _support_hand(f: float) -> void:
 	var away := smoothstep(0.15, 0.32, f) * (1.0 - smoothstep(0.48, 0.66, f)) if f > 0.0 else 0.0
-	var hands := view_model.get_node_or_null("Arms_hands")
-	if hands:
+	for hands in [view_model.get_node_or_null("Arms_hands"), view_model.find_child("HandModel", true, false)]:
+		if hands == null:
+			continue
 		for n in hands.get_children():
-			if n is Node3D and String(n.name).begins_with("HandL"):
+			if n is Node3D and (String(n.name).begins_with("HandL") or String(n.name).begins_with("HandModelL")):
 				if not n.has_meta("rest"):
 					n.set_meta("rest", n.transform)
 				n.transform = n.get_meta("rest")

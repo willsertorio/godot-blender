@@ -77,7 +77,7 @@ func _build_pause() -> void:
 	var t := _label("PAUSED", 56, CYAN, true)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(t)
-	var hint := _label("Lab  ·  Esc to resume  ·  H switches hands: hands only / full arms / none", 17, Color(CYAN, 0.75))
+	var hint := _label("Lab  ·  Esc to resume  ·  H switches hands: hand model / gloves / full arms / none", 17, Color(CYAN, 0.75))
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(hint)
 	var b1 := _button("RESUME")

@@ -9,3 +9,4 @@ assets_src/
 captures/
 # Blender backups
 *.blend1
+.DS_Store
