@@ -203,6 +203,15 @@ def build(gun):
     bpy.ops.object.select_all(action="DESELECT")
     for o in bpy.data.objects:
         o.select_set(True)
+    gb = overrides.get("GunBody")
+    if gb:
+        e = bpy.data.objects.new("GunBody", None)
+        bpy.context.scene.collection.objects.link(e)
+        e.parent = root
+        e.rotation_mode = "QUATERNION"
+        e.location, e.rotation_quaternion, e.scale = gb["loc"], gb["rot"], gb["scale"]
+        e.select_set(True)
+        print("  gun body offset", gb["loc"], "scale", gb["scale"][0])
     path = os.path.join(OUT, f"rigid_{gun}.glb")
     bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", use_selection=True, export_yup=True)
     print("exported", path)

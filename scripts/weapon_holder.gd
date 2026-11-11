@@ -298,7 +298,31 @@ func _attach_arms(model: Node3D, w: String) -> void:
 		model.add_child(a)
 		a.position = spec[2]
 		MaterialLib.rebind_tree(a)
+		# The hand-model file may carry a "GunBody" empty: where the gun mesh sits for those hands
+		# (moved / turned / scaled in blender/hands_<gun>.blend), in the gun model's frame.
+		var gb := a.find_child("GunBody", true, false) as Node3D
+		if spec[0] == "model" and gb:
+			model.set_meta("model_body", _rel(gb, model))
 	_apply_arm_mode(model)
+
+
+static func _under_arms(n: Node, root: Node) -> bool:
+	var p := n.get_parent()
+	while p != null and p != root:
+		if String(p.name).begins_with("Arms_"):
+			return true
+		p = p.get_parent()
+	return false
+
+
+## Transform of `n` relative to its ancestor `root`.
+static func _rel(n: Node3D, root: Node) -> Transform3D:
+	var t := n.transform
+	var p := n.get_parent()
+	while p != root and p is Node3D:
+		t = (p as Node3D).transform * t
+		p = p.get_parent()
+	return t
 
 
 func _apply_arm_mode(model: Node3D) -> void:
@@ -306,6 +330,18 @@ func _apply_arm_mode(model: Node3D) -> void:
 		var n := model.get_node_or_null("Arms_" + m) as Node3D
 		if n:
 			n.visible = m == arm_mode
+	# Gun mesh + Muzzle follow the hand model's GunBody offset only while that style is shown.
+	var off: Transform3D = model.get_meta("model_body", Transform3D()) if arm_mode == "model" else Transform3D()
+	var targets: Array = model.find_children("*Body", "MeshInstance3D", true, false)
+	targets.append_array(model.find_children("Muzzle", "", true, false))
+	for n in targets:
+		if not (n is Node3D) or _under_arms(n, model):
+			continue
+		var nd := n as Node3D
+		if not nd.has_meta("rest"):
+			nd.set_meta("rest", nd.transform)
+		var parent_t := _rel(nd.get_parent() as Node3D, model) if nd.get_parent() != model else Transform3D()
+		nd.transform = parent_t.affine_inverse() * off * parent_t * (nd.get_meta("rest") as Transform3D)
 
 
 func cycle_arm_mode() -> void:
