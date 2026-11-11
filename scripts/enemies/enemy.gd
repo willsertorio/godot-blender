@@ -46,6 +46,14 @@ var anim: AnimationPlayer
 var anim_names := {"idle": "Idle", "aware": "Look", "move": "Run", "lock": "Look", "attack": "Attack", "hit": "Hit", "die": "TurnOff"}
 var _attack_t := 0.0
 var _hit_t := 0.0
+## From-scratch models: their Death clip does the falling, so the wreck is not dropped to the floor.
+var wreck_falls := true
+## Node names the game drives itself (stripped from every clip except Death), e.g. the turret's Yaw / Pitch.
+var clip_strip: Array = []
+## ... and the ones also stripped from Death (e.g. the turret keeps facing where it died).
+var death_strip: Array = []
+## Speed (m/s) the "move" clip is authored for; the clip is sped up / slowed to the real speed (0 = off).
+var move_clip_speed := 0.0
 
 var _path_timer := 0.0
 var _next_cell := Vector2i(-9999, -9999)
@@ -142,6 +150,8 @@ func _update_anim(frac: float, locking: bool) -> void:
 		state = "aware"
 	if not AnimUtil.play(anim, anim_names[state]):
 		AnimUtil.play(anim, "Idle")
+	var hs := Vector2(velocity.x, velocity.z).length()
+	anim.speed_scale = clampf(hs / move_clip_speed, 0.5, 3.5) if state == "move" and move_clip_speed > 0.0 else 1.0
 
 
 func eye_position() -> Vector3:
@@ -211,7 +221,7 @@ func _leave_wreck() -> void:
 	var wreck := model
 	_dim_glow(wreck)
 	var lift := wreck.global_position.y - global_position.y
-	if lift > 0.05 or wreck.position.y > 0.05:
+	if wreck_falls and (lift > 0.05 or wreck.position.y > 0.05):
 		# Drone: tumble down and settle with a small bounce.
 		var floor_y := global_position.y
 		var tw := wreck.create_tween()
@@ -367,6 +377,12 @@ func _adopt_model(path: String) -> Node3D:
 	add_child(m)
 	model = m
 	anim = m.find_child("AnimationPlayer", true, false) as AnimationPlayer
+	var clips_json := path.replace(".glb", "_clips.json")
+	if FileAccess.file_exists(clips_json):
+		AnimUtil.split_clips(anim, clips_json, clip_strip)
+		if not clip_strip.is_empty():
+			AnimUtil.split_clips(anim, clips_json, death_strip, {}, ["Death"])
+		wreck_falls = false
 	AnimUtil.play(anim, "Idle", 0.0)
 	return m
 

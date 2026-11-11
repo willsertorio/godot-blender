@@ -23,7 +23,8 @@ func _init() -> void:
 	lock_range = REACH
 	sight_range = 30.0
 	eye_height = 0.8
-	anim_names = {"idle": "Idle", "aware": "Look", "move": "Run", "lock": "Charge", "attack": "Attack", "hit": "Hit", "die": "TurnOff"}
+	anim_names = {"idle": "Idle", "aware": "Idle", "move": "Run", "lock": "Idle", "attack": "Shoot", "hit": "Idle", "die": "Death"}
+	move_clip_speed = 1.5   # SD-4 Run is authored at 1.5 m/s (in place); sped up to the charge speed
 
 
 func _build_visual() -> void:
@@ -35,7 +36,9 @@ func _build_visual() -> void:
 	cs.position.y = 0.65
 	add_child(cs)
 
-	var model := _adopt_model("res://assets/models/brawler.glb")
+	var model := _adopt_model("res://assets/models/sd4.glb")
+	if model == null:
+		model = _adopt_model("res://assets/models/brawler.glb")
 	if model:
 		body = model
 	else:

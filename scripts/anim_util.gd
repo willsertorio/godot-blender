@@ -2,7 +2,7 @@ class_name AnimUtil
 ## Helpers for the Quaternius rigs: clips are named "<Name>_Rig" (or "<Name>_<Armature>").
 ## find() matches by prefix; cyclic clips are set to loop on first use.
 
-const LOOPING := ["Idle", "Look", "Run", "Walk", "Hanging", "Charging", "Charge", "Idle_Open", "Idle_Closed"]
+const LOOPING := ["Idle", "Look", "Run", "Walk", "Hanging", "Charging", "Charge", "Idle_Open", "Idle_Closed", "Fly"]
 
 
 static func find(ap: AnimationPlayer, prefix: String) -> String:
@@ -16,9 +16,11 @@ static func find(ap: AnimationPlayer, prefix: String) -> String:
 
 ## From-scratch assets (blender/scripts/export_new_assets.py) carry one baked animation ("Scene", every
 ## frame keyed, time = frame / fps) plus <name>_clips.json {clips: {Name: [first, last]}, fps}. Cut them into
-## named clips on `ap` (frames are Blender frames). `strip` = node paths whose tracks are dropped (e.g. the
-## asset root, whose kick the game does procedurally); `extra` = more {Name: [first, last]} cuts.
-static func split_clips(ap: AnimationPlayer, json_path: String, strip: Array = [], extra: Dictionary = {}) -> void:
+## named clips on `ap` (frames are Blender frames). `strip` = node names whose tracks are dropped (matched
+## against the last node in each track path: the asset root, whose kick the game does procedurally, or the
+## parts the game aims itself); `extra` = more {Name: [first, last]} cuts; `only` = cut just these clips.
+static func split_clips(ap: AnimationPlayer, json_path: String, strip: Array = [], extra: Dictionary = {},
+		only: Array = []) -> void:
 	if ap == null or not ap.has_animation("Scene") or not FileAccess.file_exists(json_path):
 		return
 	var spec: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(json_path))
@@ -27,7 +29,15 @@ static func split_clips(ap: AnimationPlayer, json_path: String, strip: Array = [
 	clips.merge(extra, true)
 	var src := ap.get_animation("Scene")
 	var lib := ap.get_animation_library("")
+	# The library is shared by every instance of the imported scene: cut each clip set only once (re-cutting
+	# would free clips that a live instance, e.g. an enemy wreck, is still playing).
+	var tag := "split_" + ",".join(only) if not only.is_empty() else "split_all"
+	if lib.has_meta(tag):
+		return
+	lib.set_meta(tag, true)
 	for clip_name in clips:
+		if not only.is_empty() and not (String(clip_name) in only):
+			continue
 		var r: Array = clips[clip_name]
 		var t0 := float(r[0]) / fps
 		var t1 := float(r[1]) / fps
@@ -35,7 +45,7 @@ static func split_clips(ap: AnimationPlayer, json_path: String, strip: Array = [
 		a.length = maxf(t1 - t0, 1.0 / fps)
 		for i in src.get_track_count():
 			var path := src.track_get_path(i)
-			if String(path.get_concatenated_names()) in strip:
+			if path.get_name_count() > 0 and String(path.get_name(path.get_name_count() - 1)) in strip:
 				continue
 			var j := a.add_track(src.track_get_type(i))
 			a.track_set_path(j, path)
