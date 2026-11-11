@@ -150,6 +150,8 @@ blender -b -P blender/scripts/build_props.py -- assets/models  # portal.glb
 blender -b -P blender/scripts/normalize_wrad.py -- assets_src/wrad/arms.glb assets/models   # arms_wrad.glb
 blender -b -P blender/scripts/pose_wrad.py -- assets/models   # arms_pistol.glb + arms_rifle.glb (hold poses)
 blender -b -P blender/scripts/build_hands.py -- assets/models  # hands_pistol.glb + hands_rifle.glb (default hand style)
+blender -b -P blender/scripts/pose_rigid_hand.py -- assets/models  # rigid_<gun>.glb: user's rigid hand posed on each grip (not in game yet)
+blender -b -P blender/scripts/read_rigid_hand_poses.py      # after tuning in blender/hands_<gun>.blend: save the pose for pose_rigid_hand.py
 blender -b -P blender/scripts/make_hands_blend.py            # blender/hands_<gun>.blend: gun + both hand styles + game camera, for review
 python3 -I tools/set_texture_imports.py                # force VRAM compression + mipmaps on 3D textures (run after adding textures)
 ```

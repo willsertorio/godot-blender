@@ -107,3 +107,4 @@ Portal field shader (assets/shaders/portal.gdshader),modelled,assets/shaders/por
 "Leather031 (1K PBR texture, glove leather detail) -> assets/textures/fabric/Leather031/",ambientCG,https://ambientcg.com/view?id=Leather031,CC0 1.0,2026-11-10
 "WRAD ARMS first-person arms (rig, mesh, UVs) -> assets/models/arms_wrad.glb, arms_pistol.glb, arms_rifle.glb (posed per weapon, re-shaded as gloves/sleeves)",wriks (itch.io),https://wriks.itch.io/wrad-arms,CC0 1.0,2026-11-10
 "Gloved hands built around each gun's handle (assets/models/hands_pistol.glb, hands_rifle.glb)",modelled,blender/scripts/build_hands.py,Original work for this project (no third-party content),2026-11-10
+"Rigid hand model (user-supplied; hand block, 3 segments per finger, forearm) -> blender/source/rigid_hand.glb, assets/models/rigid_pistol.glb, rigid_rifle.glb (posed per gun)",supplied by the project owner,LICENCE UNCONFIRMED - source link pending,UNCONFIRMED (must be CC0 before release),2026-11-11
