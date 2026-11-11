@@ -97,7 +97,12 @@ for s in "LR":
     barrels[s].rotation_euler = (0, 0, 0)
     flash[s].location = (0, 0, 0)
     flash[s].scale = (0, 0, 0)
-rot_rest = {s: rot[s].location.copy() for s in "LR"}
+# Rest positions: the left ring is never moved by any clip, so it is the reliable rest; the right ring is its
+# mirror (reading the right ring's .location would pick up wherever a previous run left it).
+_l = rot["L"].location.copy()
+rot_rest = {"L": _l, "R": _l * 1}
+rot_rest["R"].x = -_l.x
+rot["R"].location = rot_rest["R"]
 
 
 def eye(frame, strength, interp="BEZIER"):
@@ -216,7 +221,10 @@ key(prop["R"], "rotation_euler", 2, a + 20, d(-700))
 rr = rot["R"]
 r0 = rot_rest["R"]
 key(rr, "rotation_euler", 0, a, TILT)
-for i, (v5, v15, vb) in enumerate(((0.0, 0.0, 0.0), (0.45, -0.15, 0.3), (1.3, -0.6, -0.1))):
+# Offsets per keyframe (vectors): still attached at a+5, broken away by a+15, tumbled off by the end.
+V5, V15, VB = (0.0, 0.0, 0.0), (0.45, -0.15, 0.3), (1.3, -0.6, -0.1)
+for i, (v5, v15, vb) in enumerate(zip(V5, V15, VB)):
+    key(rr, "location", i, 1, r0[i], "CONSTANT")     # rest for every clip before Death
     key(rr, "location", i, a + 5, r0[i] + v5, "QUAD", "EASE_OUT")
     key(rr, "location", i, a + 15, r0[i] + v15)
     key(rr, "location", i, b, r0[i] + vb)
