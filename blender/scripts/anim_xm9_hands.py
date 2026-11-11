@@ -122,13 +122,13 @@ for b in rig.pose.bones:
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(__file__))
 import lib_arm  # noqa: E402
-_shoulder = lib_arm.camera_in_gun_frame((0.16, -0.15, -0.4)) + lib_arm.SHOULDER_L
+_shoulder = lib_arm.shoulder("pistol", "L")
 _pb = rig.pose.bones
 for _b in ("upperarm", "forearm", "hand"):
     _pb[_b].rotation_mode = "QUATERNION"
 for _f in range(R + 1, R + 38 + 1):
     sc.frame_set(_f)
-    lib_arm.solve_arm(rig, _shoulder, lib_arm.POLE_L)
+    lib_arm.solve_arm(rig, _shoulder, lib_arm.pole("pistol", "L"))
     for _b in ("upperarm", "forearm", "hand"):
         _pb[_b].keyframe_insert("rotation_quaternion", frame=_f)
         _pb[_b].keyframe_insert("location", frame=_f)

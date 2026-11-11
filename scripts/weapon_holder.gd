@@ -15,7 +15,7 @@ const WEAPONS := {
 	"pistol": {"damage": 25.0, "interval": 0.24, "auto": false, "spread": 0.022, "ads_spread": 0.003,
 		"range": 90.0, "sound": "pistol", "kick": 1.0,
 		# XM9 (modelled from scratch, gloves included): red-dot window centre 7.7 cm above the grip origin.
-		"model": "res://assets/models/xm9.glb", "hip": Vector3(0.16, -0.15, -0.4), "ads": Vector3(0.0, -0.0766, -0.3),
+		"model": "res://assets/models/xm9.glb", "hip": Vector3(0.13, -0.14, -0.27), "hip_rot": Vector3(0, 7, -3), "ads": Vector3(0.0, -0.0766, -0.48),
 		"clips": "res://assets/models/xm9_clips.json", "root": "XM9", "shot": [3, 12],
 		"casing": "res://assets/models/casing_9mm.glb", "eject_v": Vector3(1.4, 1.6, 0.25),
 		# Grip markers (weapon frame: -Z barrel, +Y up): [position, rotation deg]; [] = no hand.
@@ -23,7 +23,7 @@ const WEAPONS := {
 	"rifle": {"damage": 12.0, "interval": 0.095, "auto": true, "spread": 0.035, "ads_spread": 0.009,
 		"range": 90.0, "sound": "rifle", "kick": 0.55, "mag": 30, "reload": 1.5,
 		# XM-R4: magnifier / holo line 13.1 cm above the pistol-grip origin.
-		"model": "res://assets/models/xmr4.glb", "hip": Vector3(0.11, -0.12, -0.22), "hip_rot": Vector3(-2, 14, -6), "ads": Vector3(0.0, -0.131, -0.14),
+		"model": "res://assets/models/xmr4.glb", "hip": Vector3(0.15, -0.155, -0.22), "hip_rot": Vector3(-2, 14, -6), "ads": Vector3(0.0, -0.131, -0.14),
 		"clips": "res://assets/models/xmr4_clips.json", "root": "XMR4", "shot": [2, 5],
 		"casing": "res://assets/models/casing_556.glb", "eject_v": Vector3(1.6, 1.3, -0.15),
 		"grip_r": [Vector3(0, -0.035, 0.0), Vector3(-15, 0, 0), Vector3.LEFT],

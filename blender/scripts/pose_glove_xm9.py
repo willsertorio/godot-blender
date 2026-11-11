@@ -180,8 +180,11 @@ print(f"  thumb: tip {(tail_world('thumb3') - tb).length * 100:.1f} cm from targ
       f"{min((tail_world('thumb3') - ta).length, 1) * 100:.1f} cm from the line start")
 
 # Arm: elbow down / out, upper arm toward the player's right shoulder (below / right of the camera).
-CAM = lib_arm.camera_in_gun_frame((0.16, -0.15, -0.4))   # WeaponHolder pistol hip
-lib_arm.solve_arm(rig_r, CAM + lib_arm.SHOULDER_R, lib_arm.POLE_R)
+lib_arm.solve_arm_aligned(rig_r, lib_arm.shoulder("pistol", "R"), droop=float(os.environ.get("DROOP", 0.9)))   # forearm out of the hand, dropping toward the shoulder
+_pb = rig_r.pose.bones
+_f = (rig_r.matrix_world.to_3x3() @ (_pb["forearm"].tail - _pb["forearm"].head)).normalized()
+_h = (rig_r.matrix_world.to_3x3() @ (_pb["middle1"].head - _pb["hand"].head)).normalized()
+print(f"  Glove.R: wrist bend {math.degrees(_f.angle(_h)):.0f} deg")
 
 # Parent to the gun root so recoil / reload move the hand with the gun.
 mw = rig_r.matrix_world.copy()
@@ -189,14 +192,14 @@ rig_r.parent = O["XM9"]
 rig_r.matrix_world = mw
 
 # ---- park the left hand below / left of the gun, relaxed ----------------------------------------------------
-rig_l.matrix_world = (Matrix.Translation((-0.11, -0.06, -0.2)) @ Matrix.Rotation(math.radians(60), 4, "X")
+rig_l.matrix_world = (Matrix.Translation((-0.16, -0.1, -0.42)) @ Matrix.Rotation(math.radians(60), 4, "X")
                       @ Matrix.Rotation(math.radians(-20), 4, "Y"))
 for b in rig_l.pose.bones:
     b.rotation_mode = "XYZ"
     if b.name[-1] in "123":
         b.rotation_euler.x = math.radians(15 if b.name.startswith("thumb") else 25)
 bpy.context.view_layer.update()
-lib_arm.solve_arm(rig_l, CAM + lib_arm.SHOULDER_L, lib_arm.POLE_L)
+lib_arm.solve_arm(rig_l, lib_arm.shoulder("pistol", "L"), lib_arm.pole("pistol", "L"))
 
 sc.frame_set(1)
 bpy.ops.wm.save_mainfile()

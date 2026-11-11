@@ -15,8 +15,8 @@ from mathutils import Matrix, Vector
 # WeaponHolder.WEAPONS[gun].hip / hip_rot once approved): position (m), rotation (deg, Godot Euler YXZ:
 # x = muzzle up, y = muzzle toward screen centre (left), z = cant).
 VIEWS = {
-    "pistol": {"hip": (0.16, -0.15, -0.4), "rot": (0.0, 0.0, 0.0)},
-    "rifle": {"hip": (0.11, -0.12, -0.22), "rot": (-2.0, 14.0, -6.0)},
+    "pistol": {"hip": (0.13, -0.14, -0.27), "rot": (0.0, 7.0, -3.0)},
+    "rifle": {"hip": (0.15, -0.155, -0.22), "rot": (-2.0, 14.0, -6.0)},
 }
 _K = Matrix(((1, 0, 0), (0, 0, -1), (0, 1, 0)))   # Godot (x, y, z) -> Blender (x, -z, y)
 
