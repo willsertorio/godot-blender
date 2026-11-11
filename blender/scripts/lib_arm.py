@@ -91,3 +91,24 @@ def solve_arm(rig, shoulder_w, pole_w):
     pb["hand"].matrix = hand_m
     bpy.context.view_layer.update()
     return elbow
+
+
+def solve_arm_aligned(rig, shoulder_w, droop=0.35):
+    """Forearm straight out of the back of the hand (a relaxed wrist: no bend except `droop`, a little drop toward
+    the shoulder), upper arm from the elbow toward `shoulder_w`. For hands on a grip whose own direction already
+    points back at the body (the trigger hand)."""
+    pb = rig.pose.bones
+    mw = rig.matrix_world
+    hand_m = pb["hand"].matrix.copy()
+    wrist = mw @ pb["hand"].head
+    hdir = (mw @ pb["middle1"].head - wrist).normalized()
+    back = -hdir
+    to_sh = (shoulder_w - wrist).normalized()
+    fdir = back.lerp(to_sh, droop).normalized()
+    elbow = wrist + fdir * pb["forearm"].length
+    head = elbow + (shoulder_w - elbow).normalized() * pb["upperarm"].length
+    _set_bone(rig, pb["upperarm"], head, elbow)
+    _set_bone(rig, pb["forearm"], elbow, wrist)
+    pb["hand"].matrix = hand_m
+    bpy.context.view_layer.update()
+    return elbow

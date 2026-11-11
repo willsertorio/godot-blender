@@ -161,7 +161,10 @@ def grip(rig, right, handle, xs, ys, u, s, u_mid_px, front, trigger_px=None, thu
         print(f"  thumb tip {(tail_w('thumb3') - tb).length * 100:.1f} cm from target")
     # Arm: elbow down / out, upper arm toward the player's shoulder (below / outside the camera view).
     side = "R" if right else "L"
-    lib_arm.solve_arm(rig, lib_arm.shoulder("rifle", side), lib_arm.pole("rifle", side))
+    if right:
+        lib_arm.solve_arm_aligned(rig, lib_arm.shoulder("rifle", side))
+    else:
+        lib_arm.solve_arm(rig, lib_arm.shoulder("rifle", side), lib_arm.pole("rifle", side))
     pbw = rig.pose.bones
     fdir = (rig.matrix_world.to_3x3() @ (pbw["forearm"].tail - pbw["forearm"].head)).normalized()
     hdir = (rig.matrix_world.to_3x3() @ (pbw["middle1"].head - pbw["hand"].head)).normalized()
@@ -177,7 +180,7 @@ grip(O["Glove.R"], True, ["PistolGrip"], (835, 930), (250, 330),
      u=Vector((0, -math.sin(GRIP_RAKE), -math.cos(GRIP_RAKE))), s=Vector((1, 0, 0)),
      u_mid_px=(852, 274), front=0.8, trigger_px=(800, 240),
      thumb_line=((890, 206), (812, 200)), thumb_x=-0.025, wrist_bend=35,
-     wrist_down=Vector((0.35, 0, -1)))
+     wrist_down=Vector((0.35, 0, -1)), roll=float(os.environ.get("RROLL", 0)))
 # Left hand UNDER the handguard (the support hold in the CS references), just ahead of the angled foregrip: palm
 # under it, fingers up the far (right) side, thumb along the near (left) side toward the muzzle; the wrist sits
 # below-left, so the forearm comes up briefly from the bottom-left of the screen.
