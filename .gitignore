@@ -10,3 +10,4 @@ captures/
 # Blender backups
 *.blend1
 .DS_Store
+__pycache__/
