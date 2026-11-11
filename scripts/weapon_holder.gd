@@ -23,7 +23,7 @@ const WEAPONS := {
 	"rifle": {"damage": 12.0, "interval": 0.095, "auto": true, "spread": 0.035, "ads_spread": 0.009,
 		"range": 90.0, "sound": "rifle", "kick": 0.55, "mag": 30, "reload": 1.5,
 		# XM-R4: magnifier / holo line 13.1 cm above the pistol-grip origin.
-		"model": "res://assets/models/xmr4.glb", "hip": Vector3(0.18, -0.2, -0.44), "ads": Vector3(0.0, -0.131, -0.14),
+		"model": "res://assets/models/xmr4.glb", "hip": Vector3(0.11, -0.12, -0.22), "hip_rot": Vector3(-2, 14, -6), "ads": Vector3(0.0, -0.131, -0.14),
 		"clips": "res://assets/models/xmr4_clips.json", "root": "XMR4", "shot": [2, 5],
 		"casing": "res://assets/models/casing_556.glb", "eject_v": Vector3(1.6, 1.3, -0.15),
 		"grip_r": [Vector3(0, -0.035, 0.0), Vector3(-15, 0, 0), Vector3.LEFT],
@@ -516,10 +516,13 @@ func _animate(delta: float) -> void:
 	# Base pose + state poses (run / crouch).
 	var base: Vector3 = w0.ads if ads else w0.hip
 	var pose_pos := base
-	var pose_rot := Vector3.ZERO
+	# Hip framing angle (deg, Godot YXZ), matched to blender/scripts/lib_arm.py VIEWS: muzzle toward the centre.
+	var pose_rot: Vector3 = Vector3.ZERO if ads else (w0.get("hip_rot", Vector3.ZERO) as Vector3) * (PI / 180.0)
+	# Guns framed close to the eye (hip_rot set) get gentler state poses so they never swing across the view.
+	var close := w0.has("hip_rot")
 	if player.running:
-		pose_pos += Vector3(-0.04, -0.06, 0.03)
-		pose_rot += Vector3(deg_to_rad(-12), deg_to_rad(28), deg_to_rad(12))
+		pose_pos += Vector3(-0.04, -0.06, 0.03) if not close else Vector3(0.0, -0.07, 0.02)
+		pose_rot += Vector3(deg_to_rad(-12), deg_to_rad(28 if not close else 6), deg_to_rad(12 if not close else 8))
 	elif player.crouching and not ads:
 		pose_pos += Vector3(-0.015, 0.01, 0.0)
 		pose_rot += Vector3(0, 0, deg_to_rad(-6))
@@ -532,8 +535,11 @@ func _animate(delta: float) -> void:
 	if reloading > 0.0:
 		rf = 1.0 - reloading / WEAPONS.rifle.reload
 		var rp := _reload_pose(rf)
-		pose_pos += rp[0]
-		pose_rot += rp[1]
+		var rk := 0.4 if close else 1.0
+		pose_pos += rp[0] * rk
+		pose_rot += rp[1] * rk
+		if close:
+			pose_pos.y -= 0.035 * smoothstep(0.0, 0.18, rf) * (1.0 - smoothstep(0.82, 1.0, rf))
 		if rf > 0.66 and not _reload_mag_dropped:
 			_reload_mag_dropped = true
 			Sfx.play("reload_in")
