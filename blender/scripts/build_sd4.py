@@ -429,6 +429,8 @@ def build():
         rig.pose.bones[b].scale = (0.001, 0.001, 0.001)
     bpy.ops.object.mode_set(mode="OBJECT")
     bpy.ops.wm.save_as_mainfile(filepath=OUT)
+    bpy.ops.file.make_paths_relative()     # reference image path relative to the .blend
+    bpy.ops.wm.save_mainfile()
     print("saved", OUT, "parts", len(PARTS), "bones", len(arm.bones))
 
 

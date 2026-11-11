@@ -161,6 +161,9 @@ blender -b blender/xm9.blend -P blender/scripts/anim_xm9_hands.py  # left-hand r
 blender -b -P blender/scripts/build_xmr4.py              # blender/xmr4.blend: XM-R4 rifle from blender/reference/rifle_concept.png (0.82 mm/px, 88 cm)
 blender -b blender/xmr4.blend -P blender/scripts/pose_glove_xmr4.py  # gloves on the rifle: right on the pistol grip, left under the handguard
 blender -b blender/xmr4.blend -P blender/scripts/anim_xmr4.py # XM-R4 Fire (f1-24, 3-round burst) + Reload with the left hand (f31-90)
+blender -b -P blender/scripts/build_at9.py && blender -b blender/at9.blend -P blender/scripts/anim_at9.py  # AT-9 ceiling turret: Idle 1-60, Shoot 67-90, Aim 97-144, Death 151-195
+blender -b -P blender/scripts/build_fr2.py && blender -b blender/fr2.blend -P blender/scripts/anim_fr2.py  # FR-2 drone: Idle 1-60, Shoot 67-90, Fly 97-156, Death 163-207
+blender -b -P blender/scripts/build_sd4.py && blender -b blender/sd4.blend -P blender/scripts/anim_sd4.py  # SD-4 spider (rig SD4Rig): Idle 1-60, Shoot 67-90, Walk 97-126 (0.6 m/s), Run 133-152 (1.5 m/s), Death 159-203
 python3 -I tools/set_texture_imports.py                # force VRAM compression + mipmaps on 3D textures (run after adding textures)
 ```
 Add `--greybox` to any run or capture to build with the greybox kit instead of the Blender kit.
