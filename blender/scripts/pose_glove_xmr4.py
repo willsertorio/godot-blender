@@ -171,12 +171,12 @@ grip(O["Glove.R"], True, ["PistolGrip"], (835, 930), (250, 330),
      u_mid_px=(852, 274), front=0.8, trigger_px=(800, 240),
      thumb_line=((890, 206), (812, 200)), thumb_x=-0.025, wrist_bend=35,
      wrist_down=Vector((0.35, 0, -1)))
-# Left hand on the near (left) side of the handguard, just ahead of the angled foregrip: palm against the side,
-# fingers up and over the top, wrist below, so the forearm rises from the bottom of the screen into the hand and the
-# back of the glove faces the camera (the classic support hold). Index toward the receiver, thumb along the side.
+# Left hand UNDER the handguard (the support hold in the CS references), just ahead of the angled foregrip: palm
+# under it, fingers up the far (right) side, thumb along the near (left) side toward the muzzle; the wrist sits
+# below-left, so the forearm comes up briefly from the bottom-left of the screen.
 grip(O["Glove.L"], False, ["Handguard"], (330, 440), (105, 210),
-     u=Vector((0, 1, 0)), s=Vector((-1, 0, 0)), u_mid_px=(425, 0), front=0.35,
-     thumb_line=((470, 182), (540, 182)), thumb_x=-0.033)
+     u=Vector((0, -1, 0)), s=Vector((0, 0, -1)), u_mid_px=(378, 0), front=0.55,
+     thumb_line=((420, 150), (330, 150)), thumb_x=-0.036)
 
 sc.frame_set(1)
 bpy.ops.wm.save_mainfile()

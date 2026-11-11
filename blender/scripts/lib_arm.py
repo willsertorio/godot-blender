@@ -16,7 +16,7 @@ from mathutils import Matrix, Vector
 # x = muzzle up, y = muzzle toward screen centre (left), z = cant).
 VIEWS = {
     "pistol": {"hip": (0.16, -0.15, -0.4), "rot": (0.0, 0.0, 0.0)},
-    "rifle": {"hip": (0.085, -0.16, -0.10), "rot": (2.0, 8.0, -5.0)},
+    "rifle": {"hip": (0.085, -0.15, -0.10), "rot": (3.0, 8.0, -6.0)},
 }
 _K = Matrix(((1, 0, 0), (0, 0, -1), (0, 1, 0)))   # Godot (x, y, z) -> Blender (x, -z, y)
 
@@ -45,9 +45,9 @@ def pole(gun, side):
 
 # Shoulders relative to the viewmodel camera (Blender axes: +X right, +Y forward, +Z up), metres.
 SHOULDER_R = Vector((0.20, -0.08, -0.22))
-SHOULDER_L = Vector((-0.12, -0.05, -0.42))
+SHOULDER_L = Vector((-0.38, -0.02, -0.34))
 POLE_R = Vector((0.6, 0.0, -1.0))
-POLE_L = Vector((-0.35, 0.0, -1.0))
+POLE_L = Vector((-0.5, 0.0, -1.0))
 
 
 def camera_in_gun_frame(hip_godot):
