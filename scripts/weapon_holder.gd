@@ -14,12 +14,18 @@ signal changed
 const WEAPONS := {
 	"pistol": {"damage": 25.0, "interval": 0.24, "auto": false, "spread": 0.022, "ads_spread": 0.003,
 		"range": 90.0, "sound": "pistol", "kick": 1.0,
-		"model": "res://assets/models/pistol.glb", "hip": Vector3(0.16, -0.15, -0.4), "ads": Vector3(0.0, -0.085, -0.66),
+		# XM9 (modelled from scratch, gloves included): red-dot window centre 7.7 cm above the grip origin.
+		"model": "res://assets/models/xm9.glb", "hip": Vector3(0.16, -0.15, -0.4), "ads": Vector3(0.0, -0.0766, -0.3),
+		"clips": "res://assets/models/xm9_clips.json", "root": "XM9", "shot": [3, 12],
+		"casing": "res://assets/models/casing_9mm.glb", "eject_v": Vector3(1.4, 1.6, 0.25),
 		# Grip markers (weapon frame: -Z barrel, +Y up): [position, rotation deg]; [] = no hand.
 		"grip_r": [Vector3(0, -0.03, 0.012), Vector3(-18, 0, 0), Vector3.LEFT], "grip_l": []},
 	"rifle": {"damage": 12.0, "interval": 0.095, "auto": true, "spread": 0.035, "ads_spread": 0.009,
 		"range": 90.0, "sound": "rifle", "kick": 0.55, "mag": 30, "reload": 1.5,
-		"model": "res://assets/models/rifle.glb", "hip": Vector3(0.18, -0.2, -0.44), "ads": Vector3(0.0, -0.205, -0.48),
+		# XM-R4: magnifier / holo line 13.1 cm above the pistol-grip origin.
+		"model": "res://assets/models/xmr4.glb", "hip": Vector3(0.18, -0.2, -0.44), "ads": Vector3(0.0, -0.131, -0.14),
+		"clips": "res://assets/models/xmr4_clips.json", "root": "XMR4", "shot": [2, 5],
+		"casing": "res://assets/models/casing_556.glb", "eject_v": Vector3(1.6, 1.3, -0.15),
 		"grip_r": [Vector3(0, -0.035, 0.0), Vector3(-15, 0, 0), Vector3.LEFT],
 		# support hand under the handguard: handle axis along the barrel, palm up
 		"grip_l": [Vector3(0, -0.03, -0.3), Vector3(0, 0, 0), Vector3.UP]},
@@ -59,6 +65,10 @@ var _pose_pos := Vector3.ZERO
 var _pose_rot := Vector3.ZERO
 var _t := 0.0
 var _reload_mag_dropped := false
+## Clip-driven guns (from-scratch models): weapon -> AnimationPlayer; scripted brass in flight.
+var _anim: Dictionary = {}
+var _casings: Array = []
+var _casing_scenes: Dictionary = {}
 
 
 func setup(p: Player) -> void:
@@ -125,7 +135,7 @@ func _process(delta: float) -> void:
 	if not hold_fx:
 		_fx = maxf(0.0, _fx - delta * 18.0)
 		flash_light.light_energy = _fx * 3.0
-		flash_sprite.visible = _fx > 0.3
+		flash_sprite.visible = _fx > 0.3 and not _anim.has(current)
 		tracer.visible = _fx > 0.15
 	if reloading > 0.0:
 		reloading -= delta
@@ -135,6 +145,7 @@ func _process(delta: float) -> void:
 		switching -= delta
 
 	_animate(delta)
+	_update_casings(delta)
 	flash_sprite.global_position = muzzle().global_position
 	flash_light.global_position = muzzle().global_position
 
@@ -157,6 +168,8 @@ func _process(delta: float) -> void:
 func switch_to(w: String) -> void:
 	if w == current:
 		return
+	if reloading > 0.0:
+		_rest_pose(current)
 	reloading = 0.0
 	models[current].visible = false
 	current = w
@@ -172,6 +185,7 @@ func start_reload() -> bool:
 		return false
 	reloading = WEAPONS.rifle.reload
 	_reload_mag_dropped = false
+	_play_clip("rifle", "Reload", WEAPONS.rifle.reload)
 	Sfx.play("reload_out")
 	changed.emit()
 	return true
@@ -217,7 +231,9 @@ func _shoot(w: Dictionary) -> void:
 	_recoil(w)
 	_fx = 1.0
 	flash_light.light_energy = 3.0
-	flash_sprite.visible = true
+	flash_sprite.visible = not _anim.has(current)   # clip guns carry their own 3D flash
+	_play_clip(current, "Shot", float(w.interval))
+	_eject_casing()
 	flash_sprite.rotation.z = randf() * TAU
 	Sfx.play(w.sound)
 	var cam := player.camera
@@ -371,8 +387,73 @@ func _load_model(w: String, fallback: Callable) -> Node3D:
 	MaterialLib.rebind_tree(m)
 	assert(m.find_child("Muzzle", true, false) != null, path + " has no Muzzle")
 	m.position = WEAPONS[w].hip
-	_attach_arms(m, w)
+	var spec: Dictionary = WEAPONS[w]
+	if spec.has("clips"):
+		# Gloves are part of the model; clips cut from the baked timeline, root kick left to _recoil().
+		var ap := m.find_child("AnimationPlayer", true, false) as AnimationPlayer
+		AnimUtil.split_clips(ap, spec.clips, [spec.root], {"Shot": spec.shot})
+		_anim[w] = ap
+		_rest_pose(w)
+		if ResourceLoader.exists(spec.casing):
+			_casing_scenes[w] = load(spec.casing)
+	else:
+		_attach_arms(m, w)
 	return m
+
+
+## Hold the first frame of Fire (gloves in their grip pose, every part at rest).
+func _rest_pose(w: String) -> void:
+	var ap: AnimationPlayer = _anim.get(w)
+	if ap == null or not ap.has_animation("Fire"):
+		return
+	ap.play("Fire")
+	ap.seek(0.0, true)
+	ap.pause()
+
+
+## Play a clip once, sped up to last `duration` seconds (0 = natural speed).
+func _play_clip(w: String, clip: String, duration := 0.0) -> void:
+	var ap: AnimationPlayer = _anim.get(w)
+	if ap == null or not ap.has_animation(clip):
+		return
+	var length := ap.get_animation(clip).length
+	var speed := maxf(1.0, length / duration) if duration > 0.0 else 1.0
+	ap.stop()
+	ap.play(clip, 0.0, speed)
+
+
+## Brass: flies out of the Eject marker (right, up, a little back), spins, drops; lives in weapon space.
+func _eject_casing() -> void:
+	var sc: PackedScene = _casing_scenes.get(current)
+	var ej := view_model.find_child("Eject", true, false) as Node3D
+	if sc == null or ej == null:
+		return
+	var c := sc.instantiate() as Node3D
+	MaterialLib.rebind_tree(c)
+	add_child(c)
+	c.global_transform = ej.global_transform
+	ViewmodelRig.adopt(c)
+	for mi in c.find_children("*", "MeshInstance3D", true, false):
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var v: Vector3 = WEAPONS[current].eject_v
+	v = v * randf_range(0.85, 1.15) + Vector3(randf_range(-0.2, 0.2), randf_range(-0.2, 0.2), randf_range(-0.1, 0.1))
+	_casings.append({"node": c, "v": view_model.basis * v, "spin": Vector3(randf_range(-30, 30), randf_range(10, 25), randf_range(-20, 20)), "t": 0.0})
+
+
+func _update_casings(delta: float) -> void:
+	for i in range(_casings.size() - 1, -1, -1):
+		var c: Dictionary = _casings[i]
+		var n: Node3D = c.node
+		if not is_instance_valid(n):
+			_casings.remove_at(i)
+			continue
+		c.t += delta
+		c.v += Vector3(0, -9.8, 0) * delta
+		n.position += c.v * delta
+		n.rotation += c.spin * delta
+		if c.t > 0.6:
+			n.queue_free()
+			_casings.remove_at(i)
 
 
 ## Recoil impulse: the gun kicks back and up with a little random twist; the view is punched up.

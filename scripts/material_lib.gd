@@ -16,7 +16,55 @@ const NEON := {
 	"NeonRed": Color("#FF2D55"),
 	"NeonGreen": Color("#39FF88"),
 	"NeonViolet": Color("#B48CFF"),
+	"NeonOrange": Color("#FF7A1A"),
 }
+
+## Grounded-military materials for the from-scratch assets (XM9, XM-R4, HG-7 gloves, AT-9, FR-2, SD-4).
+## The Blender models have no UVs, so every set is projected triplanar in the object's own space (it stays
+## stuck to moving parts). CC0 ambientCG sets in assets/textures/military/<set>/ (512 px):
+##   Plastic018B worn painted coating (tinted)   Metal038 bare scratched steel   Metal029 powder-coated black
+##   Metal046B dirty dark metal   Plastic012B scratched black polymer   Rubber004 rubber   Metal048A brass base
+## name -> [set, tint, metallic (-1 = use the set's metal map), roughness offset, tile (metres per repeat)]
+const MIL_DIR := "res://assets/textures/military/"
+const MILITARY := {
+	# XM9 pistol
+	"GunSlide": ["Metal038", Color(0.72, 0.73, 0.74), -1.0, 0.05, 0.12],
+	"GunFrame": ["Plastic018B", Color(0.44, 0.45, 0.40), 0.0, 0.05, 0.14],
+	"GunDark": ["Metal029", Color(1, 1, 1), -1.0, 0.0, 0.14],
+	"GunGrip": ["Rubber004", Color(0.75, 0.75, 0.75), 0.0, 0.0, 0.05],
+	"GunBarrel": ["Metal046B", Color(0.9, 0.9, 0.9), -1.0, -0.1, 0.1],
+	"GunBrass": ["Metal048A", Color(0.86, 0.62, 0.32), 1.0, 0.2, 0.08],
+	# XM-R4 rifle
+	"RifleBody": ["Plastic018B", Color(0.42, 0.42, 0.37), 0.0, 0.05, 0.2],
+	"RifleCarbon": ["Plastic012B", Color(0.75, 0.75, 0.72), 0.0, 0.0, 0.12],
+	"RiflePolymer": ["Plastic018B", Color(0.30, 0.30, 0.27), 0.0, 0.15, 0.18],
+	"RifleDark": ["Metal029", Color(1, 1, 1), -1.0, 0.0, 0.15],
+	"RifleMetal": ["Metal046B", Color(0.9, 0.9, 0.9), -1.0, -0.1, 0.12],
+	"RifleBrass": ["Metal048A", Color(0.86, 0.62, 0.32), 1.0, 0.2, 0.08],
+	# HG-7 gloves
+	"GlovePlate": ["Plastic018B", Color(0.30, 0.31, 0.31), 0.0, 0.05, 0.1],
+	"GloveCuff": ["Rubber004", Color(0.45, 0.45, 0.45), 0.0, 0.0, 0.06],
+	# Enemies
+	"TurretArmor": ["Plastic018B", Color(0.40, 0.41, 0.33), 0.0, 0.05, 0.6],
+	"TurretDark": ["Metal029", Color(1, 1, 1), -1.0, 0.0, 0.5],
+	"TurretMetal": ["Metal046B", Color(0.9, 0.9, 0.9), -1.0, -0.05, 0.4],
+	"TurretBrass": ["Metal048A", Color(0.86, 0.62, 0.32), 1.0, 0.2, 0.2],
+	"DroneArmor": ["Plastic018B", Color(0.40, 0.41, 0.34), 0.0, 0.05, 0.6],
+	"DroneArmorLight": ["Plastic018B", Color(0.52, 0.52, 0.46), 0.0, 0.05, 0.6],
+	"DroneDark": ["Metal029", Color(1, 1, 1), -1.0, 0.0, 0.5],
+	"DroneMetal": ["Metal046B", Color(0.9, 0.9, 0.9), -1.0, -0.05, 0.4],
+	"SpiderArmor": ["Plastic018B", Color(0.40, 0.41, 0.34), 0.0, 0.05, 0.6],
+	"SpiderPlate": ["Plastic018B", Color(0.48, 0.48, 0.42), 0.0, 0.05, 0.5],
+	"SpiderDark": ["Metal029", Color(1, 1, 1), -1.0, 0.0, 0.5],
+	"SpiderJoint": ["Metal046B", Color(0.9, 0.9, 0.9), -1.0, -0.05, 0.4],
+	"SpiderTread": ["Rubber004", Color(0.6, 0.6, 0.6), 0.0, 0.0, 0.2],
+}
+## Glove / sleeve fabric on the from-scratch gloves (no UVs -> triplanar StandardMaterial, not the fabric shader).
+const MIL_FABRIC := {
+	"GloveFabric": ["res://assets/textures/fabric/Leather031/", Color(0.16, 0.16, 0.17), 0.05],
+	"ArmSuit": ["res://assets/textures/fabric/Fabric045/", Color(0.2, 0.21, 0.24), 0.08],
+}
+const FLASH_MATS := ["MuzzleFlash", "TurretFlash", "DroneFlash"]
 
 ## Quaternius materials (glbs carry names only; see blender/scripts/normalize_quaternius.py).
 const Q_TABLE := "res://assets/models/q_materials.json"
@@ -120,6 +168,38 @@ static func get_material(name: String) -> Material:
 	var m: Material = _quaternius(name)
 	if m:
 		pass
+	elif MILITARY.has(name):
+		m = _military(MILITARY[name])
+	elif name in FLASH_MATS:
+		var fm := StandardMaterial3D.new()
+		fm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		fm.albedo_color = Color(1.0, 0.85, 0.55) if name != "MuzzleFlash" else Color(0.6, 0.95, 1.0)
+		fm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		fm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		fm.cull_mode = BaseMaterial3D.CULL_DISABLED
+		fm.no_depth_test = false
+		m = fm
+	elif name in ["GunMagazine", "RifleMagazine"]:
+		var mg := _military(["Plastic012B", Color(0.42, 0.44, 0.40, 0.55), 0.0, -0.3, 0.12])
+		mg.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m = mg
+	elif name in ["GunLens", "RifleLens"]:
+		var ln := StandardMaterial3D.new()
+		# Nearly clear coated glass (it sits in the aim line of both sights).
+		ln.albedo_color = Color(0.55, 0.75, 0.85, 0.12)
+		ln.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		ln.metallic = 0.0
+		ln.roughness = 0.02
+		ln.metallic_specular = 0.8
+		m = ln
+	elif name == "GunScreen":
+		var sm := StandardMaterial3D.new()
+		sm.albedo_color = Color(0.02, 0.05, 0.07)
+		sm.roughness = 0.2
+		sm.emission_enabled = true
+		sm.emission = Color(0.15, 0.6, 0.8)
+		sm.emission_energy_multiplier = 0.5
+		m = sm
 	elif SURFACES.has(name):
 		m = _surface(SURFACES[name])
 	elif name.begins_with("Neon"):
@@ -141,6 +221,59 @@ static func get_material(name: String) -> Material:
 	if m:
 		m.resource_name = name
 		_cache[name] = m
+	return m
+
+
+static func _mil_tex(set_name: String, map: String) -> Texture2D:
+	var p := MIL_DIR + set_name + "/" + map + ".jpg"
+	return load(p) if ResourceLoader.exists(p) else null
+
+
+## Triplanar (object-local) PBR material from a MILITARY row.
+static func _military(spec: Array) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	var set_name: String = spec[0]
+	m.albedo_texture = _mil_tex(set_name, "albedo")
+	m.albedo_color = spec[1]
+	m.normal_enabled = true
+	m.normal_texture = _mil_tex(set_name, "normal")
+	m.normal_scale = 1.0
+	m.roughness_texture = _mil_tex(set_name, "rough")
+	m.roughness = clampf(1.0 + float(spec[3]), 0.0, 1.0)
+	var metal: float = spec[2]
+	if metal < 0.0 and _mil_tex(set_name, "metal"):
+		m.metallic_texture = _mil_tex(set_name, "metal")
+		m.metallic = 1.0
+	else:
+		m.metallic = maxf(metal, 0.0)
+	m.metallic_specular = 0.5
+	m.uv1_triplanar = true
+	m.uv1_world_triplanar = false
+	m.uv1_triplanar_sharpness = 4.0
+	m.uv1_scale = Vector3.ONE / float(spec[4])
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	return m
+
+
+## Fabric for meshes without UVs (the from-scratch gloves / sleeves): triplanar StandardMaterial.
+static func _mil_fabric(name: String) -> StandardMaterial3D:
+	var key := "milfab_" + name
+	if _cache.has(key):
+		return _cache[key]
+	var spec: Array = MIL_FABRIC[name]
+	var dir: String = spec[0]
+	var m := StandardMaterial3D.new()
+	m.albedo_texture = load(dir + "albedo.jpg")
+	m.albedo_color = spec[1]
+	m.normal_enabled = true
+	m.normal_texture = load(dir + "normal.jpg")
+	m.roughness_texture = load(dir + "rough.jpg")
+	m.roughness = 1.0
+	m.uv1_triplanar = true
+	m.uv1_scale = Vector3.ONE / float(spec[2])
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	m.resource_name = name
+	_cache[key] = m
 	return m
 
 
@@ -169,8 +302,13 @@ static func rebind(mesh: Mesh) -> Mesh:
 			continue
 		# Only names the library owns are replaced (Neon*, PortalField, ...); anything else
 		# (Quaternius MI_* materials with their own textures) is kept as imported.
-		if FABRIC.has(src.resource_name.get_slice(".", 0)):
-			out.surface_set_material(i, fabric(src.resource_name.get_slice(".", 0), src))
+		var base := src.resource_name.get_slice(".", 0)
+		var has_uv: bool = not (out is ArrayMesh) or ((out as ArrayMesh).surface_get_format(i) & Mesh.ARRAY_FORMAT_TEX_UV) != 0
+		if MIL_FABRIC.has(base) and not has_uv:
+			out.surface_set_material(i, _mil_fabric(base))
+			continue
+		if FABRIC.has(base):
+			out.surface_set_material(i, fabric(base, src))
 			continue
 		var lib := get_material(src.resource_name.get_slice(".", 0))
 		if lib:
