@@ -45,9 +45,9 @@ def pole(gun, side):
 
 # Shoulders relative to the viewmodel camera (Blender axes: +X right, +Y forward, +Z up), metres.
 SHOULDER_R = Vector((0.20, -0.08, -0.22))
-SHOULDER_L = Vector((-0.38, -0.02, -0.34))
+SHOULDER_L = Vector((-0.18, 0.08, -0.30))
 POLE_R = Vector((0.6, 0.0, -1.0))
-POLE_L = Vector((-0.5, 0.0, -1.0))
+POLE_L = Vector((-0.1, 0.2, -1.0))
 
 
 def camera_in_gun_frame(hip_godot):
