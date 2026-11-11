@@ -14,8 +14,13 @@ waits below / left of the gun for the reload. Re-running replaces both gloves.
 import math
 import os
 
+import sys
+
 import bpy
 from mathutils import Matrix, Vector
+
+sys.path.insert(0, os.path.dirname(__file__))
+import lib_arm  # noqa: E402
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 GLOVE = os.path.join(ROOT, "blender", "glove.blend")
@@ -174,18 +179,9 @@ for k in range(1, 4):
 print(f"  thumb: tip {(tail_world('thumb3') - tb).length * 100:.1f} cm from target, "
       f"{min((tail_world('thumb3') - ta).length, 1) * 100:.1f} cm from the line start")
 
-# Wrist bend: turn the forearm about the wrist (down the grip + a little outward), keep the hand in place.
-fa, hd = pb["forearm"], pb["hand"]
-hand_m = hd.matrix.copy()
-wrist = fa.tail.copy()                                          # armature space
-inv = rig_r.matrix_world.to_3x3().inverted()
-back = -(inv @ w)
-down = inv @ (u + s * 0.35)
-axis = back.cross(down).normalized()
-fa.matrix = Matrix.Translation(wrist) @ Matrix.Rotation(WRIST_BEND, 4, axis) @ Matrix.Translation(-wrist) @ fa.matrix
-bpy.context.view_layer.update()
-hd.matrix = hand_m
-bpy.context.view_layer.update()
+# Arm: elbow down / out, upper arm toward the player's right shoulder (below / right of the camera).
+CAM = lib_arm.camera_in_gun_frame((0.16, -0.15, -0.4))   # WeaponHolder pistol hip
+lib_arm.solve_arm(rig_r, CAM + lib_arm.SHOULDER_R, lib_arm.POLE_R)
 
 # Parent to the gun root so recoil / reload move the hand with the gun.
 mw = rig_r.matrix_world.copy()
@@ -199,6 +195,8 @@ for b in rig_l.pose.bones:
     b.rotation_mode = "XYZ"
     if b.name[-1] in "123":
         b.rotation_euler.x = math.radians(15 if b.name.startswith("thumb") else 25)
+bpy.context.view_layer.update()
+lib_arm.solve_arm(rig_l, CAM + lib_arm.SHOULDER_L, lib_arm.POLE_L)
 
 sc.frame_set(1)
 bpy.ops.wm.save_mainfile()

@@ -18,8 +18,13 @@ the left hand relative to the rifle. Re-running replaces both gloves.
 import math
 import os
 
+import sys
+
 import bpy
 from mathutils import Matrix, Vector
+
+sys.path.insert(0, os.path.dirname(__file__))
+import lib_arm  # noqa: E402
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 GLOVE = os.path.join(ROOT, "blender", "glove.blend")
@@ -27,6 +32,7 @@ K = 0.00082
 ORIGIN = (868, 232)
 R_FINGER = 0.0095
 FINGERS = ["index", "middle", "ring", "pinky"]
+CAM = None  # set below: viewmodel camera in the rifle frame (from WeaponHolder's rifle hip offset)
 
 
 def P(x, y):
@@ -150,24 +156,15 @@ def grip(rig, right, handle, xs, ys, u, s, u_mid_px, front, trigger_px=None, thu
             b.matrix = inv_w @ (Matrix.Translation(tr) @ r @ Matrix.Translation(-tr) @ m_world)
             bpy.context.view_layer.update()
         print(f"  thumb tip {(tail_w('thumb3') - tb).length * 100:.1f} cm from target")
-    # Wrist bend toward wrist_down (gun frame), keeping the hand where it is.
-    fa, hd = pb["forearm"], pb["hand"]
-    hand_m = hd.matrix.copy()
-    wrist = fa.tail.copy()
-    inv = rig.matrix_world.to_3x3().inverted()
-    back = -(inv @ w)
-    down = inv @ (wrist_down if wrist_down is not None else u)
-    axis = back.cross(down).normalized()
-    fa.matrix = (Matrix.Translation(wrist) @ Matrix.Rotation(math.radians(wrist_bend), 4, axis)
-                 @ Matrix.Translation(-wrist) @ fa.matrix)
-    bpy.context.view_layer.update()
-    hd.matrix = hand_m
-    bpy.context.view_layer.update()
+    # Arm: elbow down / out, upper arm toward the player's shoulder (below / outside the camera view).
+    lib_arm.solve_arm(rig, CAM + (lib_arm.SHOULDER_R if right else lib_arm.SHOULDER_L),
+                      lib_arm.POLE_R if right else lib_arm.POLE_L)
     mw = rig.matrix_world.copy()
     rig.parent = O["XMR4"]
     rig.matrix_world = mw
 
 
+CAM = lib_arm.camera_in_gun_frame((0.18, -0.2, -0.44))
 GRIP_RAKE = math.atan2(24, 76)       # pistol grip front strap (842,258) -> (866,334)
 grip(O["Glove.R"], True, ["PistolGrip"], (835, 930), (250, 330),
      u=Vector((0, -math.sin(GRIP_RAKE), -math.cos(GRIP_RAKE))), s=Vector((1, 0, 0)),

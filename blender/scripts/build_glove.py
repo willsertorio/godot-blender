@@ -11,8 +11,10 @@ Hand frame (right hand): wrist centre at the origin, fingers +Y, back of the han
 The left hand is the mirror (thumb +X).
 Parts: fabric glove (hand body + 3 rounded segments per finger / thumb, overlapping at the joints so a
 bend never opens a gap), grey hard-shell plates (back plate, knuckle hexes, lower guard, finger and thumb
-plates), cuff with two cyan glow rings, sleeve to mid-forearm.
-Rig "Glove.R" / "Glove.L": forearm -> hand -> <finger>1..3 and thumb1..3. Rigid skinning: every vertex
+plates), cuff with two cyan glow rings, and the sleeved arm: forearm, padded elbow, upper arm (~60 cm in
+all, so the arm always runs off-screen instead of ending in a cut).
+Rig "Glove.R" / "Glove.L": upperarm -> forearm -> hand -> <finger>1..3 and thumb1..3 (the pose scripts aim the
+upper arm at the player's shoulder with a two-bone solve). Rigid skinning: every vertex
 belongs 100 % to one bone, so plates never bend. Finger bones are rolled so that curling toward the palm
 is a positive rotation about the bone's X axis (thumb: toward the palm / index).
 Materials: GloveFabric, GlovePlate, GloveCuff, NeonCyan, ArmSuit.
@@ -30,7 +32,8 @@ REF = os.path.join(ROOT, "blender", "reference", "glove_concept.png")
 
 K = 0.00068          # metres per image pixel
 WRIST = (359, 305)   # wrist centre in the back-of-hand view (image px)
-SLEEVE_LEN = 0.24
+FOREARM = 0.26   # wrist -> elbow
+UPPER = 0.32     # elbow -> shoulder
 
 MATS = {
     "GloveFabric": dict(color=(0.07, 0.075, 0.08), metallic=0.0, rough=0.85),
@@ -159,7 +162,8 @@ class Hand:
                                       (318, 246), (300, 236)], z1 - 0.003, z1 + 0.004, "GlovePlate", "hand", 0.0022)
         self.prism(f"LowerGuard.{s}", [(320, 256), (402, 256), (410, 276), (400, 297), (324, 297), (314, 276)],
                    z1 - 0.004, z1 + 0.003, "GlovePlate", "hand", 0.0022)
-        self.bones = {"forearm": (Vector((0, -SLEEVE_LEN, FINGER_Z)), Vector((0, 0, FINGER_Z)), Vector((0, 0, -1)))}
+        self.bones = {"upperarm": (Vector((0, -FOREARM - UPPER, FINGER_Z)), Vector((0, -FOREARM, FINGER_Z)), Vector((0, 0, -1))),
+                      "forearm": (Vector((0, -FOREARM, FINGER_Z)), Vector((0, 0, FINGER_Z)), Vector((0, 0, -1)))}
         mid = self.P(*FINGERS["middle"][0], FINGER_Z)
         self.bones["hand"] = (Vector((0, 0, FINGER_Z)), mid, Vector((0, 0, -1)))
         for f, ((bx, by), tip_y, w) in FINGERS.items():
@@ -205,8 +209,15 @@ class Hand:
         for i, y in enumerate((-0.006, -0.026)):
             self.tube(f"CuffGlow{i}.{s}", y + 0.0012, y - 0.0012, (0.0422, 0.0272), (0.0422, 0.0272), FINGER_Z,
                       "NeonCyan", "forearm", cap=False)
-        self.tube(f"Sleeve.{s}", -0.028, -SLEEVE_LEN, (0.038, 0.024), (0.044, 0.032), FINGER_Z, "ArmSuit", "forearm",
-                  segs=20)
+        self.tube(f"Sleeve.{s}", -0.028, -FOREARM - 0.03, (0.038, 0.024), (0.046, 0.034), FINGER_Z, "ArmSuit",
+                  "forearm", segs=20)
+        # Padded elbow (moves with the upper arm; the forearm tube ends inside it, so a bend never opens a gap)
+        bm = bmesh.new()
+        bmesh.ops.create_uvsphere(bm, u_segments=20, v_segments=12, radius=1.0,
+                                  matrix=Matrix.Translation((0, -FOREARM, FINGER_Z)) @ Matrix.Diagonal((0.05, 0.05, 0.042, 1)))
+        self._obj(f"Elbow.{s}", bm, "ArmSuit", "upperarm")
+        self.tube(f"UpperArm.{s}", -FOREARM - 0.01, -FOREARM - UPPER, (0.047, 0.038), (0.056, 0.047), FINGER_Z, "ArmSuit",
+                  "upperarm", segs=20)
 
     def rig(self):
         s = self.side
@@ -224,6 +235,7 @@ class Hand:
             b.head, b.tail = h, t
             b.align_roll(roll_to)
             eb[name] = b
+        eb["forearm"].parent = eb["upperarm"]
         eb["hand"].parent = eb["forearm"]
         for f in list(FINGERS) + ["thumb"]:
             eb[f"{f}1"].parent = eb["hand"]

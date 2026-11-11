@@ -155,7 +155,7 @@ blender -b -P blender/scripts/read_rigid_hand_poses.py      # after tuning in bl
 blender -b -P blender/scripts/make_hands_blend.py            # blender/hands_<gun>.blend: gun + both hand styles + game camera, for review
 blender -b -P blender/scripts/build_xm9.py               # blender/xm9.blend: XM9 pistol modelled from blender/reference/pistol_concept.png (review in Blender; not in game yet)
 blender -b blender/xm9.blend -P blender/scripts/anim_xm9.py # XM9 Fire (f1-24) + Reload (f31-72) clips, timeline markers; keeps edits made in the .blend
-blender -b -P blender/scripts/build_glove.py             # blender/glove.blend: HG-7 armored glove + sleeve (from blender/reference/glove_concept.png), rigged R + L
+blender -b -P blender/scripts/build_glove.py             # blender/glove.blend: HG-7 armored glove + sleeved arm to the shoulder (upperarm/forearm/hand rig), R + L; lib_arm.py aims the arm at the player's shoulder
 blender -b blender/xm9.blend -P blender/scripts/pose_glove_xm9.py  # gloves into xm9.blend: right hand on the grip (measured; index on the trigger, thumb along the left side), left parked
 blender -b blender/xm9.blend -P blender/scripts/anim_xm9_hands.py  # left-hand reload keys (palm carries the magazine in, overhand slide release); run after the two above
 blender -b -P blender/scripts/build_xmr4.py              # blender/xmr4.blend: XM-R4 rifle from blender/reference/rifle_concept.png (0.82 mm/px, 88 cm)

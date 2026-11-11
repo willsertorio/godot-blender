@@ -244,6 +244,22 @@ for b in hand.pose.bones:
         b.rotation_euler = (math.radians(a * (0.4 if thumb else 1.0)), 0, 0)
         b.keyframe_insert("rotation_euler", frame=f)
 
+
+# ---- arm follows the hand: per-frame two-bone solve toward the player's left shoulder (camera-fixed) ----------
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(__file__))
+import lib_arm  # noqa: E402
+_shoulder = lib_arm.camera_in_gun_frame((0.18, -0.2, -0.44)) + lib_arm.SHOULDER_L
+_pb = hand.pose.bones
+for _b in ("upperarm", "forearm", "hand"):
+    _pb[_b].rotation_mode = "QUATERNION"
+for _f in range(R + 1, R + 56 + 1):
+    sc.frame_set(_f)
+    lib_arm.solve_arm(hand, _shoulder, lib_arm.POLE_L)
+    for _b in ("upperarm", "forearm", "hand"):
+        _pb[_b].keyframe_insert("rotation_quaternion", frame=_f)
+        _pb[_b].keyframe_insert("location", frame=_f)
+
 for name, f in (("Fire", 1), ("Reload", R + 1)):
     mk = sc.timeline_markers.get(name) or sc.timeline_markers.new(name, frame=f)
     mk.frame = f

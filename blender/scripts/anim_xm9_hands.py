@@ -117,6 +117,22 @@ for b in rig.pose.bones:
         b.rotation_euler.x = math.radians(a)
         b.keyframe_insert("rotation_euler", index=0, frame=f)
 
+
+# ---- arm follows the hand: per-frame two-bone solve toward the player's left shoulder (camera-fixed) ----------
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(__file__))
+import lib_arm  # noqa: E402
+_shoulder = lib_arm.camera_in_gun_frame((0.16, -0.15, -0.4)) + lib_arm.SHOULDER_L
+_pb = rig.pose.bones
+for _b in ("upperarm", "forearm", "hand"):
+    _pb[_b].rotation_mode = "QUATERNION"
+for _f in range(R + 1, R + 38 + 1):
+    sc.frame_set(_f)
+    lib_arm.solve_arm(rig, _shoulder, lib_arm.POLE_L)
+    for _b in ("upperarm", "forearm", "hand"):
+        _pb[_b].keyframe_insert("rotation_quaternion", frame=_f)
+        _pb[_b].keyframe_insert("location", frame=_f)
+
 sc.frame_set(1)
 bpy.ops.wm.save_mainfile()
 print("left-hand reload keyed:", len(keys), "hand keys")
