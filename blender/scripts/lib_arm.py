@@ -9,13 +9,45 @@ frame from a bottom corner). If the shoulder is out of reach the arm points stra
 import math
 
 import bpy
-from mathutils import Vector
+from mathutils import Matrix, Vector
+
+# How each gun sits in front of the viewmodel camera, in Godot camera space (the same numbers go into
+# WeaponHolder.WEAPONS[gun].hip / hip_rot once approved): position (m), rotation (deg, Godot Euler YXZ:
+# x = muzzle up, y = muzzle toward screen centre (left), z = cant).
+VIEWS = {
+    "pistol": {"hip": (0.16, -0.15, -0.4), "rot": (0.0, 0.0, 0.0)},
+    "rifle": {"hip": (0.085, -0.16, -0.10), "rot": (2.0, 8.0, -5.0)},
+}
+_K = Matrix(((1, 0, 0), (0, 0, -1), (0, 1, 0)))   # Godot (x, y, z) -> Blender (x, -z, y)
+
+
+def camera_matrix(gun):
+    """Viewmodel camera in the gun's Blender frame: columns = camera right / forward / up (Blender-style axes),
+    translation = eye position."""
+    v = VIEWS[gun]
+    rx, ry, rz = (math.radians(a) for a in v["rot"])
+    r = Matrix.Rotation(ry, 3, "Y") @ Matrix.Rotation(rx, 3, "X") @ Matrix.Rotation(rz, 3, "Z")  # Godot YXZ
+    rinv = r.inverted()
+    eye = _K @ (rinv @ -Vector(v["hip"]))
+    axes = _K @ rinv @ _K.inverted()
+    m = axes.to_4x4()
+    m.translation = eye
+    return m
+
+
+def shoulder(gun, side):
+    """World / gun-frame point of the player's shoulder for `side` ("R" / "L")."""
+    return camera_matrix(gun) @ (SHOULDER_R if side == "R" else SHOULDER_L)
+
+
+def pole(gun, side):
+    return camera_matrix(gun).to_3x3() @ (POLE_R if side == "R" else POLE_L)
 
 # Shoulders relative to the viewmodel camera (Blender axes: +X right, +Y forward, +Z up), metres.
 SHOULDER_R = Vector((0.20, -0.08, -0.22))
-SHOULDER_L = Vector((-0.20, -0.08, -0.22))
+SHOULDER_L = Vector((-0.12, -0.05, -0.42))
 POLE_R = Vector((0.6, 0.0, -1.0))
-POLE_L = Vector((-0.6, 0.0, -1.0))
+POLE_L = Vector((-0.35, 0.0, -1.0))
 
 
 def camera_in_gun_frame(hip_godot):

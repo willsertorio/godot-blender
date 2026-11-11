@@ -157,8 +157,8 @@ def grip(rig, right, handle, xs, ys, u, s, u_mid_px, front, trigger_px=None, thu
             bpy.context.view_layer.update()
         print(f"  thumb tip {(tail_w('thumb3') - tb).length * 100:.1f} cm from target")
     # Arm: elbow down / out, upper arm toward the player's shoulder (below / outside the camera view).
-    lib_arm.solve_arm(rig, CAM + (lib_arm.SHOULDER_R if right else lib_arm.SHOULDER_L),
-                      lib_arm.POLE_R if right else lib_arm.POLE_L)
+    side = "R" if right else "L"
+    lib_arm.solve_arm(rig, lib_arm.shoulder("rifle", side), lib_arm.pole("rifle", side))
     mw = rig.matrix_world.copy()
     rig.parent = O["XMR4"]
     rig.matrix_world = mw
@@ -171,10 +171,12 @@ grip(O["Glove.R"], True, ["PistolGrip"], (835, 930), (250, 330),
      u_mid_px=(852, 274), front=0.8, trigger_px=(800, 240),
      thumb_line=((890, 206), (812, 200)), thumb_x=-0.025, wrist_bend=35,
      wrist_down=Vector((0.35, 0, -1)))
-grip(O["Glove.L"], False, ["Handguard"], (320, 440), (105, 210),
-     u=Vector((0, -1, 0)), s=Vector((0, 0, -1)), u_mid_px=(372, 0), front=0.55,
-     thumb_line=((420, 150), (330, 150)), thumb_x=-0.036, wrist_bend=50,
-     wrist_down=Vector((-0.1, -1, -0.5)))
+# Left hand on the near (left) side of the handguard, just ahead of the angled foregrip: palm against the side,
+# fingers up and over the top, wrist below, so the forearm rises from the bottom of the screen into the hand and the
+# back of the glove faces the camera (the classic support hold). Index toward the receiver, thumb along the side.
+grip(O["Glove.L"], False, ["Handguard"], (330, 440), (105, 210),
+     u=Vector((0, 1, 0)), s=Vector((-1, 0, 0)), u_mid_px=(425, 0), front=0.35,
+     thumb_line=((470, 182), (540, 182)), thumb_x=-0.033)
 
 sc.frame_set(1)
 bpy.ops.wm.save_mainfile()
