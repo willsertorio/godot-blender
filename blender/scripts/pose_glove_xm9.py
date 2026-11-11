@@ -22,11 +22,13 @@ GLOVE = os.path.join(ROOT, "blender", "glove.blend")
 K9 = 0.000453
 ORIGIN9 = (715, 235)
 RAKE = math.atan2(33, 115)
-YAW = math.radians(18)
+YAW = math.radians(float(os.environ.get("GLOVE_YAW", 0)))
+FRONT = float(os.environ.get("GLOVE_FRONT", 0.8))
 FINGERS = ["index", "middle", "ring", "pinky"]
 R_FINGER = 0.0095
 TRIGGER_PX = (600, 205)     # index fingertip pad goes here (front face of the trigger)
-THUMB_CURL = (50, 30, 20)    # thumb across the back strap to the left side (deg per joint)
+THUMB_LINE = ((762, 182), (676, 177))  # thumb runs along the frame's left side, below the slide (px)
+THUMB_X = -0.022                         # left side of the frame + thumb radius
 WRIST_BEND = math.radians(35)  # forearm drops back + down from the wrist
 
 
@@ -87,7 +89,7 @@ k_mid = rig_r.data.bones["middle1"].head_local.copy()       # middle knuckle, ha
 rot = Matrix((u, w, s)).transposed()                        # hand X,Y,Z -> u,w,s
 rot = Matrix.Rotation(-YAW, 3, u) @ rot                     # heel swings out (+s)
 u_mid = (P9(700, 246) - c).dot(u)                           # just under the trigger guard
-k_world = c + u * u_mid + s * (es + 0.017) + w * (ew * 0.45)
+k_world = c + u * u_mid + s * (es + 0.017) + w * (ew * FRONT)
 rig_r.matrix_world = Matrix.Translation(k_world - rot @ k_mid) @ rot.to_4x4()
 bpy.context.view_layer.update()
 
@@ -146,10 +148,31 @@ for a1 in range(0, 41, 4):
 for j, a in enumerate(best[1]):
     pb[f"index{j + 1}"].rotation_euler.x = math.radians(a)
 print(f"  index on trigger: {best[1]} deg, pad {best[0] * 100:.1f} cm from the trigger")
-for j, a in enumerate(THUMB_CURL):
-    pb[f"thumb{j + 1}"].rotation_mode = "XYZ"
-    pb[f"thumb{j + 1}"].rotation_euler.x = math.radians(a)
-bpy.context.view_layer.update()
+# Thumb: aim each segment along a line on the frame's left side, below the slide (simple follow-the-line IK):
+# segment k points at the spot on the line one segment-length away from its head.
+ta = P9(*THUMB_LINE[0]) + Vector((THUMB_X, 0, 0))
+tb = P9(*THUMB_LINE[1]) + Vector((THUMB_X, 0, 0))
+inv_w = rig_r.matrix_world.inverted()
+for k in range(1, 4):
+    b = pb[f"thumb{k}"]
+    head = rig_r.matrix_world @ b.head
+    length = b.length
+    d = (tb - ta).normalized()
+    # point on the line at distance `length` from head (forward root of |ta + d t - head| = length)
+    q = head - ta
+    bq = q.dot(d)
+    disc = bq * bq - (q.length_squared - length * length)
+    t = bq + math.sqrt(disc) if disc > 0 else bq
+    target = ta + d * max(t, 0.0)
+    cur = (rig_r.matrix_world.to_3x3() @ (b.tail - b.head)).normalized()
+    want = (target - head).normalized()
+    r = cur.rotation_difference(want).to_matrix().to_4x4()
+    m_world = rig_r.matrix_world @ b.matrix
+    tr = m_world.translation.copy()
+    b.matrix = inv_w @ (Matrix.Translation(tr) @ r @ Matrix.Translation(-tr) @ m_world)
+    bpy.context.view_layer.update()
+print(f"  thumb: tip {(tail_world('thumb3') - tb).length * 100:.1f} cm from target, "
+      f"{min((tail_world('thumb3') - ta).length, 1) * 100:.1f} cm from the line start")
 
 # Wrist bend: turn the forearm about the wrist (down the grip + a little outward), keep the hand in place.
 fa, hd = pb["forearm"], pb["hand"]
