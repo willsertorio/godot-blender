@@ -1,4 +1,4 @@
-"""Fire animation on the XM9 (runs on the saved file, so edits made in blender/xm9.blend are kept).
+"""Fire + Reload animations on the XM9 (runs on the saved file, so edits made in blender/xm9.blend are kept).
 
     blender -b blender/xm9.blend -P blender/scripts/anim_xm9.py
 
@@ -7,7 +7,12 @@ One shot, 24 frames at 30 fps; Space in Blender plays it in a loop. Snappy arcad
   f3-5   slide snaps back 3.2 cm (barrel back 4 mm, chamber tilts down 4 deg)
   f5     casing pops out of the ejection port (flies up/right, spinning, falls)
   f7-10  slide slams forward (small overshoot), trigger resets   f4-13 gun settles
-Actions are named "<object>_Fire". In the game the casing becomes a physics object spawned at the
+Reload (frames 31-72, ~1.4 s, empty reload, no hands yet; markers "Fire" / "Reload" on the timeline):
+  f31    slide locked back (empty)            f31-37 gun tilts up, rolls, swings in
+  f34-36 magazine pops out along the grip, f36-44 falls away
+  f45-52 fresh magazine flies up into the grip, f52 seats (gun jolts)
+  f57-59 slide slams forward (gun jolts)    f60-70 gun returns to the hip
+One action per object ("<object>_Anim") holds both clips; the game export splits them by marker. In the game the casing becomes a physics object spawned at the
 Eject marker and the gun's kick stays procedural; this file shows the whole shot.
 """
 import math
@@ -25,7 +30,7 @@ G = 9.8
 
 sc = bpy.context.scene
 sc.render.fps = FPS
-sc.frame_start, sc.frame_end = 1, 24
+sc.frame_start, sc.frame_end = 1, 72
 O = bpy.data.objects
 
 
@@ -34,7 +39,7 @@ def keys(ob, path, index, frames, interp="BEZIER", easing="AUTO"):
     if ob.animation_data is None:
         ob.animation_data_create()
     if ob.animation_data.action is None:
-        ob.animation_data.action = bpy.data.actions.new(f"{ob.name}_Fire")
+        ob.animation_data.action = bpy.data.actions.new(f"{ob.name}_Anim")
     act = ob.animation_data.action
     fc = act.fcurves.find(path, index=index) or act.fcurves.new(path, index=index)
     for k in frames:
@@ -79,8 +84,8 @@ def flash_mesh():
     return me
 
 
-root, slide, barrel, trigger = O["XM9"], O["Slide"], O["Barrel"], O["Trigger"]
-for ob in (root, slide, barrel, trigger):
+root, slide, barrel, trigger, mag = O["XM9"], O["Slide"], O["Barrel"], O["Trigger"], O["Magazine"]
+for ob in (root, slide, barrel, trigger, mag):
     clear(ob)
 sc.frame_set(1)
 
@@ -126,7 +131,7 @@ bpy.context.view_layer.update()
 p0 = O["Eject"].matrix_world.translation + Vector((0, -SLIDE_TRAVEL, 0)) - O["Casing"].data.vertices[0].co * 0
 c0 = sum((v.co for v in O["Casing"].data.vertices), Vector()) / len(O["Casing"].data.vertices)
 for i in range(3):
-    keys(cas, "scale", i, [(1, 0.0, "CONSTANT"), (5, 1.0, "CONSTANT")])
+    keys(cas, "scale", i, [(1, 0.0, "CONSTANT"), (5, 1.0, "CONSTANT"), (25, 0.0, "CONSTANT")])
 for f in range(5, 25):
     t = (f - 5) / FPS
     p = p0 + EJECT_V * t + Vector((0, 0, -0.5 * G * t * t)) - c0
@@ -136,6 +141,40 @@ for f in range(5, 25):
 for i in range(3):
     keys(cas, "location", i, [(1, (p0 - c0)[i], "CONSTANT")])
     keys(cas, "rotation_euler", i, [(1, 0.0, "CONSTANT")])
+
+# ---- Reload (frames 31-72) ---------------------------------------------------------------------------
+R = 30  # offset: reload frame n is timeline frame R + n
+m0 = mag.location.copy()
+bpy.context.view_layer.update()
+drop = (root.matrix_world.inverted() @ O["MagAxis"].matrix_world).to_3x3().col[2].normalized()  # down the grip
+d = math.radians
+# Slide locked back for the whole reload until the release, barrel tilted with it.
+keys(slide, "location", 1, [(R + 1, s0 - SLIDE_TRAVEL, "CONSTANT"), (R + 27, s0 - SLIDE_TRAVEL, "EXPO", "EASE_OUT"),
+                            (R + 29, s0)])
+keys(barrel, "location", 1, [(R + 1, b0 - 0.004, "CONSTANT"), (R + 27, b0 - 0.004, "EXPO", "EASE_OUT"), (R + 29, b0)])
+keys(barrel, "rotation_euler", 0, [(R + 1, bx0 + d(4), "CONSTANT"), (R + 27, bx0 + d(4), "EXPO", "EASE_OUT"), (R + 29, bx0)])
+# Gun: tilt up, roll the grip toward the camera, swing in; jolts at the seat (f52) and slide release (f58).
+keys(root, "rotation_euler", 0, [(R + 1, 0.0, "BACK", "EASE_OUT"), (R + 7, d(14)), (R + 21, d(14), "EXPO", "EASE_OUT"),
+                                 (R + 22, d(9)), (R + 24, d(14)), (R + 27, d(14), "EXPO", "EASE_OUT"), (R + 28, d(19)),
+                                 (R + 31, d(14), "BACK", "EASE_OUT"), (R + 40, 0.0)])
+keys(root, "rotation_euler", 1, [(R + 1, 0.0, "BACK", "EASE_OUT"), (R + 7, d(-30)), (R + 30, d(-30), "BACK", "EASE_OUT"),
+                                 (R + 40, 0.0)])
+keys(root, "rotation_euler", 2, [(R + 1, 0.0, "BACK", "EASE_OUT"), (R + 7, d(12)), (R + 30, d(12), "BACK", "EASE_OUT"),
+                                 (R + 40, 0.0)])
+keys(root, "location", 2, [(R + 1, 0.0, "BACK", "EASE_OUT"), (R + 7, 0.02), (R + 21, 0.02, "EXPO", "EASE_OUT"),
+                           (R + 22, 0.028), (R + 25, 0.02), (R + 30, 0.02, "BACK", "EASE_OUT"), (R + 40, 0.0)])
+keys(root, "location", 0, [(R + 1, 0.0, "BACK", "EASE_OUT"), (R + 7, -0.02), (R + 30, -0.02, "BACK", "EASE_OUT"),
+                           (R + 40, 0.0)])
+# Magazine: pops out along the grip, falls away (accelerating), then a fresh one flies in and seats.
+for i in range(3):
+    def a(t, i=i):
+        return (m0 + drop * t)[i]
+    keys(mag, "location", i, [(1, m0[i], "CONSTANT"), (R + 4, a(0.0), "EXPO", "EASE_OUT"), (R + 6, a(0.03), "QUAD", "EASE_IN"),
+                              (R + 14, a(0.32), "CONSTANT"), (R + 15, a(0.16), "EXPO", "EASE_OUT"),
+                              (R + 21, a(0.012), "QUAD", "EASE_IN"), (R + 22, a(0.0))])
+for name, f in (("Fire", 1), ("Reload", R + 1)):
+    mk = sc.timeline_markers.get(name) or sc.timeline_markers.new(name, frame=f)
+    mk.frame = f
 
 # The spare casing in Parts is a library piece for the game; keep it out of the view.
 parts = bpy.data.collections.get("Parts")
