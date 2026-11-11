@@ -16,7 +16,7 @@ from mathutils import Matrix, Vector
 # x = muzzle up, y = muzzle toward screen centre (left), z = cant).
 VIEWS = {
     "pistol": {"hip": (0.16, -0.15, -0.4), "rot": (0.0, 0.0, 0.0)},
-    "rifle": {"hip": (0.085, -0.15, -0.10), "rot": (3.0, 8.0, -6.0)},
+    "rifle": {"hip": (0.11, -0.12, -0.22), "rot": (-2.0, 14.0, -6.0)},
 }
 _K = Matrix(((1, 0, 0), (0, 0, -1), (0, 1, 0)))   # Godot (x, y, z) -> Blender (x, -z, y)
 

@@ -79,8 +79,11 @@ def measure(names, xs, ys, u, s):
 
 
 def grip(rig, right, handle, xs, ys, u, s, u_mid_px, front, trigger_px=None, thumb_line=None, thumb_x=0.0,
-         wrist_bend=35, wrist_down=None):
+         wrist_bend=35, wrist_down=None, roll=0.0):
     u, s = u.normalized(), s.normalized()
+    # roll: turn the whole grip around the handle axis (deg), e.g. support palm from straight under to lower-left,
+    # so the forearm can leave the wrist in line with the hand instead of snapping the wrist.
+    s = (Matrix.Rotation(math.radians(roll), 3, u) @ s).normalized()
     w = s.cross(u) if right else u.cross(s)
     c, pts = measure(handle, xs, ys, u, s)
     es = max((p - c).dot(s) for p in pts)
@@ -159,6 +162,10 @@ def grip(rig, right, handle, xs, ys, u, s, u_mid_px, front, trigger_px=None, thu
     # Arm: elbow down / out, upper arm toward the player's shoulder (below / outside the camera view).
     side = "R" if right else "L"
     lib_arm.solve_arm(rig, lib_arm.shoulder("rifle", side), lib_arm.pole("rifle", side))
+    pbw = rig.pose.bones
+    fdir = (rig.matrix_world.to_3x3() @ (pbw["forearm"].tail - pbw["forearm"].head)).normalized()
+    hdir = (rig.matrix_world.to_3x3() @ (pbw["middle1"].head - pbw["hand"].head)).normalized()
+    print(f"  {rig.name}: wrist bend {math.degrees(fdir.angle(hdir)):.0f} deg (roll {roll})")
     mw = rig.matrix_world.copy()
     rig.parent = O["XMR4"]
     rig.matrix_world = mw
@@ -174,9 +181,18 @@ grip(O["Glove.R"], True, ["PistolGrip"], (835, 930), (250, 330),
 # Left hand UNDER the handguard (the support hold in the CS references), just ahead of the angled foregrip: palm
 # under it, fingers up the far (right) side, thumb along the near (left) side toward the muzzle; the wrist sits
 # below-left, so the forearm comes up briefly from the bottom-left of the screen.
-grip(O["Glove.L"], False, ["Handguard"], (330, 440), (105, 210),
-     u=Vector((0, -1, 0)), s=Vector((0, 0, -1)), u_mid_px=(378, 0), front=0.55,
-     thumb_line=((420, 150), (330, 150)), thumb_x=-0.036)
+GRIP_MODE = os.environ.get("LGRIP", "handguard")
+if GRIP_MODE == "foregrip":
+    # Left hand on the angled foregrip (it hangs below the handguard, so the hand stays visible below the rifle):
+    # knuckles along its slanted front bar, palm on its near (left) side, fingers round the front.
+    BAR = Vector((0, -(630 - 470), -(277 - 212)))
+    grip(O["Glove.L"], False, ["Foregrip"], (478, 628), (214, 276),
+         u=BAR, s=Vector((-1, 0, 0)), u_mid_px=(520, 232), front=0.45,
+         thumb_line=((575, 190), (480, 190)), thumb_x=-0.03, roll=float(os.environ.get("ROLL", 0)))
+else:
+    grip(O["Glove.L"], False, ["Handguard"], (330, 440), (105, 210),
+         u=Vector((0, -1, 0)), s=Vector((0, 0, -1)), u_mid_px=(345, 0), front=0.55,
+         thumb_line=((390, 150), (300, 150)), thumb_x=-0.036, roll=float(os.environ.get("ROLL", 55)))
 
 sc.frame_set(1)
 bpy.ops.wm.save_mainfile()
