@@ -242,7 +242,7 @@ for f in range(f0, f1 + 1):
     settle = 0.03 * math.sin(min(max(t - 20, 0) / 6.0, 1.0) * math.pi) if t >= 20 else 0.0
     basis = dict(FLASH_OFF)
     # turret_yaw local axes: X = +X, Y = up, Z = back. Cannon slides off sideways, drops, rolls over.
-    basis["turret_yaw"] = T(x=0.11 * tip, y=-0.07 * tip + settle) @ R("Z", -58 * tip) @ R("Y", 20 * tip)
+    basis["turret_yaw"] = T(x=0.2 * tip, y=-0.11 * tip + settle) @ R("Z", -82 * tip) @ R("Y", 25 * tip)
     basis["cannon_pitch"] = R("X", -16 * smooth((t - 14) / 8.0))
     basis["barrel"] = T(y=-0.03 * tip)
     key(f, poses, basis)
