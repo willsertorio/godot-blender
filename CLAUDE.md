@@ -154,6 +154,7 @@ blender -b -P blender/scripts/pose_rigid_hand.py -- assets/models  # rigid_<gun>
 blender -b -P blender/scripts/read_rigid_hand_poses.py      # after tuning in blender/hands_<gun>.blend: save the pose for pose_rigid_hand.py
 blender -b -P blender/scripts/make_hands_blend.py            # blender/hands_<gun>.blend: gun + both hand styles + game camera, for review
 blender -b -P blender/scripts/build_xm9.py               # blender/xm9.blend: XM9 pistol modelled from blender/reference/pistol_concept.png (review in Blender; not in game yet)
+blender -b blender/xm9.blend -P blender/scripts/anim_xm9.py # XM9 Fire clip (24 f @ 30 fps: trigger, slide, barrel tilt, recoil, flash, casing); keeps edits made in the .blend
 python3 -I tools/set_texture_imports.py                # force VRAM compression + mipmaps on 3D textures (run after adding textures)
 ```
 Add `--greybox` to any run or capture to build with the greybox kit instead of the Blender kit.

@@ -287,7 +287,7 @@ def build():
     ma.rotation_euler = (math.pi - RAKE, 0, 0)  # empty's +Z points down the grip
 
     # ---- Spare casing (spawned by the game when firing) --------------------------------------------
-    parts = coll("Parts")
+    parts = coll("Parts", hidden=True)
     cas = cyl("Casing", Vector((0.06, -0.01, 0.0)), Vector((0.06, 0.009, 0.0)), 0.0047, "GunBrass", segs=12)
     for c in list(cas.users_collection):
         c.objects.unlink(cas)
