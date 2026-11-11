@@ -31,6 +31,7 @@ K = 0.000453                 # metres per image pixel
 ORIGIN_PX = (715, 235)        # top of the grip, in the concept image
 BORE_Y = 122                  # bore height (image px)
 RAKE = math.atan2(33, 115)    # grip angle: front strap (655,235) -> (688,350)
+COLL = "XM9"                  # collection for new parts (other gun scripts import these helpers and change it)
 
 MATS = {
     "GunSlide": dict(color=(0.55, 0.57, 0.60), metallic=0.75, rough=0.35),
@@ -83,10 +84,10 @@ def coll(name, hidden=False):
     return c
 
 
-def finish(ob, material, bevel, parent, pivot, collection="XM9"):
+def finish(ob, material, bevel, parent, pivot, collection=None):
     """Material, bevel + weighted normals (live modifiers), pivot (origin) and parent."""
     ob.data.materials.append(mat(material))
-    coll(collection).objects.link(ob)
+    coll(collection or COLL).objects.link(ob)
     if pivot is not None:
         ob.data.transform(Matrix.Translation(-pivot))
         ob.location = pivot
@@ -136,7 +137,7 @@ def cyl(name, a, b, r, material, segs=16, bevel=0.0004, parent=None, pivot=None,
     return finish(bpy.data.objects.new(name, me), material, bevel, parent, pivot)
 
 
-def box(name, lo, hi, material, bevel=0.0005, parent=None, rot=None, collection="XM9"):
+def box(name, lo, hi, material, bevel=0.0005, parent=None, rot=None, collection=None):
     """Box between two gun-frame corners, optionally rotated (Euler XYZ, radians) about its centre."""
     bm = bmesh.new()
     lo, hi = Vector(lo), Vector(hi)
@@ -171,7 +172,7 @@ def empty(name, loc, parent, size=0.01):
     e = bpy.data.objects.new(name, None)
     e.empty_display_size = size
     e.empty_display_type = "ARROWS"
-    coll("XM9").objects.link(e)
+    coll(COLL).objects.link(e)
     e.location = loc
     if parent is not None:
         bpy.context.view_layer.update()
@@ -333,4 +334,5 @@ def build():
     print("saved", OUT)
 
 
-build()
+if __name__ == "__main__":
+    build()
