@@ -323,9 +323,9 @@ def build():
             bones, _ = build_leg(side, key)
             leg_bones.update(bones)
     muzzle = SP(646, 153)
-    flash_mesh("FlashMain", muzzle, Vector((0, 1, 0)), 2.2, "flash_main")
+    flash_mesh("FlashMain", muzzle, Vector((0, 1, 0)), 4.5, "flash_main")
     for sx, bone in ((-1, "flash_L"), (1, "flash_R")):
-        flash_mesh(f"Flash{bone}", Vector((sx * 0.14, 0.46, 0.19)), Vector((0, 1, 0)), 1.4, bone)
+        flash_mesh(f"Flash{bone}", Vector((sx * 0.14, 0.46, 0.19)), Vector((0, 1, 0)), 2.8, bone)
 
     # ---- rig -------------------------------------------------------------------------------------------
     arm = bpy.data.armatures.new("SD4Rig")
