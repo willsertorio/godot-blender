@@ -5,12 +5,13 @@ A detailed static scene built and rendered in Blender first (the concept for V2)
 
 ```
 blender -b -P v2/scripts/build_room.py                                   # stage 1: room + lighting -> v2/scene.blend
-blender -b -P v2/scripts/build_viewmodel.py                              # stage 2: pistol + gloved hands (run after build_room.py)
+blender -b -P v2/scripts/build_viewmodel.py -- show=rifle                # both weapon views, gloved hands (run after build_room.py); show=pistol|rifle = the one left visible
+xvfb-run -a blender -b -P v2/scripts/build_rifle.py -- /tmp/rifle         # the machine gun alone: 4 review views
 xvfb-run -a blender -b -P v2/scripts/build_pistol.py -- /tmp/pistol       # the pistol alone: 4 review views
 blender -b -P v2/scripts/build_robots.py                                 # stage 3: spider, drone, ceiling turret (rebuilds the Robots collection)
 xvfb-run -a blender -b -P v2/scripts/build_robots.py -- review /tmp/rob   # each robot alone, 3 views
-blender -b v2/scene.blend -P v2/scripts/debug_viewmodel.py -- /tmp/vm    # quick views of the viewmodel only (DBG_SCALE, DBG_C)
-blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100      # Cycles render (samples, size %); ~5 min at 1280x720 on 4 CPU cores
+blender -b v2/scene.blend -P v2/scripts/debug_viewmodel.py -- /tmp/vm    # quick views of one viewmodel only (DBG_SCALE, DBG_C, DBG_VIEW=ViewmodelRifle)
+blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100 view=rifle   # Cycles render (samples, size %, view=pistol|rifle); ~5 min at 1280x720 on 4 CPU cores
 ```
 
 - `scripts/v2lib.py`: scanned CC0 materials box-projected in object space (tint, roughness range, per-part tint
@@ -25,4 +26,11 @@ blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100      # Cycle
   attributes `palm` / `tip` written by `bake_arm`, so they are smooth lines with a sewn seam (groove + stitches),
   whatever the mesh. Assigning the fabrics per face gave a zigzag edge.
 - Robots: curved shells are `Part.ellipsoid` cut to shape; the drone leans 36 deg toward the camera so both rotors read.
+- Two weapon views share `PlayerCamera`: collection `Viewmodel` (pistol) and `ViewmodelRifle` (machine gun, after
+  `reference/scene_concept_rifle.png`). One is hidden; switch with the two collection check boxes in the outliner,
+  `show=` (build) or `view=` (render). `build_viewmodel.py` always rebuilds both (`PLACE` = where each gun sits in the
+  camera frame). The rifle (`build_rifle.py`) reuses the pistol's grip / trigger proportions moved by (Y -32, Z -74) mm,
+  so `trigger_hand()` fits both; the support hand lies on the magazine well. Its rear body is `Part.loft`
+  (superellipse rings, Catmull-Rom) over a dark core that shows through the panel gaps. In this view the trigger hand
+  is below the frame (the gun is shouldered, as in the reference).
 - Stages: 1 room + lighting, 2 pistol + gloved hands, 3 robots (done, robots and gloves polished once); next: effects.

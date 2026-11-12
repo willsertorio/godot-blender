@@ -107,6 +107,12 @@ rule no longer applies to the environment):
   against `captures/gfx_before`).
 - Not verified here: frame rate on a real GPU / in the browser (software GL in this container).
 
+## V2 (Blender concept scene; current work)
+
+V1 (everything above and below) is frozen at commit `d4507b9` (`VERSIONS.md`). V2 starts as a detailed static scene
+built and rendered in Blender only: `v2/` (Godot ignores it). Commands, method and notes: `v2/README.md`.
+`v2/scene.blend` = room + three robots + two weapon views (pistol / machine gun) from one player camera.
+
 ## Conventions (fixed on day one; do not drift)
 
 - Units: 1 Blender unit = 1 m. Blender is Z-up, Godot is Y-up. Blender +Y (forward) becomes Godot -Z

@@ -53,10 +53,11 @@ class Part:
         """Cross-section [(x, z), ...] extruded along the barrel from y0 to y1."""
         self._extrude([self.bm.verts.new(Vector((x, y0, z)) * S) for x, z in pts_xz], Vector((0, y1 - y0, 0)) * S)
 
-    def box(self, lo, hi, rx=0.0, rz=0.0):
+    def box(self, lo, hi, rx=0.0, rz=0.0, ry=0.0):
         lo, hi = Vector(lo), Vector(hi)
         m = Matrix.Translation((lo + hi) / 2 * S) @ Matrix.Rotation(math.radians(rz), 4, "Z") @ \
-            Matrix.Rotation(math.radians(rx), 4, "X") @ Matrix.Diagonal((*((hi - lo) * S), 1))
+            Matrix.Rotation(math.radians(ry), 4, "Y") @ Matrix.Rotation(math.radians(rx), 4, "X") @ \
+            Matrix.Diagonal((*((hi - lo) * S), 1))
         bmesh.ops.create_cube(self.bm, size=1.0, matrix=m)
 
     def cyl(self, a, b, r, segs=28, r2=None):
@@ -69,6 +70,36 @@ class Part:
     def ellipsoid(self, c, r, segs=36, rings=18):
         m = Matrix.Translation(Vector(c) * S) @ Matrix.Diagonal((r[0] * S, r[1] * S, r[2] * S, 1))
         bmesh.ops.create_uvsphere(self.bm, u_segments=segs, v_segments=rings, radius=1.0, matrix=m)
+
+    def loft(self, sections, segs=44, smooth=4):
+        """A smooth shell along the barrel: superellipse rings [(y, z centre, half width, height up, height down,
+        exponent), ...] joined into one closed body. `smooth` extra rings are interpolated between the given ones
+        (Catmull-Rom), so the profile is a curve, not a polyline."""
+        sec = [tuple(float(v) for v in s_) for s_ in sections]
+        fine = []
+        for i in range(len(sec) - 1):
+            p0, p1, p2, p3 = sec[max(i - 1, 0)], sec[i], sec[i + 1], sec[min(i + 2, len(sec) - 1)]
+            for k in range(smooth + 1):
+                t = k / (smooth + 1)
+                fine.append(tuple(0.5 * (2 * b + (c - a) * t + (2 * a - 5 * b + 4 * c - d) * t * t
+                                         + (3 * b - a - 3 * c + d) * t ** 3) for a, b, c, d in zip(p0, p1, p2, p3)))
+        fine.append(sec[-1])
+        rings = []
+        for y, zc, hw, ht, hb, n in fine:
+            ring = []
+            for i in range(segs):
+                t = (i + 0.5) * math.tau / segs
+                c, s_ = math.cos(t), math.sin(t)
+                x = hw * math.copysign(abs(c) ** (2 / n), c)
+                z = zc + (ht if s_ > 0 else hb) * math.copysign(abs(s_) ** (2 / n), s_)
+                ring.append(self.bm.verts.new(Vector((x, y, z)) * S))
+            rings.append(ring)
+        for a, b in zip(rings, rings[1:]):
+            for i in range(segs):
+                j = (i + 1) % segs
+                self.bm.faces.new((a[i], a[j], b[j], b[i]))
+        self.bm.faces.new(rings[0])
+        self.bm.faces.new(rings[-1])
 
     def cut(self):
         c = Part(self.name + "_cut%d" % len(self.cutters))

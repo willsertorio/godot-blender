@@ -24,34 +24,58 @@ sys.path.insert(0, os.path.dirname(__file__))
 import mh_arm  # noqa: E402
 import v2lib as L  # noqa: E402
 
-XM9 = os.path.abspath(os.path.join(L.ROOT, "..", "blender", "xm9.blend"))
-K9, O9 = 0.000453, (715, 235)
-RAKE = math.atan2(33, 115)
-# Where the gun sits in the camera's frame: right, forward, up (m) and a small turn toward the screen centre (deg).
-GUN_IN_CAM = (0.095, 0.315, -0.085)
-GUN_YAW, GUN_PITCH = 9.0, 3.0
-
-
-def P9(x, y, xx=0.0):
-    return Vector((xx, (O9[0] - x) * K9, (O9[1] - y) * K9))
-
+# Two views share the camera: the pistol (collection Viewmodel) and the machine gun (collection ViewmodelRifle).
+# Where each gun sits in the camera's frame: right, forward, up (m), then a turn toward the screen centre, a tilt up
+# and a roll (deg). Only one view is shown at a time: `-- show=rifle|pistol` here, `view=...` in render.py, or the
+# two collection check boxes in Blender's outliner.
+PLACE = {
+    "pistol": dict(at=(0.095, 0.315, -0.085), yaw=9.0, pitch=3.0, roll=0.0),
+    "rifle": dict(at=(0.12, 0.26, -0.07), yaw=5.0, pitch=3.0, roll=0.0),
+}
+COLL = {"pistol": "Viewmodel", "rifle": "ViewmodelRifle"}
+SHOW = next((a.split("=")[1] for a in sys.argv if a.startswith("show=")), "rifle")
 
 bpy.ops.wm.open_mainfile(filepath=os.path.join(L.ROOT, "scene.blend"))
 sc = bpy.context.scene
-old = bpy.data.collections.get("Viewmodel")
-if old:
-    for o in list(old.all_objects):
-        bpy.data.objects.remove(o)
-    bpy.data.collections.remove(old)
-VM = L.coll("Viewmodel")
-root = bpy.data.objects.new("Viewmodel", None)
-root.empty_display_size = 0.05
-VM.objects.link(root)
+for _c in COLL.values():
+    old = bpy.data.collections.get(_c)
+    if old:
+        for o in list(old.all_objects):
+            bpy.data.objects.remove(o)
+        bpy.data.collections.remove(old)
+VM = root = None
+
+
+def start_view(weapon):
+    """A new, empty view: its collection and the empty everything in it hangs from (gun space)."""
+    global VM, root
+    VM = L.coll(COLL[weapon])
+    root = bpy.data.objects.new(COLL[weapon], None)
+    root.empty_display_size = 0.05
+    VM.objects.link(root)
+
+
+def place_view(weapon):
+    """Put the finished view in front of the player camera."""
+    pl = PLACE[weapon]
+    cam = bpy.data.objects["PlayerCamera"]
+    basis = Matrix(((1, 0, 0), (0, 0, 1), (0, -1, 0))).to_4x4()          # gun (x, y, z) -> camera local (x, z, -y)
+    local = Matrix.Translation((pl["at"][0], pl["at"][2], -pl["at"][1])) @ basis
+    local = local @ Matrix.Rotation(math.radians(pl["yaw"]), 4, "Z") @ Matrix.Rotation(math.radians(pl["pitch"]), 4, "X") \
+        @ Matrix.Rotation(math.radians(pl["roll"]), 4, "Y")
+    root.matrix_world = cam.matrix_world @ local
+    print(f"{weapon} view built:", len(VM.all_objects), "objects")
+
+
+def cam_in_gun(weapon):
+    """The camera position in gun space (before the small turn): shoulders are given relative to it."""
+    return -Vector(PLACE[weapon]["at"])
+
 
 # ------------------------------------------------------------------ materials
 # (materials saved in scene.blend by an earlier run would be reused as they were: drop them first)
 for _n in ("PistolSlide", "PistolFrame", "PistolDark", "PistolGrip", "PistolCyan", "SightDot", "RedDot", "SightGlass",
-           "GloveKnit", "JacketSleeve", "GlovePad", "GloveCuff", "GlovePalm", "GloveTip", "Glove"):
+           "GloveKnit", "JacketSleeve", "GlovePad", "GloveCuff", "GlovePalm", "GloveTip", "Glove"):  # noqa
     if bpy.data.materials.get(_n):
         bpy.data.materials.remove(bpy.data.materials[_n])
 M_SLIDE = L.pbr("PistolSlide", "Metal032", scale=0.12, tint=(1.3, 1.3, 1.28), rough=(0.28, 0.5), grunge=0.12, grunge_scale=25)
@@ -77,11 +101,8 @@ M_CUFF = L.pbr("GloveCuff", "Fabric045", scale=0.02, tint=(0.2, 0.21, 0.23), rou
 REMAP = {"GunSlide": M_SLIDE, "GunFrame": M_FRAME, "GunDark": M_GDARK, "GunGrip": M_GRIP, "GunBarrel": M_GDARK,
          "NeonCyan": M_CYAN, "GunScreen": M_CYAN, "GunMagazine": M_FRAME, "GunBrass": M_GDARK, "GunLens": M_GLASS}
 
-# ------------------------------------------------------------------ pistol (v2/scripts/build_pistol.py)
 import build_pistol  # noqa: E402
-build_pistol.build(VM, root)
-AN = build_pistol.ANCHORS
-RAKE = AN["rake"]
+import build_rifle  # noqa: E402
 
 
 # ------------------------------------------------------------------ arms
@@ -364,37 +385,62 @@ def bake_arm(rig, ob, side):
 
 
 pb_cache = {}
-u = Vector((0, -math.sin(RAKE), -math.cos(RAKE)))
-CAM = Vector((-GUN_IN_CAM[0], -GUN_IN_CAM[1], -GUN_IN_CAM[2]))      # camera position in gun space (before the small turn)
-TANG, GC, HW = AN["tang"], AN["grip_centre"], AN["grip_half_width"]
-arms = {}
-for side, spec in (
-    # Right hand: web of the thumb high under the tang, three fingers round the front strap, index straight along
-    # the frame above the trigger guard, thumb forward along the left side.
-    ("R", dict(curls={2: (6, 10, 5), 3: (58, 84, 40), 4: (62, 86, 42), 5: (66, 88, 44)},
-               F_t=Vector((-0.14, 1.0, -0.16)), A_hint=u,
-               anchor_fn=lambda pb, w0, k, F, A, pn: (pb["finger1-2"].head + k[2]) / 2 - F * 0.012,
-               anchor_target=TANG + Vector((0.004, -0.004, -0.004)),
-               shoulder=CAM + Vector((0.2, -0.04, -0.3)), pole=(0.7, 0.0, -1.0),
-               thumb_dirs=((-0.5, 0.85, 0.15), (-0.12, 1.0, 0.06), (0.0, 1.0, 0.0)))),
+
+
+def hold(specs):
+    for side, spec in specs:
+        rig, ob = pose_hand(side, **spec)
+        pbs = rig.pose.bones
+        pb_cache[side] = {f: (pbs[f"finger{f}-1"].head.copy(), pbs[f"finger{f}-1"].tail.copy()) for f in range(1, 6)}
+        bake_arm(rig, ob, side)
+
+
+def trigger_hand(AN, CAM, shoulder=(0.2, -0.04, -0.3)):
+    """Right hand on a pistol-type grip: web of the thumb high under the tang, three fingers round the front strap,
+    index straight along the frame above the trigger guard, thumb forward along the left side."""
+    rake = AN["rake"]
+    return ("R", dict(curls={2: (6, 10, 5), 3: (58, 84, 40), 4: (62, 86, 42), 5: (66, 88, 44)},
+                      F_t=Vector((-0.14, 1.0, -0.16)), A_hint=Vector((0, -math.sin(rake), -math.cos(rake))),
+                      anchor_fn=lambda pb, w0, k, F, A, pn: (pb["finger1-2"].head + k[2]) / 2 - F * 0.012,
+                      anchor_target=AN["tang"] + Vector((0.004, -0.004, -0.004)),
+                      shoulder=CAM + Vector(shoulder), pole=(0.7, 0.0, -1.0),
+                      thumb_dirs=((-0.5, 0.85, 0.15), (-0.12, 1.0, 0.06), (0.0, 1.0, 0.0))))
+
+
+# ------------------------------------------------------------------ view 1: pistol in both hands
+start_view("pistol")
+build_pistol.build(VM, root)
+AN = build_pistol.ANCHORS
+CAM = cam_in_gun("pistol")
+hold((
+    trigger_hand(AN, CAM),
     # Left hand: palm on the left side of the grip, fingers wrapped over the right hand's fingers under the trigger
     # guard, wrist dropped 45 degrees, thumb forward under the slide.
     ("L", dict(curls={2: (50, 74, 38), 3: (54, 78, 40), 4: (56, 80, 40), 5: (58, 82, 40)},
                F_t=Vector((0.25, 0.74, -0.62)), A_hint=Vector((0.0, -0.64, -0.77)),
                anchor_fn=lambda pb, w0, k, F, A, pn: w0.lerp(k[3], 0.55) + pn * 0.014,
-               anchor_target=GC + Vector((-HW - 0.008, 0.004, 0.0)),
+               anchor_target=AN["grip_centre"] + Vector((-AN["grip_half_width"] - 0.008, 0.004, 0.0)),
                shoulder=CAM + Vector((-0.1, -0.04, -0.3)), pole=(-0.7, 0.0, -1.0),
-               thumb_dirs=((0.22, 0.92, 0.3), (0.08, 1.0, 0.1), (0.04, 1.0, 0.0))))):
-    rig, ob = pose_hand(side, **spec)
-    pbs = rig.pose.bones
-    pb_cache[side] = {f: (pbs[f"finger{f}-1"].head.copy(), pbs[f"finger{f}-1"].tail.copy()) for f in range(1, 6)}
-    arms[side] = bake_arm(rig, ob, side)
+               thumb_dirs=((0.22, 0.92, 0.3), (0.08, 1.0, 0.1), (0.04, 1.0, 0.0))))))
+place_view("pistol")
 
-# ------------------------------------------------------------------ place in front of the camera
-cam = bpy.data.objects["PlayerCamera"]
-basis = Matrix(((1, 0, 0), (0, 0, 1), (0, -1, 0))).to_4x4()          # gun (x, y, z) -> camera local (x, z, -y)
-local = Matrix.Translation((GUN_IN_CAM[0], GUN_IN_CAM[2], -GUN_IN_CAM[1])) @ basis
-local = local @ Matrix.Rotation(math.radians(GUN_YAW), 4, "Z") @ Matrix.Rotation(math.radians(GUN_PITCH), 4, "X")
-root.matrix_world = cam.matrix_world @ local
+# ------------------------------------------------------------------ view 2: machine gun, support hand on the magazine well
+start_view("rifle")
+build_rifle.build(VM, root)
+AN = build_rifle.ANCHORS
+CAM = cam_in_gun("rifle")
+hold((
+    trigger_hand(AN, CAM, shoulder=(0.22, -0.16, -0.24)),      # the stock is in the shoulder: the elbow is behind the grip
+    # Left hand: palm flat on the left face of the magazine well, knuckles at its front corner, fingers wrapped
+    # round the front face, thumb forward and up along the left face. The forearm comes up from below.
+    ("L", dict(curls={2: (70, 70, 35), 3: (74, 74, 36), 4: (76, 76, 36), 5: (78, 78, 38)},
+               F_t=Vector((0.15, 0.85, 0.4)), A_hint=Vector((0.0, 0.35, -1.0)),
+               anchor_fn=lambda pb, w0, k, F, A, pn: w0.lerp(k[3], 0.55) + pn * 0.014,
+               anchor_target=AN["magwell_left"] + Vector((-0.008, -0.008, 0.0)),
+               shoulder=CAM + Vector((-0.1, 0.0, -0.3)), pole=(-0.5, 0.0, -1.0),
+               thumb_dirs=((0.0, 0.8, 0.6), (0.05, 0.9, 0.45), (0.05, 1.0, 0.3))))))
+place_view("rifle")
+
+for weapon, cname in COLL.items():          # one view at a time
+    bpy.data.collections[cname].hide_render = bpy.data.collections[cname].hide_viewport = weapon != SHOW
 bpy.ops.wm.save_mainfile()
-print("viewmodel built:", len(VM.all_objects), "objects")

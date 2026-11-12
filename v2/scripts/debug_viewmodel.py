@@ -6,14 +6,16 @@ out = sys.argv[sys.argv.index("--") + 1]
 sc = bpy.context.scene
 sc.render.engine = "BLENDER_EEVEE_NEXT"
 sc.eevee.taa_render_samples = 8
+import os
+VIEW = os.environ.get("DBG_VIEW", "Viewmodel")
 for c in sc.collection.children:
-    c.hide_render = c.name != "Viewmodel"
+    c.hide_render = c.name != VIEW
 w = sc.world
 w.node_tree.nodes["Background"].inputs["Color"].default_value = (0.45, 0.47, 0.5, 1)
 sun = bpy.data.objects.new("dbgsun", bpy.data.lights.new("dbgsun", "SUN"))
 sun.data.energy = 3
 sc.collection.objects.link(sun)
-M = bpy.data.objects["Viewmodel"].matrix_world
+M = bpy.data.objects[VIEW].matrix_world
 cd = bpy.data.cameras.new("dbg")
 cd.type = "ORTHO"
 import os
