@@ -86,6 +86,27 @@ rule no longer applies to the environment):
 - Lights: no OmniLights on props (they push room meshes past the 8-lights-per-object limit). Room lights 2.0,
   corridor 1.3, ambient 0.6 neutral, exposure 1.0, glow 0.35 @ 1.3.
 
+## Graphics pass (lab; from-scratch assets)
+
+- Renderer settings (`project.godot`): MSAA 4x (also on the viewmodel SubViewport), anisotropic 16x, 4096 shadow
+  atlases with soft filtering. `--quality=low` (`?quality=low` on the web) turns off MSAA, the extra shadows, shafts, dust.
+- Environment (`main.gd _setup_environment`): CC0 HDRI `assets/sky/bank_vault_1k.hdr` for reflections + half of the
+  ambient (its mean luminance is 0.74 and warm, so a cool fill supplies the other half), ACES tonemap, exposure 1.08, glow.
+- Every room light casts soft shadows and has a light shaft + dust (`DungeonBuilder._light_shaft`, `shaft.gdshader`).
+  Shafts / dust are alpha-blended, never additive: in Compatibility an additive material is drawn again at full
+  strength by the extra pass of every shadowed light in range (it rendered as solid white cones).
+- `assets/shaders/military.gdshader` (all `MaterialLib.MILITARY` rows: guns, gloves, sleeves, enemies): triplanar PBR in
+  object space + baked mask through UV1 (`assets/models/<name>_mask.png`: R = AO, G = convex-edge mask, baked by
+  `export_new_assets.py` with Cycles, Smart-UV atlas over all parts) -> paint worn to steel on edges, dirt in crevices,
+  scratches / smudges from `textures/military/_detail/imperfections.png`. The sRGB -> linear conversion of the base
+  colour is explicit in the shader (the `source_color` hint did not convert the VRAM-compressed sets);
+  `MaterialLib.MIL_LOOK` holds the per-set brightness / metal / roughness, `MIL_WEAR` the wear; enemy materials are
+  x0.42 (they stand under the room lights). `MaterialLib.rebind_tree(root, glb_path)` picks up the mask.
+- Viewmodel lights: key 2.6 (shadowed: the gun shadows itself and the hands), rim 1.8, fill 0.5.
+- Review: `CAPTURE_ARGS="--lab --gfx" tools/capture.sh 1 gfx` then `python3 -I tools/gfx_sheet.py` (before / after sheet
+  against `captures/gfx_before`).
+- Not verified here: frame rate on a real GPU / in the browser (software GL in this container).
+
 ## Conventions (fixed on day one; do not drift)
 
 - Units: 1 Blender unit = 1 m. Blender is Z-up, Godot is Y-up. Blender +Y (forward) becomes Godot -Z
@@ -161,6 +182,7 @@ blender -b blender/xm9.blend -P blender/scripts/anim_xm9_hands.py  # left-hand r
 blender -b -P blender/scripts/build_xmr4.py              # blender/xmr4.blend: XM-R4 rifle from blender/reference/rifle_concept.png (0.82 mm/px, 88 cm)
 blender -b blender/xmr4.blend -P blender/scripts/pose_glove_xmr4.py  # gloves on the rifle: right on the pistol grip, left under the handguard
 blender -b blender/xmr4.blend -P blender/scripts/anim_xmr4.py # XM-R4 Fire (f1-24, 3-round burst) + Reload with the left hand (f31-90)
+blender -b -P blender/scripts/export_new_assets.py -- assets/models  # the 5 from-scratch assets -> glb + clips json + baked AO/edge mask (~2.5 min each; ASSETS=xm9,at9 for some)
 blender -b -P blender/scripts/build_at9.py && blender -b blender/at9.blend -P blender/scripts/anim_at9.py  # AT-9 ceiling turret: Idle 1-60, Shoot 67-90, Aim 97-144, Death 151-195
 blender -b -P blender/scripts/build_fr2.py && blender -b blender/fr2.blend -P blender/scripts/anim_fr2.py  # FR-2 drone: Idle 1-60, Shoot 67-90, Fly 97-156, Death 163-207
 blender -b -P blender/scripts/build_sd4.py && blender -b blender/sd4.blend -P blender/scripts/anim_sd4.py  # SD-4 spider (rig SD4Rig): Idle 1-60, Shoot 67-90, Walk 97-126 (0.6 m/s), Run 133-152 (1.5 m/s), Death 159-203

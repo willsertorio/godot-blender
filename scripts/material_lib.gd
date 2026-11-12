@@ -28,7 +28,7 @@ const NEON := {
 const MIL_DIR := "res://assets/textures/military/"
 const MILITARY := {
 	# XM9 pistol
-	"GunSlide": ["Metal038", Color(0.72, 0.73, 0.74), -1.0, 0.05, 0.12],
+	"GunSlide": ["Metal038", Color(0.95, 0.96, 0.97), -1.0, 0.05, 0.12],
 	"GunFrame": ["Plastic018B", Color(0.44, 0.45, 0.40), 0.0, 0.05, 0.14],
 	"GunDark": ["Metal029", Color(1, 1, 1), -1.0, 0.0, 0.14],
 	"GunGrip": ["Rubber004", Color(0.75, 0.75, 0.75), 0.0, 0.0, 0.05],
@@ -44,6 +44,8 @@ const MILITARY := {
 	# HG-7 gloves
 	"GlovePlate": ["Plastic018B", Color(0.30, 0.31, 0.31), 0.0, 0.05, 0.1],
 	"GloveCuff": ["Rubber004", Color(0.45, 0.45, 0.45), 0.0, 0.0, 0.06],
+	"GloveFabric": ["Leather031", Color(0.75, 0.75, 0.78), 0.0, 0.0, 0.05],
+	"ArmSuit": ["Fabric045", Color(0.2, 0.21, 0.24), 0.0, 0.0, 0.08],
 	# Enemies
 	"TurretArmor": ["Plastic018B", Color(0.40, 0.41, 0.33), 0.0, 0.05, 0.6],
 	"TurretDark": ["Metal029", Color(1, 1, 1), -1.0, 0.0, 0.5],
@@ -169,7 +171,7 @@ static func get_material(name: String) -> Material:
 	if m:
 		pass
 	elif MILITARY.has(name):
-		m = _military(MILITARY[name])
+		m = _military(name, MILITARY[name])
 	elif name in FLASH_MATS:
 		var fm := StandardMaterial3D.new()
 		fm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -180,17 +182,16 @@ static func get_material(name: String) -> Material:
 		fm.no_depth_test = false
 		m = fm
 	elif name in ["GunMagazine", "RifleMagazine"]:
-		var mg := _military(["Plastic012B", Color(0.42, 0.44, 0.40, 0.55), 0.0, -0.3, 0.12])
+		var mg := _military_std(["Plastic012B", Color(0.42, 0.44, 0.40, 0.55), 0.0, -0.3, 0.12])
 		mg.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		m = mg
 	elif name in ["GunLens", "RifleLens"]:
 		var ln := StandardMaterial3D.new()
-		# Nearly clear coated glass (it sits in the aim line of both sights).
-		ln.albedo_color = Color(0.55, 0.75, 0.85, 0.12)
+		# Dark coated glass: reflects the room, hides the tube behind it.
+		ln.albedo_color = Color(0.015, 0.03, 0.045, 0.93)
 		ln.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		ln.metallic = 0.0
-		ln.roughness = 0.02
-		ln.metallic_specular = 0.8
+		ln.metallic = 0.9
+		ln.roughness = 0.04
 		m = ln
 	elif name == "GunScreen":
 		var sm := StandardMaterial3D.new()
@@ -225,12 +226,83 @@ static func get_material(name: String) -> Material:
 
 
 static func _mil_tex(set_name: String, map: String) -> Texture2D:
-	var p := MIL_DIR + set_name + "/" + map + ".jpg"
-	return load(p) if ResourceLoader.exists(p) else null
+	for dir in [MIL_DIR, "res://assets/textures/fabric/"]:
+		var p: String = dir + set_name + "/" + map + ".jpg"
+		if ResourceLoader.exists(p):
+			return load(p)
+	return null
 
 
-## Triplanar (object-local) PBR material from a MILITARY row.
-static func _military(spec: Array) -> StandardMaterial3D:
+## Wear per texture set: [wear amount, wear colour (what shows under the coating), wear metallic, wear roughness,
+## scratches, dirt]. Painted / coated sets chip down to steel; polymer scuffs to a lighter grey; rubber only gets dirty.
+const MIL_WEAR := {
+	"Plastic018B": [0.75, Color(0.60, 0.60, 0.58), 1.0, 0.32, 0.5, 0.35],
+	"Metal029": [0.85, Color(0.58, 0.58, 0.57), 1.0, 0.30, 0.6, 0.35],
+	"Metal038": [0.45, Color(0.80, 0.80, 0.80), 1.0, 0.22, 0.8, 0.12],
+	"Metal046B": [0.55, Color(0.66, 0.66, 0.66), 1.0, 0.25, 0.6, 0.4],
+	"Plastic012B": [0.4, Color(0.34, 0.34, 0.33), 0.0, 0.5, 0.5, 0.5],
+	"Rubber004": [0.0, Color(0.2, 0.2, 0.2), 0.0, 0.8, 0.0, 0.6],
+	"Metal048A": [0.3, Color(0.95, 0.78, 0.45), 1.0, 0.2, 0.5, 0.3],
+	"Leather031": [0.0, Color(0.2, 0.2, 0.2), 0.0, 0.8, 0.0, 0.5],
+	"Fabric045": [0.0, Color(0.2, 0.2, 0.2), 0.0, 0.9, 0.0, 0.5],
+}
+
+
+## Physical look per texture set. The scans are far darker than a real finish (the black coat reflects ~1 %), so
+## `bright` lifts the base colour to a plausible albedo; `metal` overrides the row (the powder coat and paints are
+## dielectric coatings, only bare steel / brass are metal); `rough` scales the roughness map.
+const MIL_LOOK := {
+	"Plastic018B": {"bright": 3.6, "rough": 1.05},                # paint: ~0.08 after the olive tint
+	"Metal029": {"bright": 4.5, "metal": 0.0, "rough": 1.7},      # black powder coat: ~0.05, satin
+	"Metal038": {"bright": 4.5, "rough": 1.0, "contrast": 0.3},                    # steel: ~0.5 reflectance
+	"Metal046B": {"bright": 7.0, "rough": 1.1},                   # dark worn metal: ~0.3
+	"Plastic012B": {"bright": 4.0, "rough": 1.2},                 # black polymer: ~0.04
+	"Rubber004": {"bright": 3.0, "rough": 1.2},
+	"Metal048A": {"bright": 1.0, "rough": 2.5},
+	"Leather031": {"bright": 3.0, "rough": 1.0, "contrast": 1.0},  # black leather: ~0.03
+	"Fabric045": {"bright": 1.0, "rough": 1.0, "contrast": 1.0},   # the weave is the texture: keep its contrast
+}
+
+
+## Worn hardware (assets/shaders/military.gdshader) from a MILITARY row. Bevels are ~1 mm on the guns / gloves and
+## ~6 mm on the enemies, which sets what counts as an edge.
+static func _military(name: String, spec: Array) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/military.gdshader")
+	var set_name: String = spec[0]
+	m.set_shader_parameter("tex_albedo", _mil_tex(set_name, "albedo"))
+	m.set_shader_parameter("tex_normal", _mil_tex(set_name, "normal"))
+	m.set_shader_parameter("tex_rough", _mil_tex(set_name, "rough"))
+	m.set_shader_parameter("tex_imperfections", load(MIL_DIR + "_detail/imperfections.png"))
+	m.set_shader_parameter("tint", spec[1])
+	var look: Dictionary = MIL_LOOK.get(set_name, {})
+	var metal: float = look.get("metal", spec[2])
+	if metal < 0.0 and _mil_tex(set_name, "metal"):
+		m.set_shader_parameter("tex_metal", _mil_tex(set_name, "metal"))
+		m.set_shader_parameter("use_metal_map", true)
+		m.set_shader_parameter("metallic", 1.0)
+	else:
+		m.set_shader_parameter("metallic", maxf(metal, 0.0))
+	# The enemies stand under the room lights (far stronger than the weapon's own lights): darker finish.
+	var world_scale := 0.42 if (name.begins_with("Turret") or name.begins_with("Drone") or name.begins_with("Spider")) else 1.0
+	m.set_shader_parameter("brightness", float(look.get("bright", 1.0)) * world_scale)
+	m.set_shader_parameter("albedo_contrast", float(look.get("contrast", 0.55)))
+	m.set_shader_parameter("rough_scale", maxf(1.0 + float(spec[3]), 0.0) * float(look.get("rough", 1.0)))
+	m.set_shader_parameter("tile", float(spec[4]))
+	var big := name.begins_with("Turret") or name.begins_with("Drone") or name.begins_with("Spider")
+	m.set_shader_parameter("edge_radius", 0.007 if big else 0.0013)
+	var w: Array = MIL_WEAR.get(set_name, [0.5, Color(0.6, 0.6, 0.6), 1.0, 0.3, 0.5, 0.4])
+	m.set_shader_parameter("wear", w[0])
+	m.set_shader_parameter("wear_color", w[1])
+	m.set_shader_parameter("wear_metallic", w[2])
+	m.set_shader_parameter("wear_rough", w[3])
+	m.set_shader_parameter("scratch", w[4])
+	m.set_shader_parameter("dirt", w[5])
+	return m
+
+
+## Triplanar (object-local) StandardMaterial from a MILITARY row (kept for the see-through magazines).
+static func _military_std(spec: Array) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	var set_name: String = spec[0]
 	m.albedo_texture = _mil_tex(set_name, "albedo")
@@ -294,7 +366,8 @@ static func _surface(spec: Dictionary) -> StandardMaterial3D:
 
 
 ## Replace every surface material of a mesh with the library material of the same name.
-static func rebind(mesh: Mesh) -> Mesh:
+## `mask` = the model's baked AO / edge texture ("" = none): military materials get a per-model copy that reads it.
+static func rebind(mesh: Mesh, mask: String = "") -> Mesh:
 	var out := mesh.duplicate() as Mesh
 	for i in out.get_surface_count():
 		var src := out.surface_get_material(i)
@@ -304,6 +377,9 @@ static func rebind(mesh: Mesh) -> Mesh:
 		# (Quaternius MI_* materials with their own textures) is kept as imported.
 		var base := src.resource_name.get_slice(".", 0)
 		var has_uv: bool = not (out is ArrayMesh) or ((out as ArrayMesh).surface_get_format(i) & Mesh.ARRAY_FORMAT_TEX_UV) != 0
+		if MILITARY.has(base) and mask != "":
+			out.surface_set_material(i, _masked(base, mask))
+			continue
 		if MIL_FABRIC.has(base) and not has_uv:
 			out.surface_set_material(i, _mil_fabric(base))
 			continue
@@ -317,7 +393,23 @@ static func rebind(mesh: Mesh) -> Mesh:
 
 
 ## Rebind every MeshInstance3D under `root` (for glb scenes instanced as-is).
-static func rebind_tree(root: Node) -> void:
+## `model_path`: the glb the scene came from; if "<model>_mask.png" exists next to it, it is used.
+static func rebind_tree(root: Node, model_path: String = "") -> void:
+	var mask := model_path.replace(".glb", "_mask.png") if model_path != "" else ""
+	if mask != "" and not ResourceLoader.exists(mask):
+		mask = ""
 	for n in root.find_children("*", "MeshInstance3D", true, false):
 		var mi := n as MeshInstance3D
-		mi.mesh = rebind(mi.mesh)
+		mi.mesh = rebind(mi.mesh, mask)
+
+
+static func _masked(name: String, mask: String) -> ShaderMaterial:
+	var key := name + "@" + mask
+	if _cache.has(key):
+		return _cache[key]
+	var m := _military(name, MILITARY[name])
+	m.set_shader_parameter("tex_mask", load(mask))
+	m.set_shader_parameter("use_mask", true)
+	m.resource_name = name
+	_cache[key] = m
+	return m

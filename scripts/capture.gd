@@ -166,6 +166,51 @@ func run_lab(p_main, p_dir: String) -> void:
 
 ## Pose tour (`--lab --poses=FILE`): FILE is JSON [{"name","weapon","side","pos":[x,y,z],
 ## "basis":[[x],[y],[z]] or "rot":[rx,ry,rz]}]; shoots side / front / player views for each.
+## Graphics review (--lab --gfx --capture=DIR): the room, both guns at hip and up close, each enemy up close.
+func run_gfx(p_main, p_dir: String) -> void:
+	main = p_main
+	dir = p_dir
+	DirAccess.make_dir_recursive_absolute(dir)
+	await _settle(4)
+	await main.start_lab()
+	var p: Player = main.player
+	p.input_enabled = false
+	await _settle(8)
+	var target: Vector3 = DungeonGen.cell_center(Vector2i(2, 1)) + Vector3.UP * 1.0
+	var w: WeaponHolder = p.weapons
+	var rig: ViewmodelRig = p.viewmodel
+	for weapon in ["rifle", "pistol"]:
+		w.switch_to(weapon)
+		await _wait(0.6)
+		p.global_position = main.layout.player_spawn
+		p.look_at_point(target)
+		await shot("gfx_%s_hip" % weapon, 6)
+		rig.follow = false
+		var gun := w.view_model
+		var b := gun.global_transform.basis
+		var c := gun.global_position + b.z * (-0.12 if weapon == "rifle" else -0.03) + b.y * 0.03
+		rig.camera.global_position = c + (b.x * 0.75 - b.z * 0.55 + b.y * 0.35).normalized() * (0.42 if weapon == "rifle" else 0.26)
+		rig.camera.look_at(c, Vector3.UP)
+		await shot("gfx_%s_close" % weapon, 6)
+		rig.follow = true
+	w.switch_to("pistol")
+	await _wait(0.5)
+	# Each enemy from 3 m (the turret from below).
+	for e in main.get_tree().get_nodes_in_group("hostiles"):
+		var en := e as Enemy
+		var at := en.eye_position()
+		var from := en.global_position + Vector3(1.6, 0.0, 3.0)
+		p.global_position = Vector3(from.x, 0.0, from.z)
+		p.look_at_point(at)
+		await shot("gfx_enemy_%s" % en.kind, 6)
+	# Room: a corner with props, low angle across the floor.
+	p.global_position = DungeonGen.cell_center(Vector2i(1, 3))
+	p.look_at_point(DungeonGen.cell_center(Vector2i(4, 0)) + Vector3.UP * 1.2)
+	await shot("gfx_room", 6)
+	print("[capture] done")
+	main.get_tree().quit()
+
+
 func run_poses(p_main, p_dir: String, file: String) -> void:
 	main = p_main
 	dir = p_dir

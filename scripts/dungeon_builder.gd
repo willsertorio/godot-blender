@@ -116,6 +116,59 @@ func build(g: DungeonGen) -> Node3D:
 
 ## Distance cut for props (enemies, crates, pickups): their meshes are small on screen
 ## beyond this and there is no occlusion culling in Compatibility.
+static var high_quality := true
+
+
+## Light shaft (additive cone, assets/shaders/shaft.gdshader) and drifting dust under a ceiling light.
+static func _light_shaft(l: OmniLight3D) -> void:
+	var h := l.position.y - 0.05
+	var cone := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = 0.35
+	cm.bottom_radius = 2.6
+	cm.height = h
+	cm.radial_segments = 24
+	cm.rings = 1
+	cm.cap_top = false
+	cm.cap_bottom = false
+	cone.mesh = cm
+	var sm := ShaderMaterial.new()
+	sm.shader = load("res://assets/shaders/shaft.gdshader")
+	sm.set_shader_parameter("color", l.light_color)
+	sm.set_shader_parameter("height", h)
+	cone.material_override = sm
+	cone.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	cone.position = Vector3(0, -h * 0.5 + 0.3, 0)
+	cone.visibility_range_end = 40.0
+	l.add_child(cone)
+	var dust := CPUParticles3D.new()
+	dust.amount = 70
+	dust.lifetime = 9.0
+	dust.preprocess = 9.0
+	dust.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	dust.emission_box_extents = Vector3(1.8, h * 0.42, 1.8)
+	dust.direction = Vector3(0.3, -1, 0.2)
+	dust.spread = 70.0
+	dust.gravity = Vector3(0, -0.01, 0)
+	dust.initial_velocity_min = 0.02
+	dust.initial_velocity_max = 0.07
+	dust.scale_amount_min = 0.5
+	dust.scale_amount_max = 1.4
+	var q := QuadMesh.new()
+	q.size = Vector2(0.014, 0.014)
+	var dm := StandardMaterial3D.new()
+	dm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	dm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA   # not additive: see shaft.gdshader
+	dm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	dm.albedo_color = Color(l.light_color.r, l.light_color.g, l.light_color.b, 0.55)
+	q.material = dm
+	dust.mesh = q
+	dust.position = Vector3(0, -h * 0.5, 0)
+	dust.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	dust.visibility_range_end = 25.0
+	l.add_child(dust)
+
+
 static func limit_view_range(root: Node, distance: float = 48.0) -> void:
 	for gi in root.find_children("*", "GeometryInstance3D", true, false):
 		(gi as GeometryInstance3D).visibility_range_end = distance
@@ -242,8 +295,14 @@ func _build_lights(g: DungeonGen, root: Node3D) -> void:
 				lights.add_child(l)
 				placed.append(l)
 		placed.sort_custom(func(a, b): return a.position.distance_to(centre) < b.position.distance_to(centre))
-		placed[0].shadow_enabled = true
-		placed[0].shadow_bias = 0.08
+		for k in placed.size():
+			# High quality: every room light casts soft shadows (props, enemies, the gun), with a shaft + dust.
+			if k == 0 or high_quality:
+				placed[k].shadow_enabled = true
+				placed[k].shadow_bias = 0.08
+				placed[k].shadow_blur = 1.6
+			if high_quality:
+				_light_shaft(placed[k])
 	for co in g.corridors:
 		var mid: Vector2i = co.cells[co.cells.size() / 2]
 		var l := OmniLight3D.new()

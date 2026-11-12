@@ -83,7 +83,7 @@ func setup(p: Player) -> void:
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	view_model = models[current]
 	for k in models:
-		ViewmodelRig.adopt(models[k])
+		ViewmodelRig.adopt(models[k], true)
 
 
 	flash_light = OmniLight3D.new()
@@ -384,7 +384,7 @@ func _load_model(w: String, fallback: Callable) -> Node3D:
 	if not ResourceLoader.exists(path):
 		return fallback.call()
 	var m := (load(path) as PackedScene).instantiate() as Node3D
-	MaterialLib.rebind_tree(m)
+	MaterialLib.rebind_tree(m, path)
 	assert(m.find_child("Muzzle", true, false) != null, path + " has no Muzzle")
 	m.position = WEAPONS[w].hip
 	var spec: Dictionary = WEAPONS[w]

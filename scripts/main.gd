@@ -58,6 +58,13 @@ var exit_found := false
 var exit_distance := 0.0
 var _exit_timer := 0.0
 var kills_by_type := {"turret": 0, "brawler": 0, "pursuer": 0}
+## Graphics (see _setup_environment).
+# The HDRI's mean luminance is 0.74 and warm (0.82, 0.73, 0.59): half of the ambient comes from it, half from a cool
+# fill that neutralises the cast; total ambient ~0.36 (the level the rooms were lit for).
+const SKY_ENERGY := 1.0
+const AMBIENT_ENERGY := 0.55
+const EXPOSURE := 1.08
+var high_quality := true
 
 
 func set_paused(on: bool) -> void:
@@ -90,6 +97,8 @@ func _ready() -> void:
 		add_child(cap)
 		if args.has("poses"):
 			cap.run_poses(self, args.capture, args.poses)
+		elif args.has("gfx"):
+			cap.run_gfx(self, args.capture)
 		elif args.has("lab"):
 			cap.run_lab(self, args.capture)
 		else:
@@ -447,42 +456,49 @@ func _input(event: InputEvent) -> void:
 
 
 func _setup_environment() -> void:
-	## Lighting / post: dark background, cool ambient fill, a dim sky used only for
-	## metal reflections, depth fog, ACES tonemap and HDR glow so neon blooms.
+	## Lighting / post. A CC0 interior HDRI (fluorescent strips overhead) is the source of ambient light and of
+	## what metal reflects; the background itself stays dark. ACES tonemap rolls the highlights off instead of
+	## clipping them, soft bloom on the lamps and neon, light depth fog. `--quality=low` (or ?quality=low in the
+	## browser) drops MSAA, shadows on the extra lights, shafts and dust.
+	high_quality = args.get("quality", "high") != "low"
+	DungeonBuilder.high_quality = high_quality
+	ViewmodelRig.high_quality = high_quality
+	if not high_quality:
+		get_viewport().msaa_3d = Viewport.MSAA_DISABLED
 	var we := WorldEnvironment.new()
 	we.name = "WorldEnvironment"
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color(0.008, 0.01, 0.016)
 	var sky := Sky.new()
-	var sm := ProceduralSkyMaterial.new()
-	sm.sky_top_color = Color(0.1, 0.16, 0.2)
-	sm.sky_horizon_color = Color(0.25, 0.32, 0.38)
-	sm.ground_bottom_color = Color(0.03, 0.035, 0.04)
-	sm.ground_horizon_color = Color(0.2, 0.26, 0.3)
-	sm.sun_angle_max = 0.0
-	sky.sky_material = sm
-	sky.radiance_size = Sky.RADIANCE_SIZE_64
+	var pano := PanoramaSkyMaterial.new()
+	pano.panorama = load("res://assets/sky/bank_vault_1k.hdr")
+	pano.energy_multiplier = SKY_ENERGY
+	sky.sky_material = pano
+	sky.radiance_size = Sky.RADIANCE_SIZE_256 if high_quality else Sky.RADIANCE_SIZE_64
+	sky.process_mode = Sky.PROCESS_MODE_QUALITY
 	env.sky = sky
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.62, 0.66, 0.72)
-	env.ambient_light_energy = 0.6
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.tonemap_exposure = 1.0
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+	env.ambient_light_sky_contribution = 0.5
+	env.ambient_light_color = Color(0.5, 0.66, 0.9)
+	env.ambient_light_energy = AMBIENT_ENERGY
+	env.tonemap_mode = Environment.TONE_MAPPER_ACES
+	env.tonemap_exposure = EXPOSURE
+	env.tonemap_white = 6.0
 	env.glow_enabled = true
-	env.glow_intensity = 0.35
+	env.glow_intensity = 0.42
 	env.glow_strength = 1.0
-	env.glow_bloom = 0.02
-	env.glow_hdr_threshold = 1.3
-	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
+	env.glow_bloom = 0.04
+	env.glow_hdr_threshold = 1.25
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
 	env.fog_enabled = true
-	env.fog_light_color = Color(0.05, 0.06, 0.08)
-	env.fog_density = 0.006
+	env.fog_light_color = Color(0.09, 0.11, 0.14)
+	env.fog_density = 0.008
 	env.fog_sky_affect = 0.0
 	env.adjustment_enabled = true
-	env.adjustment_contrast = 1.06
-	env.adjustment_saturation = 1.05
+	env.adjustment_contrast = 1.08
+	env.adjustment_saturation = 1.08
 	we.environment = env
 	add_child(we)
 

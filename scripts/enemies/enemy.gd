@@ -244,7 +244,7 @@ func _dim_glow(root: Node) -> void:
 				var d := (m as BaseMaterial3D).duplicate() as BaseMaterial3D
 				mi.set_surface_override_material(i, d)
 				mi.create_tween().tween_property(d, "emission_energy_multiplier", 0.08, 1.5)
-			elif m is ShaderMaterial:
+			elif m is ShaderMaterial and (m as ShaderMaterial).shader.resource_path.ends_with("neon.gdshader"):
 				var d2 := (m as ShaderMaterial).duplicate() as ShaderMaterial
 				mi.set_surface_override_material(i, d2)
 				d2.set_shader_parameter("energy", 0.15)
@@ -366,11 +366,12 @@ func _adopt_model(path: String) -> Node3D:
 	if not ResourceLoader.exists(path):
 		return null
 	var m := (load(path) as PackedScene).instantiate() as Node3D
-	MaterialLib.rebind_tree(m)
+	MaterialLib.rebind_tree(m, path)
 	for mi: MeshInstance3D in m.find_children("*", "MeshInstance3D", true, false):
 		for i in mi.mesh.get_surface_count():
 			var mat := mi.mesh.surface_get_material(i)
-			if mat is ShaderMaterial:
+			# Only the glow (neon shader) is per-instance; the wear materials are shared.
+			if mat is ShaderMaterial and (mat as ShaderMaterial).shader.resource_path.ends_with("neon.gdshader"):
 				var d := mat.duplicate() as ShaderMaterial
 				mi.set_surface_override_material(i, d)
 				_neon_mats.append(d)
