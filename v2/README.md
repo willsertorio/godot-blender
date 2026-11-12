@@ -29,8 +29,11 @@ blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100 view=rifle  
 - Two weapon views share `PlayerCamera`: collection `Viewmodel` (pistol) and `ViewmodelRifle` (machine gun, after
   `reference/scene_concept_rifle.png`). One is hidden; switch with the two collection check boxes in the outliner,
   `show=` (build) or `view=` (render). `build_viewmodel.py` always rebuilds both (`PLACE` = where each gun sits in the
-  camera frame). The rifle (`build_rifle.py`) reuses the pistol's grip / trigger proportions moved by (Y -32, Z -74) mm,
+  camera frame). The rifle (`build_rifle.py`) reuses the pistol's grip / trigger proportions moved by (Y -32, Z -64) mm,
   so `trigger_hand()` fits both; the support hand lies on the magazine well. Its rear body is `Part.loft`
-  (superellipse rings, Catmull-Rom) over a dark core that shows through the panel gaps. In this view the trigger hand
-  is below the frame (the gun is shouldered, as in the reference).
+  (superellipse rings, Catmull-Rom) in two shells over a dark core that shows through the panel gaps and vents.
+  Whether the trigger hand shows under the gun depends on the gun's proportions, not on where it is placed: the
+  angle between sight and grip against the width of the sight is fixed by the model. So the body is slim (60 mm
+  receiver) and the sight wide and low (52 mm hood, 75 mm above the bore); a taller gun hid the hand at any distance.
+  Parts that overlap a curved shell (screen on the pod) need a flat seat cut into every shell under them.
 - Stages: 1 room + lighting, 2 pistol + gloved hands, 3 robots (done, robots and gloves polished once); next: effects.

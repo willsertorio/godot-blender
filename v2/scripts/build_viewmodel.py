@@ -30,7 +30,7 @@ import v2lib as L  # noqa: E402
 # two collection check boxes in Blender's outliner.
 PLACE = {
     "pistol": dict(at=(0.095, 0.315, -0.085), yaw=9.0, pitch=3.0, roll=0.0),
-    "rifle": dict(at=(0.12, 0.26, -0.07), yaw=5.0, pitch=3.0, roll=0.0),
+    "rifle": dict(at=(0.165, 0.365, -0.07), yaw=5.0, pitch=4.0, roll=0.0),
 }
 COLL = {"pistol": "Viewmodel", "rifle": "ViewmodelRifle"}
 SHOW = next((a.split("=")[1] for a in sys.argv if a.startswith("show=")), "rifle")
@@ -430,14 +430,14 @@ build_rifle.build(VM, root)
 AN = build_rifle.ANCHORS
 CAM = cam_in_gun("rifle")
 hold((
-    trigger_hand(AN, CAM, shoulder=(0.22, -0.16, -0.24)),      # the stock is in the shoulder: the elbow is behind the grip
+    trigger_hand(AN, CAM, shoulder=(0.2, -0.02, -0.28)),
     # Left hand: palm flat on the left face of the magazine well, knuckles at its front corner, fingers wrapped
     # round the front face, thumb forward and up along the left face. The forearm comes up from below.
     ("L", dict(curls={2: (70, 70, 35), 3: (74, 74, 36), 4: (76, 76, 36), 5: (78, 78, 38)},
                F_t=Vector((0.15, 0.85, 0.4)), A_hint=Vector((0.0, 0.35, -1.0)),
                anchor_fn=lambda pb, w0, k, F, A, pn: w0.lerp(k[3], 0.55) + pn * 0.014,
                anchor_target=AN["magwell_left"] + Vector((-0.008, -0.008, 0.0)),
-               shoulder=CAM + Vector((-0.1, 0.0, -0.3)), pole=(-0.5, 0.0, -1.0),
+               shoulder=CAM + Vector((0.02, 0.16, -0.3)), pole=(-0.5, 0.0, -1.0),
                thumb_dirs=((0.0, 0.8, 0.6), (0.05, 0.9, 0.45), (0.05, 1.0, 0.3))))))
 place_view("rifle")
 
