@@ -121,14 +121,15 @@ def materials():
             bpy.data.materials.remove(bpy.data.materials[n])
     m = {}
     m["slide"] = L.pbr("PSlide", "Metal032", scale=0.09, tint=(0.94, 0.9, 0.84), rough=(0.34, 0.52), metallic=0.25,
-                       normal=0.5, grunge=0.1, grunge_scale=40, round_edges=0.0004)
+                       normal=0.5, grunge=0.14, grunge_scale=40, round_edges=0.0004, edge_wear=0.8,
+                       wear_color=(0.7, 0.69, 0.66), cavity=0.5)
     m["frame"] = L.pbr("PFrame", "Plastic012B", scale=0.05, tint=(0.62, 0.68, 0.78), bright=1.25, rough=(0.5, 0.72), normal=0.8,
-                       round_edges=0.0005)
+                       round_edges=0.0005, edge_wear=0.35, wear_color=(0.2, 0.21, 0.23), cavity=0.5)
     m["grip"] = L.pbr("PGripTex", "Rubber004", scale=0.012, bright=0.55, rough=(0.7, 0.95), normal=4.0)
     m["steel"] = L.pbr("PSteel", "Metal032", scale=0.06, tint=(0.2, 0.2, 0.21), rough=(0.28, 0.45), metallic=1.0,
                        round_edges=0.0003)
     m["black"] = L.pbr("PBlack", "Metal032", scale=0.06, tint=(0.05, 0.05, 0.055), rough=(0.35, 0.55), metallic=0.6,
-                       round_edges=0.0003)
+                       round_edges=0.0003, edge_wear=0.9, wear_color=(0.6, 0.6, 0.6), cavity=0.3)
     m["barrel"] = L.pbr("PBarrel", "Metal032", scale=0.05, tint=(0.75, 0.74, 0.72), rough=(0.12, 0.3), metallic=1.0)
     m["rubber"] = L.pbr("PRubber", "Rubber004", scale=0.02, bright=1.0, rough=(0.6, 0.9), normal=1.5)
     m["lens"] = L.plain("PLens", (0.55, 0.8, 1.0), rough=0.0, transmission=1.0, ior=1.5)

@@ -28,8 +28,8 @@ XM9 = os.path.abspath(os.path.join(L.ROOT, "..", "blender", "xm9.blend"))
 K9, O9 = 0.000453, (715, 235)
 RAKE = math.atan2(33, 115)
 # Where the gun sits in the camera's frame: right, forward, up (m) and a small turn toward the screen centre (deg).
-GUN_IN_CAM = (0.10, 0.37, -0.092)
-GUN_YAW, GUN_PITCH = 5.0, 3.0
+GUN_IN_CAM = (0.095, 0.315, -0.085)
+GUN_YAW, GUN_PITCH = 9.0, 3.0
 
 
 def P9(x, y, xx=0.0):
@@ -51,7 +51,7 @@ VM.objects.link(root)
 # ------------------------------------------------------------------ materials
 # (materials saved in scene.blend by an earlier run would be reused as they were: drop them first)
 for _n in ("PistolSlide", "PistolFrame", "PistolDark", "PistolGrip", "PistolCyan", "SightDot", "RedDot", "SightGlass",
-           "GloveKnit", "JacketSleeve", "GlovePad", "GloveCuff"):
+           "GloveKnit", "JacketSleeve", "GlovePad", "GloveCuff", "GlovePalm", "GloveTip"):
     if bpy.data.materials.get(_n):
         bpy.data.materials.remove(bpy.data.materials[_n])
 M_SLIDE = L.pbr("PistolSlide", "Metal032", scale=0.12, tint=(1.3, 1.3, 1.28), rough=(0.28, 0.5), grunge=0.12, grunge_scale=25)
@@ -62,9 +62,14 @@ M_CYAN = L.plain("PistolCyan", (0, 0.02, 0.03), emit=(0.15, 0.85, 1.0), emit_str
 M_WHITE = L.plain("SightDot", (0.9, 0.9, 0.88), rough=0.4, emit=(0.9, 1.0, 0.9), emit_strength=0.6)
 M_REDDOT = L.plain("RedDot", (0, 0, 0), emit=(1.0, 0.08, 0.04), emit_strength=60.0)
 M_GLASS = L.plain("SightGlass", (0.75, 0.9, 1.0), rough=0.0, transmission=1.0, ior=1.45)
-M_GLOVE = L.pbr("GloveKnit", "Fabric045", scale=0.045, tint=(0.36, 0.38, 0.41), rough=(0.75, 1.0), normal=3.0)
-M_SLEEVE = L.pbr("JacketSleeve", "Fabric045", scale=0.045, tint=(0.11, 0.12, 0.14), rough=(0.8, 1.0), normal=1.2)
-M_PAD = L.pbr("GlovePad", "Rubber004", scale=0.025, bright=2.2, tint=(0.8, 0.82, 0.88), rough=(0.45, 0.75), normal=1.5)
+M_GLOVE = L.pbr("GloveKnit", "Fabric045", scale=0.11, tint=(0.38, 0.4, 0.43), rough=(0.75, 1.0), normal=2.5, wrinkle=0.3)
+M_PALM = L.pbr("GlovePalm", "Rubber004", scale=0.03, bright=2.6, tint=(0.75, 0.78, 0.85), rough=(0.55, 0.8), normal=1.2,
+               wrinkle=0.5, wrinkle_scale=60)
+M_TIP = L.pbr("GloveTip", "Rubber004", scale=0.012, bright=1.0, rough=(0.5, 0.75), normal=3.0)
+M_SLEEVE = L.pbr("JacketSleeve", "Fabric045", scale=0.16, tint=(0.11, 0.12, 0.14), rough=(0.8, 1.0), normal=2.5, wrinkle=0.6,
+                 wrinkle_scale=35)
+M_PAD = L.pbr("GlovePad", "Rubber004", scale=0.025, bright=2.2, tint=(0.8, 0.82, 0.88), rough=(0.4, 0.7), normal=1.5,
+              round_edges=0.0006)
 M_CUFF = L.pbr("GloveCuff", "Fabric045", scale=0.02, tint=(0.2, 0.21, 0.23), rough=(0.7, 1.0), normal=2.0)
 REMAP = {"GunSlide": M_SLIDE, "GunFrame": M_FRAME, "GunDark": M_GDARK, "GunGrip": M_GRIP, "GunBarrel": M_GDARK,
          "NeonCyan": M_CYAN, "GunScreen": M_CYAN, "GunMagazine": M_FRAME, "GunBrass": M_GDARK, "GunLens": M_GLASS}
@@ -178,10 +183,35 @@ def bake_arm(rig, ob, side):
         sl.add([v.index], max(0.0, 1.0 - g), "REPLACE")
     ob.data.materials.append(M_GLOVE)
     ob.data.materials.append(M_SLEEVE)
+    ob.data.materials.append(M_PALM)
+    ob.data.materials.append(M_TIP)
+    # rest-pose hand frame: which faces are palm side, which are fingertips (classified before the pose deforms them)
+    rk = {f: rb[f"finger{f}-1"].head_local.copy() for f in range(2, 6)}
+    rF = (rk[3] - rest_w).normalized()
+    rA = rk[5] - rk[2]
+    rA = (rA - rF * rA.dot(rF)).normalized()
+    rpn = (rF.cross(rA) if side == "R" else rA.cross(rF)).normalized()
+    names = [g.name for g in ob.vertex_groups]
+    tipw = [sum(e.weight for e in v.groups if names[e.group].endswith("-3")) for v in ob.data.vertices]
     # glove fabric runs to 3.5 cm behind the wrist (the edge is hidden under the cuff), then the jacket sleeve
     for p in ob.data.polygons:
         c = sum((ob.data.vertices[v].co for v in p.vertices), Vector()) / len(p.vertices)
-        p.material_index = 0 if (rest_w - c).dot(rest_f) < 0.035 else 1
+        p.material_index = 1 if (rest_w - c).dot(rest_f) >= 0.035 else 0
+    # palm side / fingertip masks as vertex groups: subdivision interpolates them, so the seams between knit, leather
+    # and tips are assigned on the fine mesh and follow smooth lines
+    pg = ob.vertex_groups.new(name="palmside")
+    tg = ob.vertex_groups.new(name="tipside")
+    pw = [min(max(v.normal.dot(rpn) / 0.5, 0.0), 1.0) for v in ob.data.vertices]
+    nb = [[] for _ in pw]
+    for e in ob.data.edges:
+        nb[e.vertices[0]].append(e.vertices[1])
+        nb[e.vertices[1]].append(e.vertices[0])
+    for _ in range(4):                                      # smooth the mask so the seam is a clean line
+        pw = [0.4 * pw[i] + 0.6 * sum(pw[j] for j in nb[i]) / max(len(nb[i]), 1) for i in range(len(pw))]
+    for v in ob.data.vertices:
+        pg.add([v.index], pw[v.index], "REPLACE")
+        tg.add([v.index], min(tipw[v.index], 1.0), "REPLACE")
+    PG, TG = pg.index, tg.index
     ss = ob.modifiers.new("Subsurf", "SUBSURF")
     ss.levels = ss.render_levels = 2
     for name, strength in (("glove", 0.0016), ("sleeve", 0.006)):
@@ -191,6 +221,19 @@ def bake_arm(rig, ob, side):
         dm.mid_level = 0.0
     upd()
     me = bpy.data.meshes.new_from_object(ob.evaluated_get(bpy.context.evaluated_depsgraph_get()))
+    def gw_of(v, gi):
+        for e in v.groups:
+            if e.group == gi:
+                return e.weight
+        return 0.0
+    for p in me.polygons:
+        if p.material_index == 1:
+            continue
+        vs = [me.vertices[i] for i in p.vertices]
+        if sum(gw_of(v, TG) for v in vs) / len(vs) > 0.55:
+            p.material_index = 3            # grippy fingertips
+        elif sum(gw_of(v, PG) for v in vs) / len(vs) > 0.5:
+            p.material_index = 2            # leather palm and finger fronts
     st = bpy.data.objects.new(f"Glove.{side}", me)
     VM.objects.link(st)
     for p in me.polygons:
@@ -255,8 +298,12 @@ def bake_arm(rig, ob, side):
     kc = sum(k.values(), Vector()) / 4
     AX = A if side == "R" else -A            # so that AX x F points out of the back of the hand on both sides
     # the pads sit toward the thumb side of the back of the hand: that is the part the player's eye sees
-    back = w0.lerp(kc, 0.5) - A * 0.012
-    wrapped(f"BackPad.{side}", back, AX, F, 0.062, 0.048, M_PAD, power=5.0, thick=0.0035)
+    back = w0.lerp(kc, 0.5) - A * 0.014
+    wrapped(f"BackPad.{side}", back, AX, F, 0.07, 0.05, M_PAD, power=5.0, thick=0.0035)
+    # the top edge of the hand (thumb side, from the index knuckle back to the wrist): faces the player's eye
+    rad_x, rad_y = (out, F) if side == "R" else (F, out)
+    wrapped(f"EdgePad.{side}", k[2].lerp(w0, 0.42) - A * 0.016, rad_x, rad_y, 0.03 if side == "R" else 0.046,
+            0.046 if side == "R" else 0.03, M_PAD, power=4.0, thick=0.003)
     wrapped(f"KnuckleGuard.{side}", kc + F * 0.003, AX, F, 0.08, 0.02, M_PAD, power=6.0, thick=0.004)
     t1 = pb_cache[side][1]                    # thumb: a pad along its first phalanx, facing away from the palm
     td = (t1[1] - t1[0]).normalized()

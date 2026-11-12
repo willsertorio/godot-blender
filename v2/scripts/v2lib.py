@@ -27,7 +27,11 @@ def _img(set_name, suffix, non_color=False):
 
 
 def pbr(name, set_name, scale=1.0, tint=(1, 1, 1), rough=(0.0, 1.0), metallic=None, normal=1.0, bright=1.0,
-        tint_attr=None, grunge=0.0, grunge_scale=0.7, round_edges=0.0):
+        tint_attr=None, grunge=0.0, grunge_scale=0.7, round_edges=0.0, edge_wear=0.0, wear_color=(0.72, 0.72, 0.7),
+        cavity=0.0, wrinkle=0.0, wrinkle_scale=90.0):
+    """... edge_wear (Cycles): the coating is rubbed down to `wear_color` metal along edges (found by comparing a
+    bevelled normal with the flat one), broken up by noise. cavity: darkening + roughening in recesses (AO).
+    wrinkle: soft cloth wrinkles as bump."""
     """Principled material from a scanned set, box-projected in object space. scale = metres per repeat.
     rough = (min, max) the roughness map is remapped to. tint_attr = name of a colour attribute multiplied in."""
     m = bpy.data.materials.get(name)
@@ -128,7 +132,134 @@ def pbr(name, set_name, scale=1.0, tint=(1, 1, 1), rough=(0.0, 1.0), metallic=No
     op = tex("Opacity", True)
     if op:
         nt.links.new(op.outputs["Color"], bsdf.inputs["Alpha"])
+    if edge_wear > 0 or cavity > 0 or wrinkle > 0:
+        _overlay(nt, bsdf, tc, edge_wear, wear_color, cavity, wrinkle, wrinkle_scale)
     return m
+
+
+def _src(nt, sock):
+    """The socket feeding `sock` (a constant node is made if it is not linked)."""
+    if sock.is_linked:
+        return sock.links[0].from_socket
+    if sock.type == "RGBA":
+        n = nt.nodes.new("ShaderNodeRGB")
+        n.outputs[0].default_value = sock.default_value
+    else:
+        n = nt.nodes.new("ShaderNodeValue")
+        n.outputs[0].default_value = sock.default_value
+    return n.outputs[0]
+
+
+def _mixf(nt, a, b, fac):
+    n = nt.nodes.new("ShaderNodeMix")
+    n.data_type = "FLOAT"
+    nt.links.new(fac, n.inputs[0])
+    nt.links.new(a, n.inputs[2])
+    if isinstance(b, float):
+        n.inputs[3].default_value = b
+    else:
+        nt.links.new(b, n.inputs[3])
+    return n.outputs[0]
+
+
+def _mixc(nt, a, color, fac, blend="MIX"):
+    n = nt.nodes.new("ShaderNodeMix")
+    n.data_type = "RGBA"
+    n.blend_type = blend
+    nt.links.new(fac, n.inputs[0])
+    nt.links.new(a, n.inputs[6])
+    n.inputs[7].default_value = (*color, 1)
+    return n.outputs[2]
+
+
+def _overlay(nt, bsdf, tc, edge_wear, wear_color, cavity, wrinkle, wrinkle_scale):
+    col, rough, metal = (_src(nt, bsdf.inputs[k]) for k in ("Base Color", "Roughness", "Metallic"))
+    if cavity > 0:
+        ao = nt.nodes.new("ShaderNodeAmbientOcclusion")
+        ao.samples = 4
+        ao.inputs["Distance"].default_value = 0.004
+        inv = nt.nodes.new("ShaderNodeMath")
+        inv.operation = "SUBTRACT"
+        inv.inputs[0].default_value = 1.0
+        nt.links.new(ao.outputs["AO"], inv.inputs[1])
+        k = nt.nodes.new("ShaderNodeMath")
+        k.operation = "MULTIPLY"
+        k.inputs[1].default_value = cavity * 2.0
+        k.use_clamp = True
+        nt.links.new(inv.outputs[0], k.inputs[0])
+        col = _mixc(nt, col, (0.05, 0.045, 0.04), k.outputs[0])
+        rough = _mixf(nt, rough, 0.85, k.outputs[0])
+    if edge_wear > 0:
+        geo = nt.nodes.new("ShaderNodeNewGeometry")
+        bv = nt.nodes.new("ShaderNodeBevel")
+        bv.samples = 4
+        bv.inputs["Radius"].default_value = 0.0012
+        dot = nt.nodes.new("ShaderNodeVectorMath")
+        dot.operation = "DOT_PRODUCT"
+        nt.links.new(bv.outputs["Normal"], dot.inputs[0])
+        nt.links.new(geo.outputs["True Normal"], dot.inputs[1])
+        e = nt.nodes.new("ShaderNodeMath")          # (1 - dot) * gain
+        e.operation = "SUBTRACT"
+        e.inputs[0].default_value = 1.0
+        nt.links.new(dot.outputs["Value"], e.inputs[1])
+        nz = nt.nodes.new("ShaderNodeTexNoise")
+        nz.inputs["Scale"].default_value = 260.0
+        nz.inputs["Detail"].default_value = 6.0
+        nz.inputs["Roughness"].default_value = 0.7
+        nt.links.new(tc.outputs["Object"], nz.inputs["Vector"])
+        ramp = nt.nodes.new("ShaderNodeValToRGB")
+        ramp.color_ramp.elements[0].position = 0.38
+        ramp.color_ramp.elements[1].position = 0.62
+        nt.links.new(nz.outputs["Fac"], ramp.inputs["Fac"])
+        g = nt.nodes.new("ShaderNodeMath")
+        g.operation = "MULTIPLY"
+        g.inputs[1].default_value = 14.0 * edge_wear
+        nt.links.new(e.outputs[0], g.inputs[0])
+        w = nt.nodes.new("ShaderNodeMath")
+        w.operation = "MULTIPLY"
+        w.use_clamp = True
+        nt.links.new(g.outputs[0], w.inputs[0])
+        nt.links.new(ramp.outputs["Color"], w.inputs[1])
+        # a few fine scratches away from the edges too
+        sc = nt.nodes.new("ShaderNodeTexNoise")
+        sc.inputs["Scale"].default_value = 55.0
+        sc.inputs["Detail"].default_value = 8.0
+        sc.inputs["Distortion"].default_value = 2.5
+        nt.links.new(tc.outputs["Object"], sc.inputs["Vector"])
+        sr = nt.nodes.new("ShaderNodeValToRGB")
+        sr.color_ramp.elements[0].position = 0.492
+        sr.color_ramp.elements[0].color = (0, 0, 0, 1)
+        sr.color_ramp.elements[1].position = 0.5
+        sr.color_ramp.elements[1].color = (1, 1, 1, 1)
+        e2 = sr.color_ramp.elements.new(0.508)
+        e2.color = (0, 0, 0, 1)
+        nt.links.new(sc.outputs["Fac"], sr.inputs["Fac"])
+        s2 = nt.nodes.new("ShaderNodeMath")
+        s2.operation = "MULTIPLY_ADD"
+        s2.inputs[1].default_value = 0.5 * edge_wear
+        s2.use_clamp = True
+        nt.links.new(sr.outputs["Color"], s2.inputs[0])
+        nt.links.new(w.outputs[0], s2.inputs[2])
+        wear = s2.outputs[0]
+        col = _mixc(nt, col, wear_color, wear)
+        rough = _mixf(nt, rough, 0.28, wear)
+        metal = _mixf(nt, metal, 1.0, wear)
+    nt.links.new(col, bsdf.inputs["Base Color"])
+    nt.links.new(rough, bsdf.inputs["Roughness"])
+    nt.links.new(metal, bsdf.inputs["Metallic"])
+    if wrinkle > 0:
+        nz = nt.nodes.new("ShaderNodeTexNoise")
+        nz.inputs["Scale"].default_value = wrinkle_scale
+        nz.inputs["Detail"].default_value = 3.0
+        nz.inputs["Distortion"].default_value = 1.2
+        nt.links.new(tc.outputs["Object"], nz.inputs["Vector"])
+        bp = nt.nodes.new("ShaderNodeBump")
+        bp.inputs["Strength"].default_value = wrinkle
+        bp.inputs["Distance"].default_value = 0.002
+        nt.links.new(nz.outputs["Fac"], bp.inputs["Height"])
+        if bsdf.inputs["Normal"].is_linked:
+            nt.links.new(bsdf.inputs["Normal"].links[0].from_socket, bp.inputs["Normal"])
+        nt.links.new(bp.outputs["Normal"], bsdf.inputs["Normal"])
 
 
 def plain(name, color, rough=0.5, metallic=0.0, emit=None, emit_strength=0.0, transmission=0.0, ior=1.45, alpha=1.0):
