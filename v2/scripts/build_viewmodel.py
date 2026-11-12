@@ -51,7 +51,7 @@ VM.objects.link(root)
 # ------------------------------------------------------------------ materials
 # (materials saved in scene.blend by an earlier run would be reused as they were: drop them first)
 for _n in ("PistolSlide", "PistolFrame", "PistolDark", "PistolGrip", "PistolCyan", "SightDot", "RedDot", "SightGlass",
-           "GloveKnit", "JacketSleeve", "GlovePad", "GloveCuff", "GlovePalm", "GloveTip"):
+           "GloveKnit", "JacketSleeve", "GlovePad", "GloveCuff", "GlovePalm", "GloveTip", "Glove"):
     if bpy.data.materials.get(_n):
         bpy.data.materials.remove(bpy.data.materials[_n])
 M_SLIDE = L.pbr("PistolSlide", "Metal032", scale=0.12, tint=(1.3, 1.3, 1.28), rough=(0.28, 0.5), grunge=0.12, grunge_scale=25)
@@ -62,10 +62,13 @@ M_CYAN = L.plain("PistolCyan", (0, 0.02, 0.03), emit=(0.15, 0.85, 1.0), emit_str
 M_WHITE = L.plain("SightDot", (0.9, 0.9, 0.88), rough=0.4, emit=(0.9, 1.0, 0.9), emit_strength=0.6)
 M_REDDOT = L.plain("RedDot", (0, 0, 0), emit=(1.0, 0.08, 0.04), emit_strength=60.0)
 M_GLASS = L.plain("SightGlass", (0.75, 0.9, 1.0), rough=0.0, transmission=1.0, ior=1.45)
-M_GLOVE = L.pbr("GloveKnit", "Fabric045", scale=0.11, tint=(0.38, 0.4, 0.43), rough=(0.75, 1.0), normal=2.5, wrinkle=0.3)
-M_PALM = L.pbr("GlovePalm", "Rubber004", scale=0.03, bright=2.6, tint=(0.75, 0.78, 0.85), rough=(0.55, 0.8), normal=1.2,
-               wrinkle=0.5, wrinkle_scale=60)
-M_TIP = L.pbr("GloveTip", "Rubber004", scale=0.012, bright=1.0, rough=(0.5, 0.75), normal=3.0)
+# knit back, leather palm and grippy fingertips are one material: the fabrics change along smooth lines given by the
+# point attributes "palm" and "tip" (bake_arm), each with a sewn seam
+M_GLOVE = L.layered("Glove", [
+    dict(set="Fabric045", scale=0.11, tint=(0.38, 0.4, 0.43), rough=(0.75, 1.0), normal=2.5),
+    dict(set="Rubber004", scale=0.03, bright=2.6, tint=(0.75, 0.78, 0.85), rough=(0.55, 0.8), normal=1.2),
+    dict(set="Rubber004", scale=0.012, bright=1.0, rough=(0.5, 0.75), normal=3.0),
+], ["palm", "tip"], seam=0.09, seam_depth=0.0012, wrinkle=0.4, wrinkle_scale=70)
 M_SLEEVE = L.pbr("JacketSleeve", "Fabric045", scale=0.16, tint=(0.11, 0.12, 0.14), rough=(0.8, 1.0), normal=2.5, wrinkle=0.6,
                  wrinkle_scale=35)
 M_PAD = L.pbr("GlovePad", "Rubber004", scale=0.025, bright=2.2, tint=(0.8, 0.82, 0.88), rough=(0.4, 0.7), normal=1.5,
@@ -183,8 +186,6 @@ def bake_arm(rig, ob, side):
         sl.add([v.index], max(0.0, 1.0 - g), "REPLACE")
     ob.data.materials.append(M_GLOVE)
     ob.data.materials.append(M_SLEEVE)
-    ob.data.materials.append(M_PALM)
-    ob.data.materials.append(M_TIP)
     # rest-pose hand frame: which faces are palm side, which are fingertips (classified before the pose deforms them)
     rk = {f: rb[f"finger{f}-1"].head_local.copy() for f in range(2, 6)}
     rF = (rk[3] - rest_w).normalized()
@@ -226,14 +227,10 @@ def bake_arm(rig, ob, side):
             if e.group == gi:
                 return e.weight
         return 0.0
-    for p in me.polygons:
-        if p.material_index == 1:
-            continue
-        vs = [me.vertices[i] for i in p.vertices]
-        if sum(gw_of(v, TG) for v in vs) / len(vs) > 0.55:
-            p.material_index = 3            # grippy fingertips
-        elif sum(gw_of(v, PG) for v in vs) / len(vs) > 0.5:
-            p.material_index = 2            # leather palm and finger fronts
+    # the masks become point attributes; the glove material draws the fabric edges and seams from them per pixel
+    for an, gi in (("palm", PG), ("tip", TG)):
+        at = me.attributes.new(an, "FLOAT", "POINT")
+        at.data.foreach_set("value", [gw_of(v, gi) for v in me.vertices])
     st = bpy.data.objects.new(f"Glove.{side}", me)
     VM.objects.link(st)
     for p in me.polygons:

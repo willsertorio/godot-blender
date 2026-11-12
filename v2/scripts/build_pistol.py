@@ -66,6 +66,10 @@ class Part:
         bmesh.ops.create_cone(self.bm, cap_ends=True, segments=segs, radius1=r * S, radius2=(r if r2 is None else r2) * S,
                               depth=d.length, matrix=Matrix.Translation((a + b) / 2) @ rot)
 
+    def ellipsoid(self, c, r, segs=36, rings=18):
+        m = Matrix.Translation(Vector(c) * S) @ Matrix.Diagonal((r[0] * S, r[1] * S, r[2] * S, 1))
+        bmesh.ops.create_uvsphere(self.bm, u_segments=segs, v_segments=rings, radius=1.0, matrix=m)
+
     def cut(self):
         c = Part(self.name + "_cut%d" % len(self.cutters))
         self.cutters.append(c)

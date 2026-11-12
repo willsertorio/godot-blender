@@ -49,7 +49,7 @@ def seg(p0, p1):
 
 
 def materials():
-    names = ("RArmor", "RFrame", "RSteel", "RRubber", "REye", "RRed", "RBrass", "RLens", "RGlow")
+    names = ("RArmor", "RFrame", "RSteel", "RRubber", "REye", "RRed", "RBrass", "RLens", "RGlow", "RDisc")
     for n in names:
         if bpy.data.materials.get(n):
             bpy.data.materials.remove(bpy.data.materials[n])
@@ -68,6 +68,7 @@ def materials():
     m["red"] = L.plain("RRed", (0.5, 0.03, 0.02), rough=0.35)
     m["brass"] = L.plain("RBrass", (0.75, 0.55, 0.22), rough=0.3, metallic=1.0)
     m["lens"] = L.plain("RLens", (0.02, 0.02, 0.025), rough=0.03, metallic=0.9)
+    m["disc"] = L.plain("RDisc", (0.12, 0.12, 0.13), rough=0.4, alpha=0.3)        # spinning-prop blur
     return m
 
 
@@ -95,7 +96,7 @@ def bolts(part, pts, axis, r=7, h=5):
 
 # ====================================================================== spider
 def spider(coll, M, mats, turret_yaw=20):
-    R = Robot("Spider", coll, M @ T(0, 0, 620))
+    R = Robot("Spider", coll, M @ T(0, 0, 540))
     A, F, ST = mats["armor"], mats["frame"], mats["steel"]
     core = Part("Core", F, bevel=14, segs=2)
     core.box((-235, -385, -95), (235, 385, 70))
@@ -103,7 +104,7 @@ def spider(coll, M, mats, turret_yaw=20):
         core.box((-190, -300 + i * 100, -118), (190, -250 + i * 100, -95))
     core.cyl((0, -420, -20), (0, -385, -20), 60, segs=20)      # rear exhaust
     R.add(core)
-    shell = Part("Shell", A, bevel=26, segs=4)
+    shell = Part("Shell", A, bevel=52, segs=6)
     shell.prism_x([(-405, -15), (-440, 55), (-345, 150), (140, 172), (350, 118), (438, 28), (405, -40)], -262, 262)
     c = shell.cut()                                            # panel lines
     c.box((-300, -112, 20), (300, -106, 220))
@@ -140,57 +141,66 @@ def spider(coll, M, mats, turret_yaw=20):
         lamps.box((-120 * sx - 30, -441, 20), (-120 * sx + 30, -437, 34))
     R.add(lamps)
     # --- legs
-    HIP, KNEE, ANKLE, TOE = (0, 0), (430, 310), (790, -545), (850, -620)
+    HIP, KNEE, ANKLE, TOE = (0, 0), (400, 235), (735, -470), (800, -540)
     for i, (hx, hy, ang) in enumerate(((300, 300, 42), (-300, 300, 138), (-300, -300, 222), (300, -300, 318))):
         LM = T(hx, hy, -5) @ RZ(ang)
         hip = Part(f"Hip{i}", F, bevel=8)
         hip.cyl((0, 0, -85), (0, 0, 80), 92, segs=28)
         hip.cyl((30, -75, 20), (30, 75, 20), 70, segs=24)
         R.add(hip, LM)
-        cap = Part(f"HipCap{i}", A, bevel=8, segs=3)
-        cap.cyl((0, 0, 70), (0, 0, 104), 104, segs=32)
+        cap = Part(f"HipCap{i}", A, bevel=6, segs=3)          # domed pauldron over the hip
+        cap.ellipsoid((0, 0, 62), (128, 128, 74))
         c = cap.cut()
-        c.cyl((0, 0, 92), (0, 0, 120), 60, segs=24)
+        c.box((-200, -200, -80), (200, 200, 62))
+        c = cap.cut()
+        c.cyl((0, 0, 118), (0, 0, 160), 46, segs=24)
         R.add(cap, LM)
         m, ln = seg((30, 20), KNEE)
         th = Part(f"Thigh{i}", F, bevel=8)
-        th.box((0, -46, -42), (ln, 46, 42))
+        th.box((0, -60, -55), (ln, 60, 55))
         th.cyl((60, -58, -20), (60, 58, -20), 16, segs=10)
         R.add(th, LM @ m)
-        ta = Part(f"ThighArmor{i}", A, bevel=16, segs=3)
-        ta.prism_y([(40, -8), (70, 78), (ln - 110, 86), (ln - 30, 40), (ln - 40, -8)], -72, 72)
+        ta = Part(f"ThighArmor{i}", A, bevel=30, segs=5)
+        ta.prism_y([(30, -20), (60, 96), (ln - 110, 106), (ln - 20, 52), (ln - 34, -20)], -88, 88)
         c = ta.cut()
         c.box((ln * 0.5 - 3, -90, 20), (ln * 0.5 + 3, 90, 120))
         for k in range(3):
-            c.box((90 + k * 34, -90, 30), (106 + k * 34, -60, 70))
-            c.box((90 + k * 34, 60, 30), (106 + k * 34, 90, 70))
+            c.box((90 + k * 34, -110, 30), (106 + k * 34, -76, 76))
+            c.box((90 + k * 34, 76, 30), (106 + k * 34, 110, 76))
         R.add(ta, LM @ m)
         kn = Part(f"Knee{i}", ST, bevel=5)
-        kn.cyl((KNEE[0], -98, KNEE[1]), (KNEE[0], 98, KNEE[1]), 66, segs=28)
+        kn.cyl((KNEE[0], -104, KNEE[1]), (KNEE[0], 104, KNEE[1]), 80, segs=32)
         bolts(kn, [(KNEE[0] + 40 * math.cos(a), 98, KNEE[1] + 40 * math.sin(a)) for a in (0, 2.1, 4.2)], (0, 1, 0))
         bolts(kn, [(KNEE[0] + 40 * math.cos(a), -98, KNEE[1] + 40 * math.sin(a)) for a in (0, 2.1, 4.2)], (0, -1, 0))
         R.add(kn, LM)
+        kc = Part(f"KneeCap{i}", A, bevel=5, segs=2)           # armour dome over the front of the knee
+        kc.ellipsoid((KNEE[0] + 18, 0, KNEE[1] + 22), (104, 96, 104))
+        c = kc.cut()
+        c.cyl((KNEE[0], -150, KNEE[1]), (KNEE[0], 150, KNEE[1]), 86, segs=32)
+        c = kc.cut()
+        c.box((KNEE[0] - 200, -150, KNEE[1] - 200), (KNEE[0] + 20, 150, KNEE[1] - 5), rx=0)
+        R.add(kc, LM)
         m, ln = seg(KNEE, ANKLE)
         sh = Part(f"Shin{i}", F, bevel=7)
-        sh.prism_y([(0, -58), (0, 58), (ln * 0.55, 44), (ln, 16), (ln, -16), (ln * 0.55, -34)], -42, 42)
+        sh.prism_y([(0, -72), (0, 72), (ln * 0.55, 56), (ln, 24), (ln, -22), (ln * 0.55, -44)], -54, 54)
         R.add(sh, LM @ m)
-        sa = Part(f"ShinArmor{i}", A, bevel=12, segs=3)
-        sa.prism_y([(60, 30), (50, 92), (ln * 0.5, 76), (ln * 0.72, 40), (ln * 0.6, 24)], -56, 56)
+        sa = Part(f"ShinArmor{i}", A, bevel=26, segs=5)
+        sa.prism_y([(70, 30), (56, 112), (ln * 0.52, 96), (ln * 0.8, 52), (ln * 0.66, 30)], -72, 72)
         c = sa.cut()
         c.box((ln * 0.3 - 3, -70, 10), (ln * 0.3 + 3, 70, 120))
         R.add(sa, LM @ m)
         m, ln = seg(ANKLE, TOE)
         ft = Part(f"Foot{i}", ST, bevel=4)
-        ft.cyl((0, -50, 0), (0, 50, 0), 34, segs=20)
-        ft.prism_y([(-10, -30), (ln + 10, -22), (ln + 28, 0), (ln + 10, 22), (-10, 30)], -30, 30)
+        ft.cyl((0, -62, 0), (0, 62, 0), 44, segs=24)
+        ft.prism_y([(-10, -40), (ln + 10, -30), (ln + 30, 0), (ln + 10, 30), (-10, 40)], -40, 40)
         R.add(ft, LM @ m)
         pad = Part(f"FootPad{i}", mats["rubber"], bevel=5)
-        pad.cyl((TOE[0] + 6, 0, TOE[1]), (TOE[0] + 6, 0, TOE[1] + 26), 50, segs=24)
+        pad.cyl((TOE[0] + 6, 0, TOE[1]), (TOE[0] + 6, 0, TOE[1] + 30), 66, segs=28)
         R.add(pad, LM)
         m, ln = seg((150, -40), (KNEE[0] + 95, KNEE[1] - 190))       # hydraulic ram under the thigh
         ram = Part(f"Ram{i}", ST, bevel=2)
-        ram.cyl((0, 0, 0), (ln * 0.55, 0, 0), 20, segs=16)
-        ram.cyl((ln * 0.55, 0, 0), (ln, 0, 0), 11, segs=12)
+        ram.cyl((0, 0, 0), (ln * 0.55, 0, 0), 26, segs=16)
+        ram.cyl((ln * 0.55, 0, 0), (ln, 0, 0), 14, segs=12)
         ram.cyl((0, -26, 0), (0, 26, 0), 16, segs=12)
         ram.cyl((ln, -26, 0), (ln, 26, 0), 14, segs=12)
         R.add(ram, LM @ m)
@@ -202,7 +212,7 @@ def spider(coll, M, mats, turret_yaw=20):
     ring.cyl((0, 0, 0), (0, 0, 50), 140, segs=40)
     ring.box((-70, -60, 50), (70, 120, 150))
     R.add(ring, TM)
-    tb = Part("TurretBody", A, bevel=18, segs=3)
+    tb = Part("TurretBody", A, bevel=40, segs=5)
     tb.prism_x([(-150, 50), (-170, 120), (-110, 205), (60, 215), (150, 160), (160, 60)], -105, 105)
     c = tb.cut()
     c.box((-120, -40, 150), (120, -34, 260))
@@ -241,8 +251,12 @@ def drone(coll, M, mats):
         core.box((sx * 140 - 10, -60, -10), (sx * 420, 60, 46))               # rotor arms
     core.box((-40, -330, 20), (40, -220, 80))                                   # tail boom
     R.add(core)
-    shell = Part("Shell", A, bevel=34, segs=4)
-    shell.prism_y([(-172, 10), (-160, 100), (-85, 170), (85, 170), (160, 100), (172, 10)], -250, 185)
+    shell = Part("Shell", A, bevel=5, segs=2)                 # rounded upper shell
+    shell.ellipsoid((0, -30, 30), (188, 262, 150), segs=48, rings=24)
+    c = shell.cut()
+    c.box((-300, -400, -300), (300, 400, 4))
+    c = shell.cut()
+    c.cyl((0, 120, 20), (0, 320, 20), 118, segs=36)
     c = shell.cut()
     c.box((-200, -62, 60), (200, -56, 200))
     c.box((-3, -260, 120), (3, 190, 200))
@@ -272,7 +286,7 @@ def drone(coll, M, mats):
     R.add(lens)
     for sx in (-1, 1):
         DM = T(sx * 560, 0, 70) @ RY(-sx * 7)
-        duct = Part(f"Duct{sx}", A, bevel=10, segs=3)
+        duct = Part(f"Duct{sx}", A, bevel=15, segs=5)
         duct.cyl((0, 0, -58), (0, 0, 58), 300, segs=64)
         c = duct.cut()
         c.cyl((0, 0, -80), (0, 0, 80), 266, segs=64)
@@ -297,9 +311,12 @@ def drone(coll, M, mats):
             bl = Part(f"Blade{sx}_{k}", ST, bevel=1.5)
             bl.prism_x([(-34, 0), (-20, 5), (26, 3), (34, 0), (26, -2), (-20, -2)], 46, 258)
             R.add(bl, DM @ RZ(k * 120 + 25 * sx) @ T(0, 0, 14) @ RX(0) @ Matrix.Rotation(math.radians(14), 4, "X"))
-        cap = Part(f"HubCap{sx}", mats["red"], bevel=4)
-        cap.cyl((0, 0, 44), (0, 0, 62), 40, segs=20)
+        cap = Part(f"HubCap{sx}", mats["red"], bevel=0)
+        cap.ellipsoid((0, 0, 44), (44, 44, 26), segs=24, rings=12)
         R.add(cap, DM)
+        disc = Part(f"PropBlur{sx}", mats["disc"], bevel=0)
+        disc.cyl((0, 0, 16), (0, 0, 22), 262, segs=64)
+        R.add(disc, DM)
     gun = Part("Gun", F, bevel=4)
     gun.box((-48, -60, -190), (48, 120, -118))
     gun.cyl((0, 120, -155), (0, 400, -155), 15, segs=14)
@@ -341,7 +358,7 @@ def turret(coll, M, mats, aim_pitch=-22, drop=0):
     base.cyl((0, 0, -200), (0, 0, -45), 150, segs=36)
     base.cyl((0, -170, -260), (0, 170, -260), 105, segs=32)
     R.add(base)
-    collar = Part("Collar", A, bevel=12, segs=3)
+    collar = Part("Collar", A, bevel=20, segs=5)
     collar.cyl((0, 0, -170), (0, 0, -60), 190, segs=48)
     c = collar.cut()
     c.cyl((0, 0, -200), (0, 0, -30), 152, segs=40)
@@ -358,7 +375,7 @@ def turret(coll, M, mats, aim_pitch=-22, drop=0):
         for k in range(4):
             beam.box((ln * 0.2 + k * ln * 0.17, -w / 2 - 6, -h * 0.3), (ln * 0.2 + k * ln * 0.17 + 30, w / 2 + 6, h * 0.3))
         R.add(beam, m)
-        cov = Part(name + "Cover", A, bevel=14, segs=3)
+        cov = Part(name + "Cover", A, bevel=22, segs=5)
         cov.prism_y([(70, h / 2 - 6), (90, h / 2 + 34), (ln - 110, h / 2 + 34), (ln - 80, h / 2 - 6)], -w / 2 - 14, w / 2 + 14)
         c = cov.cut()
         c.box((ln * 0.5 - 3, -200, 0), (ln * 0.5 + 3, 200, 200))
@@ -382,7 +399,7 @@ def turret(coll, M, mats, aim_pitch=-22, drop=0):
     hd.box((-40, -60, -60), (60, 60, 40))
     hd.cyl((60, 150, -150), (60, 262, -150), 118, segs=32)                    # ammo drum
     R.add(hd, HM)
-    hs = Part("HeadShell", A, bevel=22, segs=4)
+    hs = Part("HeadShell", A, bevel=58, segs=6)
     hs.prism_y([(-160, -280), (-185, -120), (-120, -10), (250, 0), (380, -80), (400, -200), (340, -290)], -152, 152)
     c = hs.cut()
     c.box((90, -200, -140), (96, 200, 20))
@@ -478,10 +495,11 @@ if __name__ == "__main__":
         coll = L.coll("Robots")
         # spider: on the floor left of centre, turned toward the player; drone: high on the right; turret: ceiling, left
         place = {
-            "spider": Matrix.Translation((-1.6, 5.3, 0)) @ RZ(-145),
-            "drone": Matrix.Translation((2.4, 4.3, 2.72)) @ RZ(152) @ RX(-8) @ RY(6),
-            "turret": Matrix.Translation((-2.3, 4.6, 3.62)) @ RZ(-28),
-            "turret_drop": 1580, "turret_pitch": -14,
+            "spider": Matrix.Translation((-1.5, 4.5, 0)) @ RZ(-145),
+            "drone": Matrix.Translation((2.25, 4.4, 2.55)) @ Matrix.Rotation(math.radians(36), 4, (-0.906, 0.423, 0))
+        @ RZ(152) @ RY(6),
+            "turret": Matrix.Translation((-2.25, 4.9, 3.5)) @ RZ(-28),
+            "turret_drop": 1700, "turret_pitch": -14,
         }
         robots = build(coll, place)
         bpy.ops.wm.save_mainfile()

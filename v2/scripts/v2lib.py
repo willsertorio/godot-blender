@@ -139,6 +139,124 @@ def pbr(name, set_name, scale=1.0, tint=(1, 1, 1), rough=(0.0, 1.0), metallic=No
     return m
 
 
+def layered(name, layers, masks, seam=0.03, seam_depth=0.0007, stitch=True, wrinkle=0.3, wrinkle_scale=90.0):
+    """One material made of several scanned fabrics. layers = [dict(set, scale, tint, bright, rough, normal), ...];
+    masks[i] = name of a float point attribute that puts layer i+1 over the layers before it (sharp line at 0.5).
+    The edge follows the interpolated attribute, so it is a smooth line whatever the mesh is. A sewn seam is drawn
+    along each edge: a dark groove (`seam` = half width in attribute units) and a row of stitches beside it."""
+    m = bpy.data.materials.get(name)
+    if m:
+        return m
+    m = bpy.data.materials.new(name)
+    m.use_nodes = True
+    nt = m.node_tree
+    bsdf = nt.nodes["Principled BSDF"]
+    tc = nt.nodes.new("ShaderNodeTexCoord")
+
+    def math(op, a, b=None, clamp=False):
+        n = nt.nodes.new("ShaderNodeMath")
+        n.operation = op
+        n.use_clamp = clamp
+        for i, v in enumerate((a, b)):
+            if v is None:
+                continue
+            if isinstance(v, (int, float)):
+                n.inputs[i].default_value = v
+            else:
+                nt.links.new(v, n.inputs[i])
+        return n.outputs[0]
+
+    def layer(d):
+        mp = nt.nodes.new("ShaderNodeMapping")
+        mp.inputs["Scale"].default_value = (1 / d["scale"],) * 3
+        nt.links.new(tc.outputs["Object"], mp.inputs["Vector"])
+
+        def tex(suffix, non_color):
+            n = nt.nodes.new("ShaderNodeTexImage")
+            n.image = _img(d["set"], suffix, non_color)
+            n.projection = "BOX"
+            n.projection_blend = 0.25
+            nt.links.new(mp.outputs["Vector"], n.inputs["Vector"])
+            return n
+        t, b = d.get("tint", (1, 1, 1)), d.get("bright", 1.0)
+        mix = nt.nodes.new("ShaderNodeMix")
+        mix.data_type = "RGBA"
+        mix.blend_type = "MULTIPLY"
+        mix.inputs["Factor"].default_value = 1.0
+        nt.links.new(tex("Color", False).outputs["Color"], mix.inputs[6])
+        mix.inputs[7].default_value = (t[0] * b, t[1] * b, t[2] * b, 1)
+        mr = nt.nodes.new("ShaderNodeMapRange")
+        mr.inputs["To Min"].default_value, mr.inputs["To Max"].default_value = d.get("rough", (0.0, 1.0))
+        nt.links.new(tex("Roughness", True).outputs["Color"], mr.inputs["Value"])
+        nm = nt.nodes.new("ShaderNodeNormalMap")
+        nm.inputs["Strength"].default_value = d.get("normal", 1.0)
+        nt.links.new(tex("NormalGL", True).outputs["Color"], nm.inputs["Color"])
+        return mix.outputs[2], mr.outputs["Result"], nm.outputs["Normal"]
+
+    col, rgh, nrm = layer(layers[0])
+    groove = None
+    thread = None
+    for d, attr in zip(layers[1:], masks):
+        c2, r2, n2 = layer(d)
+        at = nt.nodes.new("ShaderNodeAttribute")
+        at.attribute_name = attr
+        v = at.outputs["Fac"]
+        edge = nt.nodes.new("ShaderNodeMapRange")              # sharp but anti-aliased step at 0.5
+        edge.inputs["From Min"].default_value = 0.49
+        edge.inputs["From Max"].default_value = 0.51
+        nt.links.new(v, edge.inputs["Value"])
+        f = edge.outputs["Result"]
+        mc = nt.nodes.new("ShaderNodeMix")
+        mc.data_type = "RGBA"
+        nt.links.new(f, mc.inputs[0]); nt.links.new(col, mc.inputs[6]); nt.links.new(c2, mc.inputs[7])
+        col = mc.outputs[2]
+        rgh = _mixf(nt, rgh, r2, f)
+        mv = nt.nodes.new("ShaderNodeMix")
+        mv.data_type = "VECTOR"
+        nt.links.new(f, mv.inputs[0]); nt.links.new(nrm, mv.inputs[4]); nt.links.new(n2, mv.inputs[5])
+        nrm = mv.outputs[1]
+        dist = math("ABSOLUTE", math("SUBTRACT", v, 0.5))
+        g = math("SUBTRACT", 1.0, math("DIVIDE", dist, seam), clamp=True)          # 1 on the line -> 0 at `seam`
+        groove = g if groove is None else math("MAXIMUM", groove, g)
+        if stitch:                                             # a row of stitches on the under-layer side of the seam
+            sd = math("ABSOLUTE", math("SUBTRACT", v, 0.5 - seam * 2.4))
+            row = math("SUBTRACT", 1.0, math("DIVIDE", sd, seam * 0.45), clamp=True)
+            thread = row if thread is None else math("MAXIMUM", thread, row)
+    if thread is not None:
+        vo = nt.nodes.new("ShaderNodeTexVoronoi")
+        vo.inputs["Scale"].default_value = 380.0              # one stitch every ~2.6 mm
+        nt.links.new(tc.outputs["Object"], vo.inputs["Vector"])
+        dots = math("LESS_THAN", vo.outputs["Distance"], 0.3)
+        thread = math("MULTIPLY", math("GREATER_THAN", thread, 0.35), dots)
+        col = _mixc(nt, col, (0.2, 0.21, 0.23), thread)
+    dk = nt.nodes.new("ShaderNodeMix")                         # the groove is dark (shadowed, dirt collects there)
+    dk.data_type = "RGBA"
+    dk.blend_type = "MULTIPLY"
+    dk.inputs[7].default_value = (0.25, 0.25, 0.27, 1)
+    nt.links.new(groove, dk.inputs[0]); nt.links.new(col, dk.inputs[6])
+    nt.links.new(dk.outputs[2], bsdf.inputs["Base Color"])
+    nt.links.new(rgh, bsdf.inputs["Roughness"])
+    h = math("MULTIPLY", groove, -1.0)
+    if thread is not None:
+        h = math("ADD", h, math("MULTIPLY", thread, 0.6))
+    bp = nt.nodes.new("ShaderNodeBump")
+    bp.inputs["Distance"].default_value = seam_depth
+    nt.links.new(h, bp.inputs["Height"]); nt.links.new(nrm, bp.inputs["Normal"])
+    nrm = bp.outputs["Normal"]
+    if wrinkle > 0:
+        nz = nt.nodes.new("ShaderNodeTexNoise")
+        nz.inputs["Scale"].default_value = wrinkle_scale
+        nz.inputs["Detail"].default_value = 3.0
+        nt.links.new(tc.outputs["Object"], nz.inputs["Vector"])
+        b2 = nt.nodes.new("ShaderNodeBump")
+        b2.inputs["Strength"].default_value = wrinkle
+        b2.inputs["Distance"].default_value = 0.002
+        nt.links.new(nz.outputs["Fac"], b2.inputs["Height"]); nt.links.new(nrm, b2.inputs["Normal"])
+        nrm = b2.outputs["Normal"]
+    nt.links.new(nrm, bsdf.inputs["Normal"])
+    return m
+
+
 def _src(nt, sock):
     """The socket feeding `sock` (a constant node is made if it is not linked)."""
     if sock.is_linked:

@@ -21,4 +21,8 @@ blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100      # Cycle
   adds glove pads and cuffs. Materials made by an earlier run are removed first (they would be reused unchanged).
 - `scripts/build_pistol.py` (`Part`: mm, profiles + boolean cuts + bevels) is reused by `build_robots.py`.
 - `v2lib.pbr` options: `round_edges`, `edge_wear` (+ `wear_radius`, `wear_noise`, `wear_metal`), `cavity`, `wrinkle`.
-- Stages: 1 room + lighting, 2 pistol + gloved hands, 3 robots (all done, first versions); next: effects + polish.
+- Glove fabrics (knit back, leather palm, grippy tips) are one material, `v2lib.layered`: the edges come from the point
+  attributes `palm` / `tip` written by `bake_arm`, so they are smooth lines with a sewn seam (groove + stitches),
+  whatever the mesh. Assigning the fabrics per face gave a zigzag edge.
+- Robots: curved shells are `Part.ellipsoid` cut to shape; the drone leans 36 deg toward the camera so both rotors read.
+- Stages: 1 room + lighting, 2 pistol + gloved hands, 3 robots (done, robots and gloves polished once); next: effects.
