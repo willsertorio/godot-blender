@@ -27,7 +27,7 @@ def _img(set_name, suffix, non_color=False):
 
 
 def pbr(name, set_name, scale=1.0, tint=(1, 1, 1), rough=(0.0, 1.0), metallic=None, normal=1.0, bright=1.0,
-        tint_attr=None, grunge=0.0, grunge_scale=0.7):
+        tint_attr=None, grunge=0.0, grunge_scale=0.7, round_edges=0.0):
     """Principled material from a scanned set, box-projected in object space. scale = metres per repeat.
     rough = (min, max) the roughness map is remapped to. tint_attr = name of a colour attribute multiplied in."""
     m = bpy.data.materials.get(name)
@@ -117,7 +117,14 @@ def pbr(name, set_name, scale=1.0, tint=(1, 1, 1), rough=(0.0, 1.0), metallic=No
         nm = nt.nodes.new("ShaderNodeNormalMap")
         nm.inputs["Strength"].default_value = normal
         nt.links.new(nr.outputs["Color"], nm.inputs["Color"])
-        nt.links.new(nm.outputs["Normal"], bsdf.inputs["Normal"])
+        if round_edges > 0:          # Cycles rounds every edge at render time (radius in metres): edges catch light
+            bv = nt.nodes.new("ShaderNodeBevel")
+            bv.samples = 4
+            bv.inputs["Radius"].default_value = round_edges
+            nt.links.new(nm.outputs["Normal"], bv.inputs["Normal"])
+            nt.links.new(bv.outputs["Normal"], bsdf.inputs["Normal"])
+        else:
+            nt.links.new(nm.outputs["Normal"], bsdf.inputs["Normal"])
     op = tex("Opacity", True)
     if op:
         nt.links.new(op.outputs["Color"], bsdf.inputs["Alpha"])

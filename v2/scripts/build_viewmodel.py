@@ -2,10 +2,9 @@
 
     blender -b -P v2/scripts/build_viewmodel.py          (run after build_room.py; rebuilds the Viewmodel collection)
 
-Everything is built in "gun space" (the XM9's frame: origin at the top of the grip, barrel +Y, up +Z, metres) and
+Everything is built in "gun space" (barrel +Y, up +Z, metres; see build_pistol.py) and
 then placed in front of the camera through the `Viewmodel` empty.
-- Pistol: the XM9 from blender/xm9.blend (V1), modifiers applied, new materials, and a proper open reflex sight
-  (window along the barrel, tinted glass, red dot), rear-sight dots, rear slide plate.
+- Pistol: build_pistol.py (a detailed service pistol built for this scene); its ANCHORS place the hands.
 - Arms: MakeHuman base mesh + skeleton + weights (CC0, mh_arm.py). Each hand: fingers curled about their hinge
   axes, the hand placed by a target frame (wrist -> knuckles, index -> pinky, palm normal) and an anchor point, the
   arm solved from a shoulder point (two-bone solve, forearm twist spread over the twist bones), thumb aimed along
@@ -29,8 +28,8 @@ XM9 = os.path.abspath(os.path.join(L.ROOT, "..", "blender", "xm9.blend"))
 K9, O9 = 0.000453, (715, 235)
 RAKE = math.atan2(33, 115)
 # Where the gun sits in the camera's frame: right, forward, up (m) and a small turn toward the screen centre (deg).
-GUN_IN_CAM = (0.085, 0.39, -0.115)
-GUN_YAW, GUN_PITCH = 2.0, 2.0
+GUN_IN_CAM = (0.10, 0.37, -0.092)
+GUN_YAW, GUN_PITCH = 5.0, 3.0
 
 
 def P9(x, y, xx=0.0):
@@ -70,74 +69,11 @@ M_CUFF = L.pbr("GloveCuff", "Fabric045", scale=0.02, tint=(0.2, 0.21, 0.23), rou
 REMAP = {"GunSlide": M_SLIDE, "GunFrame": M_FRAME, "GunDark": M_GDARK, "GunGrip": M_GRIP, "GunBarrel": M_GDARK,
          "NeonCyan": M_CYAN, "GunScreen": M_CYAN, "GunMagazine": M_FRAME, "GunBrass": M_GDARK, "GunLens": M_GLASS}
 
-# ------------------------------------------------------------------ pistol
-with bpy.data.libraries.load(XM9, link=False) as (src, dst):
-    dst.collections = [c for c in src.collections if c in ("XM9", "Cutters")]
-gun_objs, cutters = [], []
-for c in dst.collections:
-    for o in list(c.all_objects):
-        (cutters if c.name.startswith("Cutters") else gun_objs).append(o)
-        sc.collection.objects.link(o)
-        if o.animation_data:
-            o.animation_data_clear()
-for o in gun_objs:
-    if o.type == "EMPTY" and o.parent is None:
-        o.location, o.rotation_euler = (0, 0, 0), (0, 0, 0)
-bpy.context.view_layer.update()
-dg = bpy.context.evaluated_depsgraph_get()
-for o in list(gun_objs):
-    drop = o.name.startswith(("MuzzleFlash", "CasingFX", "RedDot", "Round"))
-    if drop or o.type != "MESH":
-        continue
-    me = bpy.data.meshes.new_from_object(o.evaluated_get(dg))
-    mw = o.matrix_world.copy()
-    st = bpy.data.objects.new("Pistol_" + o.name, me)
-    VM.objects.link(st)
-    st.matrix_world = mw
-    st.parent = root
-    for i, m in enumerate(me.materials):
-        if m and m.name.split(".")[0] in REMAP:
-            me.materials[i] = REMAP[m.name.split(".")[0]]
-    for p in me.polygons:
-        p.use_smooth = True
-    wn = st.modifiers.new("WN", "WEIGHTED_NORMAL")
-    wn.keep_sharp = True
-for o in gun_objs + cutters:
-    bpy.data.objects.remove(o)
-for c in dst.collections:
-    bpy.data.collections.remove(c)
-
-# reflex sight: base, two posts, top bar, tinted glass, red dot (the window runs along the barrel)
-ZT = P9(0, 92).z
-opt = L.Builder("Pistol_Optic", M_GDARK, collection="Viewmodel", bevel=0.0012)
-opt.box((-0.0135, -0.010, ZT), (0.0135, 0.036, ZT + 0.007))
-opt.box((-0.0135, -0.010, ZT + 0.007), (0.0135, 0.014, ZT + 0.0125))
-for sx in (-1, 1):
-    opt.box((sx * 0.0135 - (0.003 if sx > 0 else 0), 0.018, ZT + 0.007), (sx * 0.0135 + (0.003 if sx < 0 else 0), 0.034, ZT + 0.031))
-    opt.box((sx * 0.0135 - (0.0022 if sx > 0 else 0), 0.004, ZT + 0.0125), (sx * 0.0135 + (0.0022 if sx < 0 else 0), 0.018, ZT + 0.022))
-opt.box((-0.0135, 0.018, ZT + 0.031), (0.0135, 0.034, ZT + 0.0345))
-for i in range(2):
-    opt.cyl((-0.0135, -0.003 + i * 0.008, ZT + 0.0095), (-0.0152, -0.003 + i * 0.008, ZT + 0.0095), 0.0022, segs=10)
-opt.cyl((0.006, 0.0, ZT + 0.0125), (0.006, 0.0, ZT + 0.0138), 0.004, segs=14)
-opt_ob = opt.finish()
-glass = L.Builder("Pistol_OpticGlass", M_GLASS, collection="Viewmodel", bevel=0)
-glass.box((-0.0105, 0.0265, ZT + 0.007), (0.0105, 0.0278, ZT + 0.031))
-glass_ob = glass.finish()
-dot = L.Builder("Pistol_RedDot", M_REDDOT, collection="Viewmodel", bevel=0)
-bmesh.ops.create_icosphere(dot.bm, subdivisions=2, radius=0.00055, matrix=Matrix.Translation((0, 0.0262, ZT + 0.0185)))
-dot_ob = dot.finish()
-det = L.Builder("Pistol_Details", M_GDARK, collection="Viewmodel", bevel=0.0006)
-det.box((-0.0085, -0.0334, P9(0, 142).z), (0.0085, -0.0322, P9(0, 108).z))           # rear slide plate
-det.cyl((0, -0.0336, P9(0, 126).z), (0, -0.0322, P9(0, 126).z), 0.0028, segs=12)      # striker indicator
-det.box((-0.0152, P9(705, 0).y, P9(0, 172).z), (-0.0138, P9(668, 0).y, P9(0, 164).z))  # slide stop lever
-det.cyl((-0.0155, P9(600, 0).y, P9(0, 172).z), (0.0155, P9(600, 0).y, P9(0, 172).z), 0.0022, segs=10)   # takedown pin
-det_ob = det.finish()
-dots = L.Builder("Pistol_SightDots", M_WHITE, collection="Viewmodel", bevel=0)
-for sx in (-1, 1):
-    dots.cyl((sx * 0.0072, P9(764, 0).y - 0.0003, P9(0, 85).z), (sx * 0.0072, P9(764, 0).y + 0.001, P9(0, 85).z), 0.0013, segs=10)
-dots_ob = dots.finish()
-for o in (opt_ob, glass_ob, dot_ob, det_ob, dots_ob):
-    o.parent = root
+# ------------------------------------------------------------------ pistol (v2/scripts/build_pistol.py)
+import build_pistol  # noqa: E402
+build_pistol.build(VM, root)
+AN = build_pistol.ANCHORS
+RAKE = AN["rake"]
 
 
 # ------------------------------------------------------------------ arms
@@ -317,10 +253,16 @@ def bake_arm(rig, ob, side):
         return o2
 
     kc = sum(k.values(), Vector()) / 4
-    back = w0.lerp(kc, 0.5)
     AX = A if side == "R" else -A            # so that AX x F points out of the back of the hand on both sides
-    wrapped(f"BackPad.{side}", back, AX, F, 0.058, 0.046, M_PAD, power=5.0, thick=0.0035)
-    wrapped(f"KnuckleGuard.{side}", kc + F * 0.002, AX, F, 0.082, 0.024, M_PAD, power=5.0, thick=0.0045)
+    # the pads sit toward the thumb side of the back of the hand: that is the part the player's eye sees
+    back = w0.lerp(kc, 0.5) - A * 0.012
+    wrapped(f"BackPad.{side}", back, AX, F, 0.062, 0.048, M_PAD, power=5.0, thick=0.0035)
+    wrapped(f"KnuckleGuard.{side}", kc + F * 0.003, AX, F, 0.08, 0.02, M_PAD, power=6.0, thick=0.004)
+    t1 = pb_cache[side][1]                    # thumb: a pad along its first phalanx, facing away from the palm
+    td = (t1[1] - t1[0]).normalized()
+    tx = (out - td * out.dot(td)).cross(td).normalized()
+    wrapped(f"ThumbPad.{side}", t1[0].lerp(t1[1], 0.6), tx if side == "R" else -tx, td, 0.015, 0.03, M_PAD, power=3.5,
+            thick=0.003, offset=0.0015)
     for f in range(2, 6):
         b1 = pb_cache[side][f]
         mid = b1[0].lerp(b1[1], 0.55)
@@ -380,23 +322,28 @@ def bake_arm(rig, ob, side):
 pb_cache = {}
 u = Vector((0, -math.sin(RAKE), -math.cos(RAKE)))
 CAM = Vector((-GUN_IN_CAM[0], -GUN_IN_CAM[1], -GUN_IN_CAM[2]))      # camera position in gun space (before the small turn)
+TANG, GC, HW = AN["tang"], AN["grip_centre"], AN["grip_half_width"]
 arms = {}
 for side, spec in (
-    ("R", dict(curls={2: (8, 14, 6), 3: (62, 86, 42), 4: (64, 88, 44), 5: (66, 90, 44)},
-               F_t=Vector((-0.16, 1.0, -0.12)), A_hint=u,
+    # Right hand: web of the thumb high under the tang, three fingers round the front strap, index straight along
+    # the frame above the trigger guard, thumb forward along the left side.
+    ("R", dict(curls={2: (6, 10, 5), 3: (58, 84, 40), 4: (62, 86, 42), 5: (66, 88, 44)},
+               F_t=Vector((-0.14, 1.0, -0.16)), A_hint=u,
                anchor_fn=lambda pb, w0, k, F, A, pn: (pb["finger1-2"].head + k[2]) / 2 - F * 0.012,
-               anchor_target=Vector((0.003, -0.041, 0.022)),
-               shoulder=CAM + Vector((0.18, -0.03, -0.24)), pole=(0.6, 0.0, -1.0),
-               thumb_dirs=((-0.45, 0.85, 0.2), (-0.1, 1.0, 0.08), (0.02, 1.0, 0.0)))),
-    ("L", dict(curls={2: (48, 72, 38), 3: (52, 76, 40), 4: (54, 78, 40), 5: (56, 80, 40)},
-               F_t=Vector((0.22, 0.78, -0.58)), A_hint=Vector((0.0, -0.58, -0.8)),
+               anchor_target=TANG + Vector((0.004, -0.004, -0.004)),
+               shoulder=CAM + Vector((0.2, -0.04, -0.3)), pole=(0.7, 0.0, -1.0),
+               thumb_dirs=((-0.5, 0.85, 0.15), (-0.12, 1.0, 0.06), (0.0, 1.0, 0.0)))),
+    # Left hand: palm on the left side of the grip, fingers wrapped over the right hand's fingers under the trigger
+    # guard, wrist dropped 45 degrees, thumb forward under the slide.
+    ("L", dict(curls={2: (50, 74, 38), 3: (54, 78, 40), 4: (56, 80, 40), 5: (58, 82, 40)},
+               F_t=Vector((0.25, 0.74, -0.62)), A_hint=Vector((0.0, -0.64, -0.77)),
                anchor_fn=lambda pb, w0, k, F, A, pn: w0.lerp(k[3], 0.55) + pn * 0.014,
-               anchor_target=Vector((-0.019, 0.002, -0.052)),
-               shoulder=CAM + Vector((-0.13, -0.03, -0.24)), pole=(-0.6, 0.0, -1.0),
-               thumb_dirs=((0.25, 0.9, 0.3), (0.1, 1.0, 0.12), (0.05, 1.0, 0.0))))):
+               anchor_target=GC + Vector((-HW - 0.008, 0.004, 0.0)),
+               shoulder=CAM + Vector((-0.1, -0.04, -0.3)), pole=(-0.7, 0.0, -1.0),
+               thumb_dirs=((0.22, 0.92, 0.3), (0.08, 1.0, 0.1), (0.04, 1.0, 0.0))))):
     rig, ob = pose_hand(side, **spec)
     pbs = rig.pose.bones
-    pb_cache[side] = {f: (pbs[f"finger{f}-1"].head.copy(), pbs[f"finger{f}-1"].tail.copy()) for f in range(2, 6)}
+    pb_cache[side] = {f: (pbs[f"finger{f}-1"].head.copy(), pbs[f"finger{f}-1"].tail.copy()) for f in range(1, 6)}
     arms[side] = bake_arm(rig, ob, side)
 
 # ------------------------------------------------------------------ place in front of the camera

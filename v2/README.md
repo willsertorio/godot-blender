@@ -6,6 +6,7 @@ A detailed static scene built and rendered in Blender first (the concept for V2)
 ```
 blender -b -P v2/scripts/build_room.py                                   # stage 1: room + lighting -> v2/scene.blend
 blender -b -P v2/scripts/build_viewmodel.py                              # stage 2: pistol + gloved hands (run after build_room.py)
+xvfb-run -a blender -b -P v2/scripts/build_pistol.py -- /tmp/pistol       # the pistol alone: 4 review views
 blender -b v2/scene.blend -P v2/scripts/debug_viewmodel.py -- /tmp/vm    # quick views of the viewmodel only (DBG_SCALE, DBG_C)
 blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100      # Cycles render (samples, size %); ~5 min at 1280x720 on 4 CPU cores
 ```
