@@ -28,7 +28,8 @@ def _img(set_name, suffix, non_color=False):
 
 def pbr(name, set_name, scale=1.0, tint=(1, 1, 1), rough=(0.0, 1.0), metallic=None, normal=1.0, bright=1.0,
         tint_attr=None, grunge=0.0, grunge_scale=0.7, round_edges=0.0, edge_wear=0.0, wear_color=(0.72, 0.72, 0.7),
-        cavity=0.0, wrinkle=0.0, wrinkle_scale=90.0):
+        cavity=0.0, wrinkle=0.0, wrinkle_scale=90.0, wear_radius=0.0012, wear_noise=260.0, cavity_dist=0.004,
+        wear_metal=1.0):
     """... edge_wear (Cycles): the coating is rubbed down to `wear_color` metal along edges (found by comparing a
     bevelled normal with the flat one), broken up by noise. cavity: darkening + roughening in recesses (AO).
     wrinkle: soft cloth wrinkles as bump."""
@@ -133,7 +134,8 @@ def pbr(name, set_name, scale=1.0, tint=(1, 1, 1), rough=(0.0, 1.0), metallic=No
     if op:
         nt.links.new(op.outputs["Color"], bsdf.inputs["Alpha"])
     if edge_wear > 0 or cavity > 0 or wrinkle > 0:
-        _overlay(nt, bsdf, tc, edge_wear, wear_color, cavity, wrinkle, wrinkle_scale)
+        _overlay(nt, bsdf, tc, edge_wear, wear_color, cavity, wrinkle, wrinkle_scale, wear_radius, wear_noise, cavity_dist,
+                 wear_metal)
     return m
 
 
@@ -172,12 +174,13 @@ def _mixc(nt, a, color, fac, blend="MIX"):
     return n.outputs[2]
 
 
-def _overlay(nt, bsdf, tc, edge_wear, wear_color, cavity, wrinkle, wrinkle_scale):
+def _overlay(nt, bsdf, tc, edge_wear, wear_color, cavity, wrinkle, wrinkle_scale, wear_radius=0.0012, wear_noise=260.0,
+             cavity_dist=0.004, wear_metal=1.0):
     col, rough, metal = (_src(nt, bsdf.inputs[k]) for k in ("Base Color", "Roughness", "Metallic"))
     if cavity > 0:
         ao = nt.nodes.new("ShaderNodeAmbientOcclusion")
         ao.samples = 4
-        ao.inputs["Distance"].default_value = 0.004
+        ao.inputs["Distance"].default_value = cavity_dist
         inv = nt.nodes.new("ShaderNodeMath")
         inv.operation = "SUBTRACT"
         inv.inputs[0].default_value = 1.0
@@ -193,7 +196,7 @@ def _overlay(nt, bsdf, tc, edge_wear, wear_color, cavity, wrinkle, wrinkle_scale
         geo = nt.nodes.new("ShaderNodeNewGeometry")
         bv = nt.nodes.new("ShaderNodeBevel")
         bv.samples = 4
-        bv.inputs["Radius"].default_value = 0.0012
+        bv.inputs["Radius"].default_value = wear_radius
         dot = nt.nodes.new("ShaderNodeVectorMath")
         dot.operation = "DOT_PRODUCT"
         nt.links.new(bv.outputs["Normal"], dot.inputs[0])
@@ -203,7 +206,7 @@ def _overlay(nt, bsdf, tc, edge_wear, wear_color, cavity, wrinkle, wrinkle_scale
         e.inputs[0].default_value = 1.0
         nt.links.new(dot.outputs["Value"], e.inputs[1])
         nz = nt.nodes.new("ShaderNodeTexNoise")
-        nz.inputs["Scale"].default_value = 260.0
+        nz.inputs["Scale"].default_value = wear_noise
         nz.inputs["Detail"].default_value = 6.0
         nz.inputs["Roughness"].default_value = 0.7
         nt.links.new(tc.outputs["Object"], nz.inputs["Vector"])
@@ -222,7 +225,7 @@ def _overlay(nt, bsdf, tc, edge_wear, wear_color, cavity, wrinkle, wrinkle_scale
         nt.links.new(ramp.outputs["Color"], w.inputs[1])
         # a few fine scratches away from the edges too
         sc = nt.nodes.new("ShaderNodeTexNoise")
-        sc.inputs["Scale"].default_value = 55.0
+        sc.inputs["Scale"].default_value = wear_noise * 0.21
         sc.inputs["Detail"].default_value = 8.0
         sc.inputs["Distortion"].default_value = 2.5
         nt.links.new(tc.outputs["Object"], sc.inputs["Vector"])
@@ -243,7 +246,7 @@ def _overlay(nt, bsdf, tc, edge_wear, wear_color, cavity, wrinkle, wrinkle_scale
         wear = s2.outputs[0]
         col = _mixc(nt, col, wear_color, wear)
         rough = _mixf(nt, rough, 0.28, wear)
-        metal = _mixf(nt, metal, 1.0, wear)
+        metal = _mixf(nt, metal, wear_metal, wear)
     nt.links.new(col, bsdf.inputs["Base Color"])
     nt.links.new(rough, bsdf.inputs["Roughness"])
     nt.links.new(metal, bsdf.inputs["Metallic"])

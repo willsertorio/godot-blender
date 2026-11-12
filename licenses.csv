@@ -133,3 +133,4 @@ Portal field shader (assets/shaders/portal.gdshader),modelled,assets/shaders/por
 "Rubber004 (2K PBR texture; V2 concept: glove pads, pistol grip) -> v2/textures/Rubber004/",ambientCG,https://ambientcg.com/view?id=Rubber004,CC0 1.0,2026-11-12
 "Plastic012B (2K PBR texture; V2 concept: pistol frame) -> v2/textures/Plastic012B/",ambientCG,https://ambientcg.com/view?id=Plastic012B,CC0 1.0,2026-11-12
 "V2 concept scene: service pistol (slide, frame, grip, controls, sights, reflex sight, weapon light) and gloves (pads, cuffs) built on the MakeHuman arms -> v2/scene.blend",modelled,v2/scripts/build_pistol.py; build_viewmodel.py; mh_arm.py,Original work for this project (gloves built on the CC0 MakeHuman mesh),2026-11-12
+"V2 concept scene: three robots (quadruped spider with turret, twin-rotor drone, ceiling arm turret on a pylon) -> v2/scene.blend",modelled,v2/scripts/build_robots.py,Original work for this project (no third-party content),2026-11-12
