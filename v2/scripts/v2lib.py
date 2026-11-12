@@ -237,5 +237,5 @@ def setup_cycles(samples=96, res=(1280, 720)):
     sc.render.resolution_x, sc.render.resolution_y = res
     sc.render.resolution_percentage = 100
     sc.view_settings.view_transform = "AgX"
-    sc.view_settings.look = "AgX - Medium High Contrast"
+    sc.view_settings.look = "AgX - High Contrast"
     return sc
