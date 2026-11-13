@@ -38,14 +38,15 @@ def cam_in_gun(weapon):
     return -Vector(PLACE[weapon]["at"])
 
 
-def view_matrix(weapon, cam):
-    """World matrix of a view's root empty: gun space placed in front of the camera."""
+def view_local(weapon):
+    """Matrix of a view's root empty in the camera's frame (the root is a child of the camera): gun space placed in
+    front of the eye."""
     pl = PLACE[weapon]
     basis = Matrix(((1, 0, 0), (0, 0, 1), (0, -1, 0))).to_4x4()          # gun (x, y, z) -> camera local (x, z, -y)
     local = Matrix.Translation((pl["at"][0], pl["at"][2], -pl["at"][1])) @ basis
     local = local @ Matrix.Rotation(math.radians(pl["yaw"]), 4, "Z") @ Matrix.Rotation(math.radians(pl["pitch"]), 4, "X") \
         @ Matrix.Rotation(math.radians(pl["roll"]), 4, "Y")
-    return cam.matrix_world @ local
+    return local
 
 
 MATERIAL_NAMES = ("Glove", "JacketSleeve", "GlovePad", "GloveCuff", "GloveAccent")
@@ -95,8 +96,9 @@ def hand_frame(pb, side):
     return w0, k, F, A, pn.normalized()
 
 
-def pose(rig, side, curls, F_t, A_hint, anchor_fn, anchor_target, shoulder, pole, thumb_dirs, quiet=False):
-    """Put one arm in a pose (gun space). Starts from the rest pose, so the result depends only on the arguments."""
+def pose(rig, side, curls, F_t, A_hint, anchor_fn, anchor_target, shoulder, pole, thumb_dirs, quiet=False, reach=None):
+    """Put one arm in a pose (gun space). Starts from the rest pose, so the result depends only on the arguments.
+    reach (0..1): the shoulder follows the hand when the target is further than that share of the arm's length."""
     pb = rig.pose.bones
     for b in pb:
         b.matrix_basis = Matrix()
@@ -123,6 +125,8 @@ def pose(rig, side, curls, F_t, A_hint, anchor_fn, anchor_target, shoulder, pole
     S = Vector(shoulder)
     l1 = (pb["lowerarm01"].head - pb["upperarm01"].head).length
     l2 = (pb["wrist"].head - pb["lowerarm01"].head).length
+    if reach and (P - S).length > (l1 + l2) * reach:           # the shoulder gives way before the arm overstretches
+        S = P - (P - S).normalized() * (l1 + l2) * reach
     ax = P - S
     dist = min(ax.length, l1 + l2 - 1e-4)
     u = ax.normalized()

@@ -29,7 +29,7 @@ for cname in H.COLL.values():
         for o in list(old.all_objects):
             bpy.data.objects.remove(o)
         bpy.data.collections.remove(old)
-for block in (bpy.data.armatures, bpy.data.meshes):          # data of the removed objects
+for block in (bpy.data.armatures, bpy.data.meshes, bpy.data.lights, bpy.data.actions):   # data of the removed objects
     for d in list(block):
         if d.users == 0:
             block.remove(d)
@@ -41,10 +41,13 @@ for weapon, (gun, hold) in GUNS.items():
     root = bpy.data.objects.new(H.COLL[weapon], None)
     root.empty_display_size = 0.05
     coll.objects.link(root)
-    gun.build(coll, root)
+    parts = gun.build(coll, root)
+    if hasattr(gun, "props"):                                  # animation-only parts, hidden at rest
+        gun.props(coll, root, parts)
     hands = H.Hands(coll, root, weapon, mats)
     hands.hold(hold(gun.ANCHORS, H.cam_in_gun(weapon)))
-    root.matrix_world = H.view_matrix(weapon, bpy.data.objects["PlayerCamera"])
+    root.parent = bpy.data.objects["PlayerCamera"]             # the view rides with the eye
+    root.matrix_basis = H.view_local(weapon)
     print(f"{weapon} view built:", len(coll.all_objects), "objects")
 
 for weapon, cname in H.COLL.items():                           # one view at a time

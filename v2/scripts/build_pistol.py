@@ -151,7 +151,7 @@ class Part:
 
 def materials():
     for n in ("PSlide", "PFrame", "PGripTex", "PSteel", "PBlack", "PBarrel", "PLens", "PDotRed", "PSightDot", "PCyan",
-              "PLightLens", "PRubber"):
+              "PLightLens", "PRubber", "PBrass", "PFlash"):
         if bpy.data.materials.get(n):
             bpy.data.materials.remove(bpy.data.materials[n])
     m = {}
@@ -171,6 +171,7 @@ def materials():
     m["dot"] = L.plain("PDotRed", (0, 0, 0), emit=(1.0, 0.07, 0.03), emit_strength=80.0)
     m["sightdot"] = L.plain("PSightDot", (0.85, 0.9, 0.8), rough=0.4, emit=(0.6, 1.0, 0.6), emit_strength=0.8)
     m["cyan"] = L.plain("PCyan", (0, 0.02, 0.03), emit=(0.15, 0.85, 1.0), emit_strength=3.0)
+    m["brass"] = L.plain("PBrass", (0.8, 0.58, 0.22), rough=0.28, metallic=1.0)
     m["lightlens"] = L.plain("PLightLens", (0.9, 0.95, 1.0), rough=0.05, transmission=0.6, ior=1.5,
                              emit=(0.9, 0.95, 1.0), emit_strength=0.4)
     return m
@@ -220,12 +221,14 @@ def build(collection, parent=None):
     done(br)
     st = Part("P_SteelBits", M["steel"], bevel=0.25)
     st.cyl((0, 80, 32.6), (0, 150.4, 32.6), 2.6, segs=16)      # guide rod
-    st.box((12.6, 6, 41.5), (13.5, 29, 44.8))                  # extractor
-    st.box((-8.6, -38.7, 31), (8.6, -37.6, 52))                # rear cover plate
-    st.cyl((0, -39.0, 43), (0, -37.6, 43), 2.6, segs=14)       # striker indicator
     for y, z, r in ((31, 20, 1.7), (-12, 12, 1.7), (47, 22.5, 2.3), (-30, 22, 1.5)):   # pins, both sides
         st.cyl((-13.9, y, z), (13.9, y, z), r, segs=14)
     done(st)
+    sb = Part("P_SlideBits", M["steel"], bevel=0.25)           # steel parts that ride on the slide
+    sb.box((12.6, 6, 41.5), (13.5, 29, 44.8))                  # extractor
+    sb.box((-8.6, -38.7, 31), (8.6, -37.6, 52))                # rear cover plate
+    sb.cyl((0, -39.0, 43), (0, -37.6, 43), 2.6, segs=14)       # striker indicator
+    done(sb)
 
     # ------------------------------------------------------------------ frame
     fr = Part("P_Frame", M["frame"], bevel=0.7, segs=3)
@@ -263,6 +266,18 @@ def build(collection, parent=None):
         y, z = 22.2 - t * 19.2, -27 - t * 56
         fs.box((-8.5, y - 0.4, z - 2.2), (8.5, y + 1.6, z + 2.2), rx=-18.4)
     done(fs)
+    mg = Part("P_Magazine", M["steel"], bevel=0.8, segs=2)     # the body inside the grip (seen when it is out)
+    mg.prism_x([(24.2, 0), (-11.8, 0), (-40.5, -88), (-4.5, -88)], -10.5, 10.5)
+    c = mg.cut()                                                # witness holes, feed-lip notch
+    for i in range(4):
+        c.cyl((-12, -3 - i * 5.0, -22 - i * 15.5), (12, -3 - i * 5.0, -22 - i * 15.5), 1.6, segs=10)
+    c = mg.cut()
+    c.box((-6.5, 2, -6), (6.5, 30, 3))
+    done(mg)
+    rd = Part("P_MagRound", M["brass"], bevel=0.3)              # the top cartridge
+    rd.cyl((0, 3, -2.2), (0, 20, -2.2), 4.8, segs=20)
+    rd.cyl((0, 20, -2.2), (0, 25.5, -2.2), 4.8, segs=20, r2=2.2)
+    done(rd)
     bp = Part("P_MagBase", M["black"], bevel=1.4, segs=3)
     bp.prism_x([(7.5, -88), (-59, -92.6), (-60, -100.5), (9.5, -97.5)], -15.6, 15.6)
     c = bp.cut()
@@ -366,7 +381,115 @@ def build(collection, parent=None):
     wg = Part("P_LightLens", M["lightlens"], bevel=0)
     wg.cyl((0, 150.6, -4), (0, 151.8, -4), 12.1, segs=36)
     done(wg)
+    # moving groups: everything on the slide follows P_Slide, the base plate and top round follow P_Magazine
+    by = {o.name.split(".")[0]: o for o in out}
+    for n in SLIDE_PARTS:
+        by[n].parent = by["P_Slide"]
+    for n in ("P_MagBase", "P_MagRound"):
+        by[n].parent = by["P_Magazine"]
+    by["P_TriggerTab"].parent = by["P_Trigger"]
     return out
+
+
+SLIDE_PARTS = ("P_SlideBits", "P_Sights", "P_SightDots", "P_Optic", "P_OpticBits", "P_OpticCapSlot", "P_OpticButtons",
+               "P_OpticLens", "P_OpticDot", "P_Accent")
+MAG_AXIS = Vector((0, 21.5, 66)).normalized()                  # the magazine slides out along -MAG_AXIS
+MUZZLE = Vector((0, 153, BORE_Z)) * S
+PORT = Vector((6, 46, 53)) * S                                 # where a spent case leaves the ejection port
+TRIGGER_PIVOT = Vector((0, 43, 10)) * S
+SLIDE_TRAVEL = 0.038
+
+
+def props(collection, parent, gun_parts):
+    """Things only the animations show (all hidden at rest by scale 0): a second magazine, a spent case, the muzzle
+    flash and its light. Returns {name: object}."""
+    M = {m.name: m for m in bpy.data.materials}
+    by = {o.name.split(".")[0]: o for o in gun_parts}
+    res = {}
+    mag2 = by["P_Magazine"].copy()                             # shares the meshes of the first magazine
+    mag2.name = "P_Magazine2"
+    collection.objects.link(mag2)
+    for n in ("P_MagBase", "P_MagRound"):
+        o = by[n].copy()
+        o.name = n + "2"
+        collection.objects.link(o)
+        o.parent = mag2
+    res["P_Magazine2"] = mag2
+    cs = Part("P_Casing", M["PBrass"], bevel=0.2)              # 9 mm case, centred on the origin, mouth toward +Y
+    cs.cyl((0, -9.5, 0), (0, 9.5, 0), 4.9, segs=20)
+    cs.cyl((0, -9.5, 0), (0, -8.3, 0), 5.3, segs=20)
+    c = cs.cut()
+    c.cyl((0, -6, 0), (0, 10, 0), 4.3, segs=20)
+    res["P_Casing"] = cs.finish(collection, parent)
+    # muzzle flash: three crossed kite-shaped blades along the barrel and a star across it, at the origin
+    bm = bmesh.new()
+    for i in range(3):
+        rot = Matrix.Rotation(i * math.pi / 3, 4, "Y")
+        bm.faces.new([bm.verts.new(rot @ Vector(v)) for v in ((0, 0, 0), (0.03, 0.045, 0), (0, 0.15, 0), (-0.03, 0.045, 0))])
+    star = []
+    for i in range(16):
+        a = i * math.tau / 16
+        r = 0.05 if i % 2 == 0 else 0.016
+        star.append(bm.verts.new((r * math.cos(a), 0.012, r * math.sin(a))))
+    bm.faces.new(star)
+    me = bpy.data.meshes.new("P_Flash")
+    bm.to_mesh(me)
+    bm.free()
+    fl = bpy.data.objects.new("P_Flash", me)
+    collection.objects.link(fl)
+    fl.parent = parent
+    fl.location = MUZZLE
+    fl.visible_shadow = False
+    me.materials.append(flash_material())
+    res["P_Flash"] = fl
+    ld = bpy.data.lights.new("P_FlashLight", "POINT")
+    ld.color = (1.0, 0.7, 0.4)
+    ld.energy = 0.0
+    ld.shadow_soft_size = 0.03
+    lo = bpy.data.objects.new("P_FlashLight", ld)
+    collection.objects.link(lo)
+    lo.parent = parent
+    lo.location = MUZZLE + Vector((0, 0.06, 0.01))
+    res["P_FlashLight"] = lo
+    for n in ("P_Magazine2", "P_Casing", "P_Flash"):
+        res[n].scale = (0, 0, 0)
+    return res
+
+
+def flash_material():
+    """White-hot at the muzzle, orange and fading to nothing at the tips (emission mixed with transparency)."""
+    m = bpy.data.materials.new("PFlash")
+    m.use_nodes = True
+    nt = m.node_tree
+    nt.nodes.remove(nt.nodes["Principled BSDF"])
+    out = nt.nodes["Material Output"]
+    tc = nt.nodes.new("ShaderNodeTexCoord")
+    ln = nt.nodes.new("ShaderNodeVectorMath")
+    ln.operation = "LENGTH"
+    nt.links.new(tc.outputs["Object"], ln.inputs[0])
+    mr = nt.nodes.new("ShaderNodeMapRange")                    # 1 at the muzzle -> 0 at 15 cm
+    mr.inputs["From Min"].default_value, mr.inputs["From Max"].default_value = 0.0, 0.15
+    mr.inputs["To Min"].default_value, mr.inputs["To Max"].default_value = 1.0, 0.0
+    nt.links.new(ln.outputs["Value"], mr.inputs["Value"])
+    ramp = nt.nodes.new("ShaderNodeValToRGB")
+    ramp.color_ramp.elements[0].color = (1.0, 0.28, 0.04, 1)
+    ramp.color_ramp.elements[1].color = (1.0, 0.8, 0.42, 1)
+    ramp.color_ramp.elements[1].position = 0.95
+    nt.links.new(mr.outputs["Result"], ramp.inputs["Fac"])
+    em = nt.nodes.new("ShaderNodeEmission")
+    em.inputs["Strength"].default_value = 9.0
+    nt.links.new(ramp.outputs["Color"], em.inputs["Color"])
+    tr = nt.nodes.new("ShaderNodeBsdfTransparent")
+    pw = nt.nodes.new("ShaderNodeMath")
+    pw.operation = "POWER"
+    pw.inputs[1].default_value = 1.4
+    nt.links.new(mr.outputs["Result"], pw.inputs[0])
+    mix = nt.nodes.new("ShaderNodeMixShader")
+    nt.links.new(pw.outputs[0], mix.inputs[0])
+    nt.links.new(tr.outputs[0], mix.inputs[1])
+    nt.links.new(em.outputs[0], mix.inputs[2])
+    nt.links.new(mix.outputs[0], out.inputs["Surface"])
+    return m
 
 
 if __name__ == "__main__":

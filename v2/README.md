@@ -10,6 +10,8 @@ xvfb-run -a blender -b -P v2/scripts/build_rifle.py -- /tmp/rifle         # the 
 xvfb-run -a blender -b -P v2/scripts/build_pistol.py -- /tmp/pistol       # the pistol alone: 4 review views
 blender -b -P v2/scripts/build_robots.py                                 # stage 3: spider, drone, ceiling turret (rebuilds the Robots collection)
 xvfb-run -a blender -b -P v2/scripts/build_robots.py -- review /tmp/rob   # each robot alone, 3 views
+blender -b v2/scene.blend -P v2/scripts/anim_pistol.py                    # bake the pistol clips onto the timeline (after build_viewmodel.py; saves); only=Fire,Reload nosave to try
+v2/scripts/make_gifs.sh pistol 16 480                                     # GIF of every clip -> v2/renders/anim/ (Cycles, ~10 s a frame, ~35 min); ONLY=Fire,Draw for some
 blender -b v2/scene.blend -P v2/scripts/pose_test.py -- out.png 40 80 [back]   # rig check: left hand open, off the pistol
 blender -b v2/scene.blend -P v2/scripts/debug_viewmodel.py -- /tmp/vm    # quick views of one viewmodel only (DBG_SCALE, DBG_C, DBG_VIEW=ViewmodelRifle)
 blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100 view=rifle   # Cycles render (samples, size %, view=pistol|rifle); ~5 min at 1280x720 on 4 CPU cores
@@ -27,6 +29,17 @@ blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100 view=rifle  
   Glove and sleeve fabrics are projected from the point attribute `rest` (rest positions), not object space, or the
   weave would slide over the moving hand (`coord_attr` in `v2lib.pbr` / `layered`).
   Materials made by an earlier run are removed first (they would be reused unchanged).
+- Animation (`scripts/anim_lib.py`, `anim_pistol.py`): 24 fps, clips one after another on the timeline with a marker
+  each (ranges in the scene property `v2_clips_pistol`): Idle 1-72 (loop), Walk 81-104 (loop), Sprint 113-159,
+  Fire 168-179, ADS 188-236, Draw 245-264, Reload 273-308 (from empty), Inspect 317-388. A clip is a function of
+  time returning a state (gun placement in the eye's frame, camera offset, part matrices, a pose spec per hand);
+  the baker re-solves both arms on every frame from shoulders fixed to the eye and writes a key per frame.
+  The view roots are children of `PlayerCamera`, so camera bob / view punch carries the gun.
+  Pistol parts that move: `P_Slide` (+ everything parented to it), `P_Trigger`, `P_Magazine` (+ base, top round);
+  hidden by scale 0 until used: `P_Magazine2`, `P_Casing`, `P_Flash`, light `P_FlashLight` (`build_pistol.props`).
+  Left-hand poses besides the hold: away (out of frame), magazine on the palm, flat palm seating it. The right index
+  finger stays along the frame (the trigger side of the gun is hidden from the eye), only the trigger blade moves.
+  A reload has to lift and tilt the gun (up 8 cm, pitch 24, roll 30) or it happens below the frame.
 - `scripts/pose_test.py`: rig check (opens the pistol's left hand, palm or `back` toward the eye; saves nothing).
   Known from it: the knuckle guard overlaps the finger bases when the hand opens; the palm is plain leather.
 - `scripts/build_pistol.py` (`Part`: mm, profiles + boolean cuts + bevels) is reused by `build_robots.py`.

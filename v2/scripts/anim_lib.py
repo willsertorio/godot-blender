@@ -1,0 +1,250 @@
+"""Baking weapon-view animations onto the timeline of v2/scene.blend (used by anim_pistol.py).
+
+A clip is a function of time that returns a *state*: where the gun is in the eye's frame, a camera offset, the
+matrices of the moving gun parts, a pose spec for each hand. `Baker.frame()` applies one state (the arms are solved
+again with hands.pose() from shoulders that stay fixed to the eye, so elbows and wrists follow the gun) and records
+every channel; `Baker.write()` turns the records into one action per object with a key on every frame.
+
+Frames: gun space is +Y muzzle, +Z up, -X the gun's left. The camera's local frame is X right, Y up, -Z forward.
+"""
+import json
+import math
+
+import bpy
+from mathutils import Matrix, Vector
+
+import hands as H
+
+FPS = 24
+I4 = Matrix.Identity(4)
+
+
+# ---------------------------------------------------------------------- curves
+def clamp(t, a=0.0, b=1.0):
+    return max(a, min(b, t))
+
+
+def seg(t, a, b):
+    """0 before a, 1 after b, linear between."""
+    return clamp((t - a) / (b - a))
+
+
+def smooth(t):
+    t = clamp(t)
+    return t * t * (3 - 2 * t)
+
+
+def ease_out(t, p=3):
+    return 1 - (1 - clamp(t)) ** p
+
+
+def back_out(t, s=1.7):
+    """Ease out with an overshoot (arrives, passes the target, settles)."""
+    t = clamp(t) - 1
+    return t * t * ((s + 1) * t + s) + 1
+
+
+def table(x, keys):
+    """Piecewise-linear lookup in [(x0, v0), (x1, v1), ...]."""
+    if x <= keys[0][0]:
+        return keys[0][1]
+    for (x0, v0), (x1, v1) in zip(keys, keys[1:]):
+        if x <= x1:
+            return v0 + (v1 - v0) * (x - x0) / (x1 - x0)
+    return keys[-1][1]
+
+
+def lerp(a, b, t):
+    return a + (b - a) * t
+
+
+# ---------------------------------------------------------------------- transforms
+def move(right=0.0, fwd=0.0, up=0.0):
+    """A shift in the eye's frame (metres)."""
+    return Matrix.Translation((right, up, -fwd))
+
+
+def rot(pitch=0.0, yaw=0.0, roll=0.0, pivot=(0, 0, 0)):
+    """A turn of the gun about a point of the gun (degrees): pitch = muzzle up, yaw = muzzle to the left,
+    roll = top to the right."""
+    r = Matrix.Rotation(math.radians(yaw), 4, "Z") @ Matrix.Rotation(math.radians(pitch), 4, "X") \
+        @ Matrix.Rotation(math.radians(roll), 4, "Y")
+    p = Vector(pivot)
+    return Matrix.Translation(p) @ r @ Matrix.Translation(-p)
+
+
+def cam_rot(pitch=0.0, yaw=0.0, roll=0.0):
+    """A turn of the eye (degrees): pitch = look up, yaw = look left, roll = head tilts to the left."""
+    return Matrix.Rotation(math.radians(yaw), 4, "Y") @ Matrix.Rotation(math.radians(pitch), 4, "X") \
+        @ Matrix.Rotation(math.radians(roll), 4, "Z")
+
+
+def mix_m(a, b, t):
+    """Between two placements: straight line for the position, shortest turn for the rotation."""
+    la, qa, _ = a.decompose()
+    lb, qb, _ = b.decompose()
+    return Matrix.Translation(la.lerp(lb, t)) @ qa.slerp(qb, t).to_matrix().to_4x4()
+
+
+# ---------------------------------------------------------------------- hand pose specs
+def xform_spec(spec, m):
+    """A hand pose given in another frame (the eye's, a magazine's ...) moved into gun space by matrix m."""
+    r = m.to_3x3()
+    s = dict(spec)
+    s["F_t"] = r @ Vector(spec["F_t"])
+    s["A_hint"] = r @ Vector(spec["A_hint"])
+    s["anchor_target"] = m @ Vector(spec["anchor_target"])
+    s["thumb_dirs"] = [r @ Vector(d) for d in spec["thumb_dirs"]]
+    return s
+
+
+def mix_spec(a, b, t):
+    """Between two hand poses that use the same anchor point on the hand."""
+    if t <= 0:
+        return dict(a)
+    if t >= 1:
+        return dict(b)
+    s = dict(a)
+    s["curls"] = {f: tuple(lerp(x, y, t) for x, y in zip(a["curls"][f], b["curls"][f])) for f in a["curls"]}
+    for k in ("F_t", "A_hint", "anchor_target"):
+        s[k] = Vector(a[k]).lerp(Vector(b[k]), t)
+    s["thumb_dirs"] = [Vector(x).normalized().lerp(Vector(y).normalized(), t) for x, y in zip(a["thumb_dirs"], b["thumb_dirs"])]
+    return s
+
+
+# ---------------------------------------------------------------------- baking
+class Baker:
+    def __init__(self, weapon, hold, parts, props=None):
+        """hold = {side: hold pose spec}; parts = {object name: rest matrix in gun space, None = hidden, or
+        ("hidden", matrix) = hidden at that place};
+        props = {(datablock, data_path): rest value} for extra animated numbers (a light's energy)."""
+        self.weapon = weapon
+        self.root = bpy.data.objects[H.COLL[weapon]]
+        self.cam = bpy.data.objects["PlayerCamera"]
+        self.local0 = H.view_local(weapon)
+        for ob in (self.root, self.cam):
+            ob.animation_data_clear()
+        self.root.matrix_basis = self.local0
+        self.cam0 = self.cam.matrix_basis.copy()
+        self.rigs = {s: bpy.data.objects[f"ArmRig.{s}.{weapon}"] for s in hold}
+        self.hold = {s: dict(sp) for s, sp in hold.items()}
+        # shoulders and elbow directions stay fixed to the eye (the body), whatever the gun does
+        self.sh_cam = {s: self.local0 @ Vector(sp["shoulder"]) for s, sp in hold.items()}
+        self.pole_cam = {s: self.local0.to_3x3() @ Vector(sp["pole"]) for s, sp in hold.items()}
+        self.parts = dict(parts)
+        self.objs = {n: bpy.data.objects[n] for n in parts}
+        self.props = dict(props or {})
+        self.last_loc = {n: I4.decompose()[:2] for n in parts}
+        self.ch = {}            # (datablock, data_path, index, group) -> {frame: value}
+        self.last = {}
+        self.clips = {}
+        self.worst = {}
+        for ob in list(self.objs.values()) + list(self.rigs.values()):
+            ob.animation_data_clear()
+        for idb, _ in self.props:
+            idb.animation_data_clear()
+        self.mods = [m for r in self.rigs.values() for c in r.children for m in c.modifiers if m.type == "ARMATURE"]
+        for m in self.mods:     # no need to deform the gloves while the poses are solved
+            m.show_viewport = False
+
+    # .................................................................. recording
+    def _put(self, idb, path, values, frame, group):
+        for i, v in enumerate(values):
+            self.ch.setdefault((idb, path, i, group), {})[frame] = v
+
+    def _trs(self, idb, prefix, key, frame, loc, quat, scale, group):
+        prev = self.last.get(key)
+        if prev is not None and prev.dot(quat) < 0:      # keep neighbouring keys on the same side of the sphere
+            quat = -quat
+        self.last[key] = quat.copy()
+        self._put(idb, prefix + "location", loc, frame, group)
+        self._put(idb, prefix + "rotation_quaternion", quat, frame, group)
+        self._put(idb, prefix + "scale", scale, frame, group)
+
+    def frame(self, f, st=None):
+        """Apply a state and record it at frame f. Missing fields mean 'at rest'."""
+        st = st or {}
+        root_m = st.get("root", self.local0)
+        cam_m = self.cam0 @ st.get("cam", I4)
+        self.root.matrix_basis = root_m
+        self.cam.matrix_basis = cam_m
+        inv = root_m.inverted()
+        self._trs(self.root, "", "root", f, *root_m.decompose(), "Object Transforms")
+        self._trs(self.cam, "", "cam", f, *cam_m.decompose(), "Object Transforms")
+        for name, ob in self.objs.items():
+            m = st.get("objs", {}).get(name, self.parts[name])
+            if isinstance(m, tuple):                     # ("cam", matrix): given in the eye's frame
+                m = inv @ m[1]
+            if isinstance(m, tuple):                     # ("hidden", matrix): scale 0 at that place
+                self.last_loc[name] = m[1].decompose()[:2]
+                m = None
+            if m is None:                                # hidden: scale 0 where it last was
+                loc, quat = self.last_loc[name]
+                scale = Vector((0, 0, 0))
+            else:
+                loc, quat, scale = m.decompose()
+                self.last_loc[name] = (loc.copy(), quat.copy())
+            ob.rotation_mode = "QUATERNION"
+            ob.location, ob.rotation_quaternion, ob.scale = loc, quat, scale
+            self._trs(ob, "", name, f, loc, quat, scale, "Object Transforms")
+        for (idb, path), rest in self.props.items():
+            v = st.get("props", {}).get((idb, path), rest)
+            self._put(idb, path, [v], f, "Animation")
+        for side, rig in self.rigs.items():
+            spec = dict(st.get("hands", {}).get(side) or self.hold[side])
+            spec["shoulder"] = inv @ self.sh_cam[side]
+            spec["pole"] = inv.to_3x3() @ self.pole_cam[side]
+            H.pose(rig, side, quiet=True, reach=0.96, **spec)
+            pb = rig.pose.bones
+            fax = (pb["wrist"].head - pb["lowerarm01"].head).normalized()
+            bend = math.degrees(fax.angle((pb["finger3-1"].head - pb["wrist"].head).normalized()))
+            self.worst[side] = max(self.worst.get(side, 0.0), bend)
+            for b in pb:
+                self._trs(rig, f'pose.bones["{b.name}"].', (side, b.name), f, b.location.copy(),
+                          b.rotation_quaternion.copy(), b.scale.copy(), b.name)
+
+    def clip(self, name, start, n, fn, loop=False):
+        """Bake n frames of fn(t seconds) -> state from frame `start`, with the rest pose keyed just outside."""
+        self.worst = {}
+        self.frame(start - 1)
+        for i in range(n):
+            self.frame(start + i, fn(i / FPS))
+        self.frame(start + n)
+        self.clips[name] = dict(start=start, end=start + n - 1, loop=loop)
+        print(f"clip {name}: frames {start}-{start + n - 1}" + (" (loop)" if loop else "")
+              + "  max wrist bend " + ", ".join(f"{s} {v:.0f}" for s, v in self.worst.items()))
+        return start + n
+
+    # .................................................................. writing
+    def write(self):
+        sc = bpy.context.scene
+        acts = {}
+        for (idb, path, idx, group), keys in self.ch.items():
+            if idb not in acts:
+                idb.animation_data_create()
+                acts[idb] = bpy.data.actions.new(f"{idb.name}.{self.weapon}Anim")
+                idb.animation_data.action = acts[idb]
+            fc = acts[idb].fcurves.new(path, index=idx, action_group=group)
+            frames = sorted(keys)
+            fc.keyframe_points.add(len(frames))
+            flat = []
+            for fr in frames:
+                flat += [fr, keys[fr]]
+            fc.keyframe_points.foreach_set("co", flat)
+            for kp in fc.keyframe_points:
+                kp.interpolation = "LINEAR"
+            fc.update()
+        for ob in (self.root, self.cam):
+            ob.rotation_mode = "QUATERNION"
+        for m in self.mods:
+            m.show_viewport = True
+        for mk in list(sc.timeline_markers):
+            sc.timeline_markers.remove(mk)
+        for name, c in self.clips.items():
+            sc.timeline_markers.new(name, frame=c["start"])
+        sc.render.fps = FPS
+        sc.frame_start = 1
+        sc.frame_end = max(c["end"] for c in self.clips.values())
+        sc["v2_clips_" + self.weapon] = json.dumps(self.clips)
+        sc.frame_set(1)
+        return self.clips
