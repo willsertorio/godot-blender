@@ -10,6 +10,7 @@ xvfb-run -a blender -b -P v2/scripts/build_rifle.py -- /tmp/rifle         # the 
 xvfb-run -a blender -b -P v2/scripts/build_pistol.py -- /tmp/pistol       # the pistol alone: 4 review views
 blender -b -P v2/scripts/build_robots.py                                 # stage 3: spider, drone, ceiling turret (rebuilds the Robots collection)
 xvfb-run -a blender -b -P v2/scripts/build_robots.py -- review /tmp/rob   # each robot alone, 3 views
+blender -b v2/scene.blend -P v2/scripts/pose_test.py -- out.png 40 80 [back]   # rig check: left hand open, off the pistol
 blender -b v2/scene.blend -P v2/scripts/debug_viewmodel.py -- /tmp/vm    # quick views of one viewmodel only (DBG_SCALE, DBG_C, DBG_VIEW=ViewmodelRifle)
 blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100 view=rifle   # Cycles render (samples, size %, view=pistol|rifle); ~5 min at 1280x720 on 4 CPU cores
 ```
@@ -18,8 +19,16 @@ blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100 view=rifle  
   attribute, grunge), bmesh builders with bevel + weighted normals, cable curves, Cycles settings (AgX).
 - Textures: ambientCG CC0 sets in `textures/` (rows in `licenses.csv`).
 - `scripts/mh_arm.py`: arms from the MakeHuman base mesh + skeleton + weights (CC0, `source/makehuman/`).
-  `build_viewmodel.py` poses them on the pistol (finger curls, hand target frame, two-bone arm solve), bakes them and
-  adds glove pads and cuffs. Materials made by an earlier run are removed first (they would be reused unchanged).
+- `scripts/hands.py`: the arms stay **rigged** (armatures `ArmRig.<R|L>.<pistol|rifle>`, gloves `Glove.<side>.<weapon>`).
+  The glove is made in the rest pose (subdivided, thickness, masks) and then skinned; `hands.pose(rig, side, **spec)`
+  sets a whole pose from the rest pose (finger curls, hand target frame + anchor, two-bone arm solve, thumb), so it
+  can be called per frame; pads are frozen in the hold pose and parented to their bone, cuffs to `lowerarm02`.
+  Hold poses: `pistol_hold()`, `rifle_hold()`; `PLACE` = where each gun sits in the camera frame.
+  Glove and sleeve fabrics are projected from the point attribute `rest` (rest positions), not object space, or the
+  weave would slide over the moving hand (`coord_attr` in `v2lib.pbr` / `layered`).
+  Materials made by an earlier run are removed first (they would be reused unchanged).
+- `scripts/pose_test.py`: rig check (opens the pistol's left hand, palm or `back` toward the eye; saves nothing).
+  Known from it: the knuckle guard overlaps the finger bases when the hand opens; the palm is plain leather.
 - `scripts/build_pistol.py` (`Part`: mm, profiles + boolean cuts + bevels) is reused by `build_robots.py`.
 - `v2lib.pbr` options: `round_edges`, `edge_wear` (+ `wear_radius`, `wear_noise`, `wear_metal`), `cavity`, `wrinkle`.
 - Glove fabrics (knit back, leather palm, grippy tips) are one material, `v2lib.layered`: the edges come from the point
@@ -28,8 +37,7 @@ blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100 view=rifle  
 - Robots: curved shells are `Part.ellipsoid` cut to shape; the drone leans 36 deg toward the camera so both rotors read.
 - Two weapon views share `PlayerCamera`: collection `Viewmodel` (pistol) and `ViewmodelRifle` (machine gun, after
   `reference/scene_concept_rifle.png`). One is hidden; switch with the two collection check boxes in the outliner,
-  `show=` (build) or `view=` (render). `build_viewmodel.py` always rebuilds both (`PLACE` = where each gun sits in the
-  camera frame). The rifle (`build_rifle.py`) reuses the pistol's grip / trigger proportions moved by (Y -32, Z -64) mm,
+  `show=` (build) or `view=` (render). `build_viewmodel.py` always rebuilds both. The rifle (`build_rifle.py`) reuses the pistol's grip / trigger proportions moved by (Y -32, Z -64) mm,
   so `trigger_hand()` fits both; the support hand lies on the magazine well. Its rear body is `Part.loft`
   (superellipse rings, Catmull-Rom) in two shells over a dark core that shows through the panel gaps and vents.
   Whether the trigger hand shows under the gun depends on the gun's proportions, not on where it is placed: the
