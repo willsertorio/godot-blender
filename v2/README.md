@@ -13,6 +13,7 @@ xvfb-run -a blender -b -P v2/scripts/build_robots.py -- review /tmp/rob   # each
 blender -b v2/scene.blend -P v2/scripts/anim_pistol.py                    # bake the pistol clips onto the timeline (after build_viewmodel.py; saves); only=Fire,Reload nosave to try
 blender -b v2/scene.blend -P v2/scripts/anim_rifle.py                     # bake the machine gun clips after them (frames 601+; saves). Always: build_viewmodel -> anim_pistol -> anim_rifle
 v2/scripts/make_gifs.sh pistol 16 480                                     # GIF of every clip of pistol | rifle -> v2/renders/anim/ (Cycles, ~10 s a frame, ~35 min); ONLY=Fire,Draw for some
+blender -b v2/scene.blend -P v2/scripts/anim_robots.py                    # bake the robots' sections (frames 1201+; run after build_robots.py; saves)
 blender -b v2/scene.blend -P v2/scripts/pose_test.py -- out.png 40 80 [back]   # rig check: left hand open, off the pistol
 blender -b v2/scene.blend -P v2/scripts/debug_viewmodel.py -- /tmp/vm    # quick views of one viewmodel only (DBG_SCALE, DBG_C, DBG_VIEW=ViewmodelRifle)
 blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100 view=rifle   # Cycles render (samples, size %, view=pistol|rifle); ~5 min at 1280x720 on 4 CPU cores
@@ -62,6 +63,15 @@ blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100 view=rifle  
   scratch-style ortho close-ups of one view (`debug_viewmodel.py`) show penetration at once.
 - Glove fabrics: the fingers are leather all the way round (thumb from its second bone); knit only on the back of
   the hand. Knit finger backs showed as light patches on the joints of the grip hand whenever the gun was turned.
+- Robots (`build_robots.py`, `anim_robots.py`): every moving part hangs from a joint, an empty named
+  `<Robot>_<Joint>` (`Robot.joint/add/cable/flash`); only joints are keyed, so the clips are plain node animation.
+  Spider: Body, Hip/Thigh/Shin/Foot 0-3, Turret, Guns. Drone: Body, PropL/R, Gun. Turret: Yaw, Shoulder, Elbow,
+  Head, Guns. The robots play together in sections (markers "Robots ..."; per-robot ranges in `v2_clips_robots`):
+  Idle 1201-1272, Shoot 1281-1310, Move 1319-1390 (Spider Walk = 24-frame loop at 0.6 m/s, in place; Drone Fly;
+  Turret Aim), Run 1399-1458 (Spider Run = 15-frame loop at 1.5 m/s, in place), Death 1467-1526.
+  Spider legs are solved from ankle targets (hip swing + two-bone solve in the leg's plane, knee up), so the feet
+  stay planted while the body moves. Lights going out = the emissive parts keyed to scale 0. Rebuilding the robots
+  drops their animation: build_robots -> anim_robots.
 - Pads: the knuckle guard lies along the real knuckle line and wholly behind it (reaching past the knuckles, it cut
   through the finger bases of an open hand); finger pads are fitted in the rest pose, fingers apart (fitted on the
   closed hand they also wrapped onto the neighbouring finger).

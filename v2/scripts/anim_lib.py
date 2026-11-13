@@ -144,16 +144,70 @@ def sway(t, k=1.0, period=3.0, tremor=1.0):
 
 
 # ---------------------------------------------------------------------- baking
-class Baker:
+def write_fcurves(ch, tag):
+    """Turn recorded channels {(datablock, data_path, index, group): {frame: value}} into one action per datablock,
+    a linear key on every recorded frame."""
+    acts = {}
+    for (idb, path, idx, group), keys in ch.items():
+        if idb not in acts:
+            idb.animation_data_create()
+            acts[idb] = bpy.data.actions.new(f"{idb.name}.{tag}Anim")
+            idb.animation_data.action = acts[idb]
+        fc = acts[idb].fcurves.new(path, index=idx, action_group=group)
+        frames = sorted(keys)
+        fc.keyframe_points.add(len(frames))
+        flat = []
+        for fr in frames:
+            flat += [fr, keys[fr]]
+        fc.keyframe_points.foreach_set("co", flat)
+        for kp in fc.keyframe_points:
+            kp.interpolation = "LINEAR"
+        fc.update()
+    return acts
+
+
+class Recorder:
+    """Collects keys frame by frame: object transforms (as matrices) and plain numbers."""
+
+    def __init__(self):
+        self.ch = {}            # (datablock, data_path, index, group) -> {frame: value}
+        self.last = {}
+
+    def _put(self, idb, path, values, frame, group):
+        for i, v in enumerate(values):
+            self.ch.setdefault((idb, path, i, group), {})[frame] = v
+
+    def _trs(self, idb, prefix, key, frame, loc, quat, scale, group):
+        prev = self.last.get(key)
+        if prev is not None and prev.dot(quat) < 0:      # keep neighbouring keys on the same side of the sphere
+            quat = -quat
+        self.last[key] = quat.copy()
+        self._put(idb, prefix + "location", loc, frame, group)
+        self._put(idb, prefix + "rotation_quaternion", quat, frame, group)
+        self._put(idb, prefix + "scale", scale, frame, group)
+
+    def key_object(self, ob, frame, basis, hidden=False):
+        """Key an object's own transform (its matrix_basis); hidden = scale 0 at that place."""
+        loc, quat, scale = basis.decompose()
+        if hidden:
+            scale = Vector((0, 0, 0))
+        ob.rotation_mode = "QUATERNION"
+        self._trs(ob, "", ob.name, frame, loc, quat, scale, "Object Transforms")
+
+    def key_value(self, idb, path, frame, value):
+        self._put(idb, path, [value], frame, "Animation")
+
+
+class Baker(Recorder):
     def __init__(self, weapon, hold, parts, props=None, first_frame=1, label=""):
         """hold = {side: hold pose spec}; parts = {object name: rest matrix in gun space, None = hidden, or
         ("hidden", matrix) = hidden at that place};
         props = {(datablock, data_path): rest value} for extra animated numbers (a light's energy)."""
+        super().__init__()
         self.weapon, self.first_frame, self.label = weapon, first_frame, label
         self.root = bpy.data.objects[H.COLL[weapon]]
         self.cam = bpy.data.objects["PlayerCamera"]
         self.local0 = H.view_local(weapon)
-        self.ch = {}            # (datablock, data_path, index, group) -> {frame: value}
         # the camera is shared by the weapon views: keep the keys the other view baked (each view owns WINDOW frames)
         ad = self.cam.animation_data
         if ad and ad.action:
@@ -178,7 +232,6 @@ class Baker:
         self.objs = {n: bpy.data.objects[n] for n in parts}
         self.props = dict(props or {})
         self.last_loc = {n: I4.decompose()[:2] for n in parts}
-        self.last = {}
         self.clips = {}
         self.worst = {}
         for ob in list(self.objs.values()) + list(self.rigs.values()):
@@ -190,19 +243,6 @@ class Baker:
             m.show_viewport = False
 
     # .................................................................. recording
-    def _put(self, idb, path, values, frame, group):
-        for i, v in enumerate(values):
-            self.ch.setdefault((idb, path, i, group), {})[frame] = v
-
-    def _trs(self, idb, prefix, key, frame, loc, quat, scale, group):
-        prev = self.last.get(key)
-        if prev is not None and prev.dot(quat) < 0:      # keep neighbouring keys on the same side of the sphere
-            quat = -quat
-        self.last[key] = quat.copy()
-        self._put(idb, prefix + "location", loc, frame, group)
-        self._put(idb, prefix + "rotation_quaternion", quat, frame, group)
-        self._put(idb, prefix + "scale", scale, frame, group)
-
     def frame(self, f, st=None):
         """Apply a state and record it at frame f. Missing fields mean 'at rest'."""
         st = st or {}
@@ -260,22 +300,7 @@ class Baker:
     # .................................................................. writing
     def write(self):
         sc = bpy.context.scene
-        acts = {}
-        for (idb, path, idx, group), keys in self.ch.items():
-            if idb not in acts:
-                idb.animation_data_create()
-                acts[idb] = bpy.data.actions.new(f"{idb.name}.{self.weapon}Anim")
-                idb.animation_data.action = acts[idb]
-            fc = acts[idb].fcurves.new(path, index=idx, action_group=group)
-            frames = sorted(keys)
-            fc.keyframe_points.add(len(frames))
-            flat = []
-            for fr in frames:
-                flat += [fr, keys[fr]]
-            fc.keyframe_points.foreach_set("co", flat)
-            for kp in fc.keyframe_points:
-                kp.interpolation = "LINEAR"
-            fc.update()
+        write_fcurves(self.ch, self.weapon)
         for ob in (self.root, self.cam):
             ob.rotation_mode = "QUATERNION"
         for m in self.mods:
