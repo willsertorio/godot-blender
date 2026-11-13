@@ -212,6 +212,11 @@ class Hands:
             nb[e.vertices[1]].append(e.vertices[0])
         for _ in range(4):                                      # smooth the mask so the seam is a clean line
             pw = [0.4 * pw[i] + 0.6 * sum(pw[j] for j in nb[i]) / max(len(nb[i]), 1) for i in range(len(pw))]
+        # the fingers are leather all the way round (thumb from its second bone): knit on the finger backs showed as
+        # light patches on the joints of a closed hand. The knit ends in a seam round the base of each finger.
+        finger_bones = {f"finger{f}-{j}" for f in range(2, 6) for j in (1, 2, 3)} | {"finger1-2", "finger1-3"}
+        fw = [sum(e.weight for e in v.groups if names[e.group] in finger_bones) for v in ob.data.vertices]
+        pw = [max(p, min(w, 1.0)) for p, w in zip(pw, fw)]
         for v in ob.data.vertices:
             pg.add([v.index], pw[v.index], "REPLACE")
             tg.add([v.index], min(tipw[v.index], 1.0), "REPLACE")

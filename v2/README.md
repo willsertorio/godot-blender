@@ -51,6 +51,8 @@ blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100 view=rifle  
   the bolt catch. The right hands never leave the grips, and the index fingers stay along the frame (the trigger
   side is hidden from the eye); only the trigger blades move.
   A reload has to lift and tilt the gun (pistol: up 8 cm, pitch 24, roll 30) or it happens below the frame.
+- Glove fabrics: the fingers are leather all the way round (thumb from its second bone); knit only on the back of
+  the hand. Knit finger backs showed as light patches on the joints of the grip hand whenever the gun was turned.
 - Pads: the knuckle guard lies along the real knuckle line and wholly behind it (reaching past the knuckles, it cut
   through the finger bases of an open hand); finger pads are fitted in the rest pose, fingers apart (fitted on the
   closed hand they also wrapped onto the neighbouring finger).
