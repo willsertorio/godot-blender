@@ -96,6 +96,8 @@ def xform_spec(spec, m):
     s["A_hint"] = r @ Vector(spec["A_hint"])
     s["anchor_target"] = m @ Vector(spec["anchor_target"])
     s["thumb_dirs"] = [r @ Vector(d) for d in spec["thumb_dirs"]]
+    if spec.get("wrap"):
+        s["wrap"] = dict(spec["wrap"], frame=m @ spec["wrap"].get("frame", I4))
     return s
 
 
@@ -110,6 +112,16 @@ def mix_spec(a, b, t):
     for k in ("F_t", "A_hint", "anchor_target"):
         s[k] = Vector(a[k]).lerp(Vector(b[k]), t)
     s["thumb_dirs"] = [Vector(x).normalized().lerp(Vector(y).normalized(), t) for x, y in zip(a["thumb_dirs"], b["thumb_dirs"])]
+    wa, wb = a.get("wrap"), b.get("wrap")                # fingers laid round a grip: fade in / out with the pose
+    if wa and wb:
+        s["wrap"] = dict(wa, front=tuple(lerp(x, y, t) for x, y in zip(wa["front"], wb["front"])),
+                         pts=tuple((lerp(p[0], q[0], t), lerp(p[1], q[1], t)) for p, q in zip(wa["pts"], wb["pts"])),
+                         weight=lerp(wa.get("weight", 1.0), wb.get("weight", 1.0), t),
+                         frame=mix_m(wa.get("frame", I4), wb.get("frame", I4), t))
+    elif wa:
+        s["wrap"] = dict(wa, weight=wa.get("weight", 1.0) * (1 - t))
+    elif wb:
+        s["wrap"] = dict(wb, weight=wb.get("weight", 1.0) * t)
     return s
 
 

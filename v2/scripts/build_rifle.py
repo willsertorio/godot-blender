@@ -35,6 +35,7 @@ ANCHORS = {                      # metres, gun frame: used by build_viewmodel.py
     "grip_half_width": 15 * S,
     "rake": math.atan2(22, 66),
     "trigger": Vector((0, 46 + DY, -6 + DZ)) * S,
+    "front_strap": ((24 + DY) * S, (-22 + DZ) * S, 21.5 / 66),   # the front strap's line: y at z, and dy/dz below it
     "magwell_left": Vector((-MAGWELL["hw"], 92, -58)) * S,       # centre of the left face the support palm lies on
     "magwell_front": MAGWELL["y1"] * S,
     "magwell_half_width": MAGWELL["hw"] * S,

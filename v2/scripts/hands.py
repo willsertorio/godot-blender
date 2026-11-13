@@ -18,7 +18,7 @@ import math
 
 import bmesh
 import bpy
-from mathutils import Matrix, Vector
+from mathutils import Matrix, Quaternion, Vector
 from mathutils.bvhtree import BVHTree
 
 import mh_arm
@@ -96,9 +96,18 @@ def hand_frame(pb, side):
     return w0, k, F, A, pn.normalized()
 
 
-def pose(rig, side, curls, F_t, A_hint, anchor_fn, anchor_target, shoulder, pole, thumb_dirs, quiet=False, reach=None):
+def pose(rig, side, curls, F_t, A_hint, anchor_fn, anchor_target, shoulder, pole, thumb_dirs, quiet=False, reach=None,
+         index_pts=None, thumb_roll=0.0, wrap=None):
     """Put one arm in a pose (gun space). Starts from the rest pose, so the result depends only on the arguments.
-    reach (0..1): the shoulder follows the hand when the target is further than that share of the arm's length."""
+    reach (0..1): the shoulder follows the hand when the target is further than that share of the arm's length.
+    index_pts: three points (gun space) the three bones of the index finger are aimed at in turn (trigger finger).
+    thumb_roll: degrees the thumb is turned about its own first bone after aiming (which side of it faces out).
+    wrap: dict(front=(y0, z0, dy/dz), pts, fingers, weight, frame) - the listed fingers are laid round a grip: each
+    of a finger's three bones is aimed at a point given as (u, dy): u = side offset from the centre plane, positive
+    toward the side away from the palm; dy = distance ahead of the front strap, whose line is `front`. The points
+    are taken in the finger's own bending plane. weight < 1 = only that share of the way from the plain curls (for
+    blending into other poses); frame = the grip's matrix when it is not where it was built (a magazine in the hand).
+    (Curl angles alone cannot do this: they do not know where the grip's corners are, and the fingers cut through.)"""
     pb = rig.pose.bones
     for b in pb:
         b.matrix_basis = Matrix()
@@ -160,6 +169,42 @@ def pose(rig, side, curls, F_t, A_hint, anchor_fn, anchor_target, shoulder, pole
         b = pb[f"finger1-{j + 1}"]
         cur = (b.tail - b.head).normalized()
         rot_about(b, b.head.copy(), cur.rotation_difference(Vector(tdir).normalized()).to_matrix())
+        if j == 0 and thumb_roll:
+            rot_about(b, b.head.copy(), Matrix.Rotation(math.radians(thumb_roll), 3, (b.tail - b.head).normalized()))
+    if wrap and wrap.get("weight", 1.0) > 0:
+        y0, z0, slope = wrap["front"]
+        wgt = wrap.get("weight", 1.0)
+        sx = 1.0 if side == "R" else -1.0                     # the palm's side of the grip
+        fr = wrap.get("frame")                                # the grip's own frame, if it has moved (a magazine)
+        fi = fr.inverted() if fr else None
+        A_now = hand_frame(pb, side)[3]                       # fingers bend in the plane across the knuckle line
+        if fr:
+            A_now = fi.to_3x3() @ A_now
+
+        def on_plane(m, x, dy):
+            """The point at side offset x, dy ahead of the front strap, in the bending plane of the finger at m."""
+            z = (A_now.z * m.z - A_now.x * (x - m.x) - A_now.y * (y0 - z0 * slope + dy - m.y)) / (A_now.y * slope + A_now.z)
+            return Vector((x, y0 + (z - z0) * slope + dy, z))
+        for f in wrap.get("fingers", (3, 4, 5)):
+            bones = [pb[f"finger{f}-{j}"] for j in (1, 2, 3)]
+            m = bones[0].head.copy()
+            if fr:
+                m = fi @ m
+            for b, (u, dy) in zip(bones, wrap["pts"]):
+                pt = on_plane(m, -sx * u, dy)
+                if fr:
+                    pt = fr @ pt
+                cur = (b.tail - b.head).normalized()
+                q = cur.rotation_difference((pt - b.head).normalized())
+                if wgt < 1.0:
+                    q = Quaternion().slerp(q, wgt)
+                rot_about(b, b.head.copy(), q.to_matrix())
+    # 5. index finger aimed bone by bone (onto the trigger)
+    if index_pts:
+        for j, pt in enumerate(index_pts):
+            b = pb[f"finger2-{j + 1}"]
+            cur = (b.tail - b.head).normalized()
+            rot_about(b, b.head.copy(), cur.rotation_difference((Vector(pt) - b.head).normalized()).to_matrix())
 
 
 class Hands:
@@ -430,15 +475,26 @@ class Hands:
 
 # ---------------------------------------------------------------------- hold poses (gun space, metres)
 def trigger_hand(AN, CAM, shoulder=(0.2, -0.04, -0.3)):
-    """Right hand on a pistol-type grip: web of the thumb high under the tang, three fingers round the front strap,
-    index straight along the frame above the trigger guard, thumb forward along the left side."""
+    """Right hand on a pistol-type grip. The knuckle of the middle finger sits on the right panel, a finger's
+    thickness off it and 21 mm behind the front strap; the palm is turned in toward the back strap; the three lower
+    fingers are laid round the front strap (`wrap`); the index finger is on the trigger; the thumb lies forward
+    along the left side."""
     rake = AN["rake"]
-    return ("R", dict(curls={2: (6, 10, 5), 3: (58, 84, 40), 4: (62, 86, 42), 5: (66, 88, 44)},
-                      F_t=Vector((-0.14, 1.0, -0.16)), A_hint=Vector((0, -math.sin(rake), -math.cos(rake))),
-                      anchor_fn=lambda pb, w0, k, F, A, pn: (pb["finger1-2"].head + k[2]) / 2 - F * 0.012,
-                      anchor_target=AN["tang"] + Vector((0.004, -0.004, -0.004)),
+    y0, z0, slope = AN["front_strap"]
+    hw, r = AN["grip_half_width"], 0.010
+    kz = AN["tang"].z - 0.042                                  # height of the middle knuckle
+    T = AN["trigger"]
+    return ("R", dict(curls={2: (6, 10, 5), 3: (20, 60, 55), 4: (20, 60, 55), 5: (20, 60, 55)},
+                      F_t=Vector((0.25, 0.95, -0.16)), A_hint=Vector((0, -math.sin(rake), -math.cos(rake))),
+                      anchor_fn=lambda pb, w0, k, F, A, pn: k[3],
+                      anchor_target=Vector((hw + r, y0 + (kz - z0) * slope - 0.021, kz)),
                       shoulder=CAM + Vector(shoulder), pole=(0.7, 0.0, -1.0),
-                      thumb_dirs=((-0.5, 0.85, 0.15), (-0.12, 1.0, 0.06), (0.0, 1.0, 0.0))))
+                      thumb_dirs=((-0.5, 0.85, 0.05), (-0.12, 1.0, -0.1), (0.0, 1.0, -0.12)),
+                      thumb_roll=70.0,                         # its broad (nail) side outward, not its edge
+                      # along the right panel to the front corner, across the front strap, back along the left panel
+                      wrap=dict(front=(y0, z0, slope), fingers=(3, 4, 5),
+                                pts=((-(hw - 0.003), r), (hw - 0.002, r), (hw + r, r - 0.024))),
+                      index_pts=[T + Vector(p) * 0.001 for p in ((13, -6, 3), (5, 11, -2), (-9, 9, -1))]))
 
 
 def pistol_hold(AN, CAM):
@@ -449,8 +505,11 @@ def pistol_hold(AN, CAM):
         ("L", dict(curls={2: (50, 74, 38), 3: (54, 78, 40), 4: (56, 80, 40), 5: (58, 82, 40)},
                    F_t=Vector((0.25, 0.74, -0.62)), A_hint=Vector((0.0, -0.64, -0.77)),
                    anchor_fn=lambda pb, w0, k, F, A, pn: w0.lerp(k[3], 0.55) + pn * 0.014,
-                   anchor_target=AN["grip_centre"] + Vector((-AN["grip_half_width"] - 0.008, 0.004, 0.0)),
+                   anchor_target=AN["grip_centre"] + Vector((-AN["grip_half_width"] - 0.017, 0.007, 0.0)),
                    shoulder=CAM + Vector((-0.1, -0.04, -0.3)), pole=(-0.7, 0.0, -1.0),
+                   # over the right hand's fingers: first bone across the front, the rest onto the right hand's knuckles
+                   wrap=dict(front=AN["front_strap"], fingers=(2, 3, 4, 5),
+                             pts=((0.002, 0.031), (AN["grip_half_width"] + 0.012, 0.022), (AN["grip_half_width"] + 0.022, -0.005))),
                    thumb_dirs=((0.22, 0.92, 0.3), (0.08, 1.0, 0.1), (0.04, 1.0, 0.0)))))
 
 
@@ -464,4 +523,7 @@ def rifle_hold(AN, CAM):
                    anchor_fn=lambda pb, w0, k, F, A, pn: w0.lerp(k[3], 0.55) + pn * 0.014,
                    anchor_target=AN["magwell_left"] + Vector((-0.008, -0.008, 0.0)),
                    shoulder=CAM + Vector((0.02, 0.16, -0.3)), pole=(-0.5, 0.0, -1.0),
+                   # first bone across the front face of the well, the rest back along its right face
+                   wrap=dict(front=(AN["magwell_front"] + 0.0015, -0.06, 0.0), fingers=(2, 3, 4, 5),
+                             pts=((0.010, 0.010), (AN["magwell_half_width"] + 0.010, 0.002), (AN["magwell_half_width"] + 0.012, -0.028))),
                    thumb_dirs=((0.0, 0.8, 0.6), (0.05, 0.9, 0.45), (0.05, 1.0, 0.3)))))

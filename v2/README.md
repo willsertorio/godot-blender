@@ -51,6 +51,15 @@ blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100 view=rifle  
   the bolt catch. The right hands never leave the grips, and the index fingers stay along the frame (the trigger
   side is hidden from the eye); only the trigger blades move.
   A reload has to lift and tilt the gun (pistol: up 8 cm, pitch 24, roll 30) or it happens below the frame.
+- Grip poses (`hands.py`): finger curl angles alone do not know where a grip's corners are; with them the trigger
+  hand's fingers cut straight through the grip and came out of its left panel (hidden from the eye, obvious in
+  Inspect / Reload). Now `pose(wrap=...)` aims each finger bone at a point round the grip (front-strap line +
+  half width, in the finger's own bending plane), `index_pts` puts the index on the trigger, `thumb_roll` turns the
+  thumb's broad side out. Trigger hand: middle knuckle anchored on the right panel 21 mm behind the front strap,
+  palm turned in. Support hands: pistol = over the trigger hand's fingers (first bone across the front); machine gun
+  = first bone across the front face of the magazine well. `wrap` fades by `weight` when poses are mixed and carries
+  a `frame` when the grip moves (magazine in the hand). Check a grip from the side, not only from the eye:
+  scratch-style ortho close-ups of one view (`debug_viewmodel.py`) show penetration at once.
 - Glove fabrics: the fingers are leather all the way round (thumb from its second bone); knit only on the back of
   the hand. Knit finger backs showed as light patches on the joints of the grip hand whenever the gun was turned.
 - Pads: the knuckle guard lies along the real knuckle line and wholly behind it (reaching past the knuckles, it cut

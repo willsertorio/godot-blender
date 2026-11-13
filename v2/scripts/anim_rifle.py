@@ -56,7 +56,9 @@ PALM = HOLD["L"]["anchor_fn"]
 L_AWAY_CAM = away_left(PALM)
 # on the magazine, below the well (given for the seated magazine; moved with the magazine)
 L_MAG = dict(HOLD["L"], curls={2: (74, 80, 42), 3: (78, 84, 44), 4: (80, 86, 44), 5: (82, 88, 46)},
-             anchor_target=R.MAG_GRIP + Vector((-0.008, -0.004, 0.0)))
+             anchor_target=R.MAG_GRIP + Vector((-0.008, -0.004, 0.0)),
+             wrap=dict(front=(0.116, -0.142, -0.06), fingers=(2, 3, 4, 5),
+                       pts=((0.006, 0.010), (0.0126 + 0.010, 0.002), (0.0126 + 0.012, -0.026))))
 # flat palm on the bolt catch (left side of the receiver, behind the magazine well)
 L_SLAP = dict(curls={2: (18, 22, 12), 3: (20, 24, 12), 4: (22, 26, 14), 5: (24, 28, 14)},
               F_t=Vector((0.1, 0.7, 0.7)), A_hint=Vector((0.0, 0.7, -0.7)), anchor_fn=PALM,

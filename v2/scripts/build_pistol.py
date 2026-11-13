@@ -31,6 +31,7 @@ ANCHORS = {                      # metres, gun frame: used by build_viewmodel.py
     "slide_top": 56 * S,
     "rake": math.atan2(22, 66),
     "trigger": Vector((0, 46, -6)) * S,
+    "front_strap": (24 * S, -22 * S, 21.5 / 66),               # the front strap's line: y at z, and dy/dz below it
 }
 
 
