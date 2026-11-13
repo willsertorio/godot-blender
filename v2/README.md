@@ -77,16 +77,22 @@ blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100 view=rifle  
   Spider legs are solved from ankle targets (hip swing + two-bone solve in the leg's plane, knee up), so the feet
   stay planted while the body moves. Lights going out = the emissive parts keyed to scale 0. Rebuilding the robots
   drops their animation: build_robots -> anim_robots.
-- Effects (`anim_fx.py`, timing shared through `fx_plan.py`): tracers (two frames per round), impact sparks with a
-  two-frame light, dust / smoke puffs, debris chips, scorch marks, muzzle smoke. All plain meshes with keyed
-  transform and object colour (materials `FxGlow`, `FxTracerGlow`, `FxSmoke`, `FxDebris`, `FxScorch` read Object Info
-  colour / alpha), handed out from pools and hidden by scale 0. The player's effects are in that weapon view's
-  collection, the robots' in `FX`. Positions are sampled from the baked scene at each shot's frame; the guns'
-  Fire / ADS rounds land where a ray from the eye hits.
+- Effects (`anim_fx.py`, timing shared through `fx_plan.py`): tracers (two frames per round) with a glow trail,
+  impact sparks with a two-frame light and a halo, smoke / dust puffs, debris chips, scorch marks, muzzle smoke and
+  flash halos, and litter + standing smoke in the Firefight. All plain meshes with keyed transforms (and object
+  colour for the glowing ones), handed out from pools and hidden by scale 0. The player's effects are in that weapon
+  view's collection, the robots' in `FX`. Positions are sampled from the baked scene at each shot's frame; the
+  guns' Fire / ADS rounds land where a ray from the eye hits.
+  Smoke is a volume in a ball (`FxSmoke_dust|smoke|wreck`, three fixed tones). A Cycles volume shader gets nothing
+  from Object Info (colour, alpha and pass index all read as zero there) and nothing from object attributes, but
+  it does see the object's transform: each puff is flattened along its own Z by up to 20 % and the shader turns
+  that into density. Glow (`FxHalo`) is emission weighted to the facing part of a ball: it stands in for lens bloom.
   Firefight = frames 1601-1672, every view and robot firing; frame 1637 has them all firing at once (the still).
   The gun is turned toward the spider there and its rounds hit the spider and the floor at its feet.
   Order after any rebuild: build_viewmodel -> anim_pistol -> anim_rifle -> (build_robots ->) anim_robots -> anim_fx.
-  Learned: a tracer at spark strength burns out to a thick white bar (own material, strength 7, 5 mm);
+  Learned: halos must stay small and faint (flash 9-13 cm at alpha 0.22): at twice that the pistol's flash
+  whites out the middle of the frame. Smoke as surface blobs with see-through rims reads as solid lumps.
+  A tracer at spark strength burns out to a thick white bar (own material, strength 7, 5 mm);
   a tracer passing within ~1.5 m of the eye fills the frame (cut it short); smoke as one mesh of merged balls
   shows hard seams (several single soft balls instead); dark smoke needs a third of the alpha of pale dust.
 - Pads: the knuckle guard lies along the real knuckle line and wholly behind it (reaching past the knuckles, it cut
