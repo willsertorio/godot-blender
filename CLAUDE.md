@@ -107,11 +107,33 @@ rule no longer applies to the environment):
   against `captures/gfx_before`).
 - Not verified here: frame rate on a real GPU / in the browser (software GL in this container).
 
-## V2 (Blender concept scene; current work)
+## V2 (current work): Blender scene -> Godot lab
 
-V1 (everything above and below) is frozen at commit `d4507b9` (`VERSIONS.md`). V2 starts as a detailed static scene
-built and rendered in Blender only: `v2/` (Godot ignores it). Commands, method and notes: `v2/README.md`.
-`v2/scene.blend` = room + three robots + two weapon views (pistol / machine gun) from one player camera.
+V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`); it still runs with `-- --v1`.
+- **Blender side**: `v2/` (Godot ignores it). `v2/scene.blend` = room + three robots + two weapon views (pistol, machine
+  gun) with rigged gloved arms, all animated, plus effects. Commands, method and what was learned: `v2/README.md`.
+- **Godot side**: pressing Play opens the **V2 lab** (`scenes/v2_lab.tscn`, `scripts/v2/`): three copies of the room,
+  one robot in each (spider, drone, ceiling turret) cycling through its clips; the player holds the V2 guns.
+  Keys: `1 2 3` / Tab rooms, `N` next robot clip, `M` auto-cycle, LMB fire, RMB aim, `R` reload, `T` reload from empty,
+  `F` inspect, `Q` switch gun, Shift sprint, Space jump, Esc frees the mouse. Shooting a robot plays its Death clip.
+- Export: `v2/scripts/export_godot.sh` (one Blender process per asset; several animated exports in one process crash
+  Blender 4.2) -> `assets/models/v2/*.glb` + `<name>_clips.json` + `materials.json`, textures 1K -> `assets/textures/v2/`.
+  Then `godot --headless --import` (this registers new `class_name`s too; `--editor --quit` did not) and keep
+  `animation/fps=24` in the six `.glb.import` files (the default 30 resamples the 24 fps keys).
+- `scripts/v2/v2_assets.gd` (`V2Assets`): rebuilds every material by name from `materials.json` (StandardMaterial3D with
+  object-space triplanar = Blender's box projection; `v2_glove.gdshader` projects the fabrics from the rest position
+  carried in UV / UV2; `v2_flash.gdshader` draws the muzzle flame from the UVs), cuts the baked "Scene" animation into
+  clips (`AnimUtil.split_clips`; clip frames are **timeline** frames: the export keeps time = frame / fps), and rebuilds
+  the flashes' one-frame scale keys from the `flashes` list (the importer drops them).
+- `v2_player.gd`: Camera3D with `fov 80` + `KEEP_WIDTH` (the Blender camera); each view glb hangs from it through its
+  `Eye` node (= the Blender camera): `scene.transform = Rx(90 deg) * Eye^-1`. `v2_robot.gd`: clip cycle, hit box on a
+  joint, flash lights, tracers. `v2_fx.gd`: tracers, sparks, dust (CPUParticles3D), flash lights. `v2_lab.gd`: rooms
+  (trimesh collision from the room meshes, a grid of omni lights, glow + fog), HUD, `--capture=DIR` tour.
+- `tools/capture_v2.sh` -> `captures/v2/` (27 shots; slow here, software GL: ~6 min).
+- Learned: "hidden by scale 0" breaks Godot's glTF import (node comes in at scale 1): export hides at 0.001.
+  The wear / cavity / edge rounding of the Blender materials (Cycles Bevel + AO nodes) does not exist here yet.
+- Not done yet: walking between rooms (rooms are 40 m apart, number keys teleport), smoke, camera kick from the
+  clips (the camera's keyed motion is not exported), sound (user: not needed now), real-GPU frame rate check.
 
 ## Conventions (fixed on day one; do not drift)
 

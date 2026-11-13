@@ -1,0 +1,1239 @@
+{
+ "materials": {
+  "Backing": {
+   "type": "plain",
+   "color": [
+    0.03,
+    0.032,
+    0.035
+   ],
+   "rough": 0.7,
+   "metallic": 0.0,
+   "emit": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "emit_strength": 0.0,
+   "alpha": 1.0,
+   "transmission": 0.0,
+   "linked": false
+  },
+  "Bubble": {
+   "type": "plain",
+   "color": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "rough": 0.15,
+   "metallic": 0.0,
+   "emit": [
+    0.8,
+    0.97,
+    1.0
+   ],
+   "emit_strength": 0.5,
+   "alpha": 1.0,
+   "transmission": 0.0,
+   "linked": false
+  },
+  "Cable": {
+   "type": "plain",
+   "color": [
+    0.02,
+    0.02,
+    0.022
+   ],
+   "rough": 0.55,
+   "metallic": 0.0,
+   "emit": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "emit_strength": 0.0,
+   "alpha": 1.0,
+   "transmission": 0.0,
+   "linked": false
+  },
+  "CeilingLight": {
+   "type": "plain",
+   "color": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "rough": 0.5,
+   "metallic": 0.0,
+   "emit": [
+    0.97,
+    0.985,
+    1.0
+   ],
+   "emit_strength": 8.0,
+   "alpha": 1.0,
+   "transmission": 0.0,
+   "linked": false
+  },
+  "Concrete": {
+   "type": "pbr",
+   "set": "Concrete034",
+   "scale": 3.0,
+   "tint": [
+    0.74,
+    0.76,
+    0.79
+   ],
+   "rough": [
+    0.5,
+    0.85
+   ],
+   "metallic": 0.0,
+   "normal": 1.0,
+   "vcol": false
+  },
+  "CoveLight": {
+   "type": "plain",
+   "color": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "rough": 0.5,
+   "metallic": 0.0,
+   "emit": [
+    0.85,
+    0.95,
+    1.0
+   ],
+   "emit_strength": 10.0,
+   "alpha": 1.0,
+   "transmission": 0.0,
+   "linked": false
+  },
+  "DarkGlass": {
+   "type": "plain",
+   "color": [
+    0.02,
+    0.03,
+    0.04
+   ],
+   "rough": 0.05,
+   "metallic": 0.6,
+   "emit": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "emit_strength": 0.0,
+   "alpha": 1.0,
+   "transmission": 0.0,
+   "linked": false
+  },
+  "DarkSteel": {
+   "type": "pbr",
+   "set": "Metal032",
+   "scale": 1.0,
+   "tint": [
+    0.16,
+    0.17,
+    0.19
+   ],
+   "rough": [
+    0.35,
+    0.6
+   ],
+   "metallic": 1.0,
+   "normal": 1.0,
+   "vcol": false
+  },
+  "FlashCore": {
+   "type": "special"
+  },
+  "FlashFire": {
+   "type": "special"
+  },
+  "FloorPaint": {
+   "type": "plain",
+   "color": [
+    0.75,
+    0.52,
+    0.03
+   ],
+   "rough": 0.45,
+   "metallic": 0.0,
+   "emit": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "emit_strength": 0.0,
+   "alpha": 1.0,
+   "transmission": 0.0,
+   "linked": false
+  },
+  "FloorTile": {
+   "type": "pbr",
+   "set": "Concrete034",
+   "scale": 2.5,
+   "tint": [
+    0.66,
+    0.68,
+    0.71
+   ],
+   "rough": [
+    0.03,
+    0.2
+   ],
+   "metallic": 0.0,
+   "normal": 0.22,
+   "vcol": true
+  },
+  "Galvanised": {
+   "type": "pbr",
+   "set": "Metal032",
+   "scale": 0.8,
+   "tint": [
+    0.82,
+    0.84,
+    0.86
+   ],
+   "rough": [
+    0.25,
+    0.5
+   ],
+   "metallic": 1.0,
+   "normal": 1.0,
+   "vcol": false
+  },
+  "Glove": {
+   "type": "pbr",
+   "set": "Fabric045",
+   "scale": 0.11,
+   "tint": [
+    0.38,
+    0.4,
+    0.43
+   ],
+   "rough": [
+    0.75,
+    1.0
+   ],
+   "metallic": 0.0,
+   "normal": 2.5,
+   "vcol": false
+  },
+  "GloveAccent": {
+   "type": "plain",
+   "color": [
+    0.0,
+    0.02,
+    0.03
+   ],
+   "rough": 0.5,
+   "metallic": 0.0,
+   "emit": [
+    0.15,
+    0.85,
+    1.0
+   ],
+   "emit_strength": 1.6,
+   "alpha": 1.0,
+   "transmission": 0.0,
+   "linked": false
+  },
+  "GloveCuff": {
+   "type": "pbr",
+   "set": "Fabric045",
+   "scale": 0.02,
+   "tint": [
+    0.2,
+    0.21,
+    0.23
+   ],
+   "rough": [
+    0.7,
+    1.0
+   ],
+   "metallic": 0.0,
+   "normal": 2.0,
+   "vcol": false
+  },
+  "GlovePad": {
+   "type": "pbr",
+   "set": "Rubber004",
+   "scale": 0.025,
+   "tint": [
+    1.76,
+    1.804,
+    1.936
+   ],
+   "rough": [
+    0.4,
+    0.7
+   ],
+   "metallic": 0.0,
+   "normal": 1.5,
+   "vcol": false
+  },
+  "Grating": {
+   "type": "pbr",
+   "set": "MetalWalkway010",
+   "scale": 0.6,
+   "tint": [
+    1.6,
+    1.6,
+    1.7
+   ],
+   "rough": [
+    0.3,
+    0.6
+   ],
+   "metallic": 1.0,
+   "normal": 1.0,
+   "vcol": false
+  },
+  "Hazard": {
+   "type": "plain",
+   "color": [
+    0.8,
+    0.8,
+    0.8
+   ],
+   "rough": 0.5,
+   "metallic": 0.0,
+   "emit": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "emit_strength": 0.0,
+   "alpha": 1.0,
+   "transmission": 0.0,
+   "linked": true
+  },
+  "JacketSleeve": {
+   "type": "pbr",
+   "set": "Fabric045",
+   "scale": 0.16,
+   "tint": [
+    0.11,
+    0.12,
+    0.14
+   ],
+   "rough": [
+    0.8,
+    1.0
+   ],
+   "metallic": 0.0,
+   "normal": 2.5,
+   "vcol": false
+  },
+  "LightStrip": {
+   "type": "plain",
+   "color": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "rough": 0.5,
+   "metallic": 0.0,
+   "emit": [
+    0.95,
+    0.98,
+    1.0
+   ],
+   "emit_strength": 30.0,
+   "alpha": 1.0,
+   "transmission": 0.0,
+   "linked": false
+  },
+  "PBarrel": {
+   "type": "pbr",
+   "set": "Metal032",
+   "scale": 0.05,
+   "tint": [
+    0.75,
+    0.74,
+    0.72
+   ],
+   "rough": [
+    0.12,
+    0.3
+   ],
+   "metallic": 1.0,
+   "normal": 1.0,
+   "vcol": false
+  },
+  "PBlack": {
+   "type": "pbr",
+   "set": "Metal032",
+   "scale": 0.06,
+   "tint": [
+    0.05,
+    0.05,
+    0.055
+   ],
+   "rough": [
+    0.35,
+    0.55
+   ],
+   "metallic": 0.6,
+   "normal": 1.0,
+   "vcol": false
+  },
+  "PBrass": {
+   "type": "plain",
+   "color": [
+    0.8,
+    0.58,
+    0.22
+   ],
+   "rough": 0.28,
+   "metallic": 1.0,
+   "emit": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "emit_strength": 0.0,
+   "alpha": 1.0,
+   "transmission": 0.0,
+   "linked": false
+  },
+  "PCyan": {
+   "type": "plain",
+   "color": [
+    0.0,
+    0.02,
+    0.03
+   ],
+   "rough": 0.5,
+   "metallic": 0.0,
+   "emit": [
+    0.15,
+    0.85,
+    1.0
+   ],
+   "emit_strength": 3.0,
+   "alpha": 1.0,
+   "transmission": 0.0,
+   "linked": false
+  },
+  "PDotRed": {
+   "type": "plain",
+   "color": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "rough": 0.5,
+   "metallic": 0.0,
+   "emit": [
+    1.0,
+    0.07,
+    0.03
+   ],
+   "emit_strength": 80.0,
+   "alpha": 1.0,
+   "transmission": 0.0,
+   "linked": false
+  },
+  "PFrame": {
+   "type": "pbr",
+   "set": "Plastic012B",
+   "scale": 0.05,
+   "tint": [
+    0.775,
+    0.85,
+    0.975
+   ],
+   "rough": [
+    0.5,
+    0.72
+   ],
+   "metallic": 0.0,
+   "normal": 0.8,
+   "vcol": false
+  },
+  "PGripTex": {
+   "type": "pbr",
+   "set": "Rubber004",
+   "scale": 0.012,
+   "tint": [
+    0.55,
+    0.55,
+    0.55
+   ],
+   "rough": [
+    0.7,
+    0.95
+   ],
+   "metallic": 0.0,
+   "normal": 4.0,
+   "vcol": false
+  },
+  "PLens": {
+   "type": "plain",
+   "color": [
+    0.55,
+    0.8,
+    1.0
+   ],
+   "rough": 0.0,
+   "metallic": 0.0,
+   "emit": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "emit_strength": 0.0,
+   "alpha": 1.0,
+   "transmission": 1.0,
+   "linked": false
+  },
+  "PLightLens": {
+   "type": "plain",
+   "color": [
+    0.9,
+    0.95,
+    1.0
+   ],
+   "rough": 0.05,
+   "metallic": 0.0,
+   "emit": [
+    0.9,
+    0.95,
+    1.0
+   ],
+   "emit_strength": 0.4,
+   "alpha": 1.0,
+   "transmission": 0.6,
+   "linked": false
+  },
+  "PRubber": {
+   "type": "pbr",
+   "set": "Rubber004",
+   "scale": 0.02,
+   "tint": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "rough": [
+    0.6,
+    0.9
+   ],
+   "metallic": 0.0,
+   "normal": 1.5,
+   "vcol": false
+  },
+  "PSightDot": {
+   "type": "plain",
+   "color": [
+    0.85,
+    0.9,
+    0.8
+   ],
+   "rough": 0.4,
+   "metallic": 0.0,
+   "emit": [
+    0.6,
+    1.0,
+    0.6
+   ],
+   "emit_strength": 0.8,
+   "alpha": 1.0,
+   "transmission": 0.0,
+   "linked": false
+  },
+  "PSlide": {
+   "type": "pbr",
+   "set": "Metal032",
+   "scale": 0.09,
+   "tint": [
+    0.94,
+    0.9,
+    0.84
+   ],
+   "rough": [
+    0.34,
+    0.52
+   ],
+   "metallic": 0.25,
+   "normal": 0.5,
+   "vcol": false
+  },
+  "PSteel": {
+   "type": "pbr",
+   "set": "Metal032",
+   "scale": 0.06,
+   "tint": [
+    0.2,
+    0.2,
+    0.21
+   ],
+   "rough": [
+    0.28,
+    0.45
+   ],
+   "metallic": 1.0,
+   "normal": 1.0,
+   "vcol": false
+  },
+  "RArmor": {
+   "type": "pbr",
+   "set": "PaintedPlaster017",
+   "scale": 0.6,
+   "tint": [
+    0.9,
+    0.91,
+    0.93
+   ],
+   "rough": [
+    0.22,
+    0.42
+   ],
+   "metallic": 0.0,
+   "normal": 0.4,
+   "vcol": false
+  },
+  "RBrass": {
+   "type": "plain",
+   "color": [
+    0.75,
+    0.55,
+    0.22
+   ],
+   "rough": 0.3,
+   "metallic": 1.0,
+   "emit": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "emit_strength": 0.0,
+   "alpha": 1.0,
+   "transmission": 0.0,
+   "linked": false
+  },
+  "RDisc": {
+   "type": "plain",
+   "color": [
+    0.12,
+    0.12,
+    0.13
+   ],
+   "rough": 0.4,
+   "metallic": 0.0,
+   "emit": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "emit_strength": 0.0,
+   "alpha": 0.3,
+   "transmission": 0.0,
+   "linked": false
+  },
+  "REye": {
+   "type": "plain",
+   "color": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "rough": 0.5,
+   "metallic": 0.0,
+   "emit": [
+    1.0,
+    0.06,
+    0.03
+   ],
+   "emit_strength": 40.0,
+   "alpha": 1.0,
+   "transmission": 0.0,
+   "linked": false
+  },
+  "RFrame": {
+   "type": "pbr",
+   "set": "Metal032",
+   "scale": 0.3,
+   "tint": [
+    0.09,
+    0.095,
+    0.105
+   ],
+   "rough": [
+    0.35,
+    0.6
+   ],
+   "metallic": 0.7,
+   "normal": 1.0,
+   "vcol": false
+  },
+  "RGlow": {
+   "type": "plain",
+   "color": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "rough": 0.5,
+   "metallic": 0.0,
+   "emit": [
+    1.0,
+    0.25,
+    0.08
+   ],
+   "emit_strength": 12.0,
+   "alpha": 1.0,
+   "transmission": 0.0,
+   "linked": false
+  },
+  "RLens": {
+   "type": "plain",
+   "color": [
+    0.02,
+    0.02,
+    0.025
+   ],
+   "rough": 0.03,
+   "metallic": 0.9,
+   "emit": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "emit_strength": 0.0,
+   "alpha": 1.0,
+   "transmission": 0.0,
+   "linked": false
+  },
+  "RRed": {
+   "type": "plain",
+   "color": [
+    0.5,
+    0.03,
+    0.02
+   ],
+   "rough": 0.35,
+   "metallic": 0.0,
+   "emit": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "emit_strength": 0.0,
+   "alpha": 1.0,
+   "transmission": 0.0,
+   "linked": false
+  },
+  "RRubber": {
+   "type": "pbr",
+   "set": "Rubber004",
+   "scale": 0.1,
+   "tint": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "rough": [
+    0.6,
+    0.9
+   ],
+   "metallic": 0.0,
+   "normal": 1.5,
+   "vcol": false
+  },
+  "RSteel": {
+   "type": "pbr",
+   "set": "Metal032",
+   "scale": 0.2,
+   "tint": [
+    0.62,
+    0.63,
+    0.65
+   ],
+   "rough": [
+    0.15,
+    0.35
+   ],
+   "metallic": 1.0,
+   "normal": 1.0,
+   "vcol": false
+  },
+  "RfBlack": {
+   "type": "pbr",
+   "set": "Metal032",
+   "scale": 0.06,
+   "tint": [
+    0.05,
+    0.05,
+    0.055
+   ],
+   "rough": [
+    0.35,
+    0.55
+   ],
+   "metallic": 0.6,
+   "normal": 1.0,
+   "vcol": false
+  },
+  "RfBrass": {
+   "type": "plain",
+   "color": [
+    0.8,
+    0.58,
+    0.22
+   ],
+   "rough": 0.28,
+   "metallic": 1.0,
+   "emit": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "emit_strength": 0.0,
+   "alpha": 1.0,
+   "transmission": 0.0,
+   "linked": false
+  },
+  "RfCyan": {
+   "type": "plain",
+   "color": [
+    0.0,
+    0.02,
+    0.03
+   ],
+   "rough": 0.5,
+   "metallic": 0.0,
+   "emit": [
+    0.15,
+    0.85,
+    1.0
+   ],
+   "emit_strength": 3.5,
+   "alpha": 1.0,
+   "transmission": 0.0,
+   "linked": false
+  },
+  "RfDark": {
+   "type": "pbr",
+   "set": "Plastic012B",
+   "scale": 0.05,
+   "tint": [
+    0.744,
+    0.792,
+    0.888
+   ],
+   "rough": [
+    0.5,
+    0.72
+   ],
+   "metallic": 0.0,
+   "normal": 0.8,
+   "vcol": false
+  },
+  "RfGrey": {
+   "type": "pbr",
+   "set": "PaintedPlaster017",
+   "scale": 0.12,
+   "tint": [
+    0.36,
+    0.37,
+    0.39
+   ],
+   "rough": [
+    0.35,
+    0.55
+   ],
+   "metallic": 0.0,
+   "normal": 0.3,
+   "vcol": false
+  },
+  "RfGripTex": {
+   "type": "pbr",
+   "set": "Rubber004",
+   "scale": 0.012,
+   "tint": [
+    0.55,
+    0.55,
+    0.55
+   ],
+   "rough": [
+    0.7,
+    0.95
+   ],
+   "metallic": 0.0,
+   "normal": 4.0,
+   "vcol": false
+  },
+  "RfLens": {
+   "type": "plain",
+   "color": [
+    0.6,
+    0.85,
+    0.8
+   ],
+   "rough": 0.0,
+   "metallic": 0.0,
+   "emit": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "emit_strength": 0.0,
+   "alpha": 1.0,
+   "transmission": 1.0,
+   "linked": false
+  },
+  "RfMatte": {
+   "type": "plain",
+   "color": [
+    0.012,
+    0.012,
+    0.014
+   ],
+   "rough": 0.45,
+   "metallic": 0.0,
+   "emit": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "emit_strength": 0.0,
+   "alpha": 1.0,
+   "transmission": 0.0,
+   "linked": false
+  },
+  "RfPod": {
+   "type": "pbr",
+   "set": "PaintedPlaster017",
+   "scale": 0.12,
+   "tint": [
+    0.17,
+    0.18,
+    0.2
+   ],
+   "rough": [
+    0.32,
+    0.5
+   ],
+   "metallic": 0.0,
+   "normal": 0.3,
+   "vcol": false
+  },
+  "RfReticle": {
+   "type": "plain",
+   "color": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "rough": 0.5,
+   "metallic": 0.0,
+   "emit": [
+    1.0,
+    0.06,
+    0.03
+   ],
+   "emit_strength": 9.0,
+   "alpha": 1.0,
+   "transmission": 0.0,
+   "linked": false
+  },
+  "RfRubber": {
+   "type": "pbr",
+   "set": "Rubber004",
+   "scale": 0.02,
+   "tint": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "rough": [
+    0.6,
+    0.9
+   ],
+   "metallic": 0.0,
+   "normal": 1.5,
+   "vcol": false
+  },
+  "RfScreen": {
+   "type": "plain",
+   "color": [
+    0.0,
+    0.01,
+    0.015
+   ],
+   "rough": 0.08,
+   "metallic": 0.0,
+   "emit": [
+    0.1,
+    0.6,
+    0.72
+   ],
+   "emit_strength": 0.9,
+   "alpha": 1.0,
+   "transmission": 0.0,
+   "linked": false
+  },
+  "RfShell2": {
+   "type": "pbr",
+   "set": "PaintedPlaster017",
+   "scale": 0.16,
+   "tint": [
+    0.6,
+    0.62,
+    0.65
+   ],
+   "rough": [
+    0.32,
+    0.52
+   ],
+   "metallic": 0.0,
+   "normal": 0.3,
+   "vcol": false
+  },
+  "RfSteel": {
+   "type": "pbr",
+   "set": "Metal032",
+   "scale": 0.06,
+   "tint": [
+    0.2,
+    0.2,
+    0.21
+   ],
+   "rough": [
+    0.28,
+    0.45
+   ],
+   "metallic": 1.0,
+   "normal": 1.0,
+   "vcol": false
+  },
+  "RfTan": {
+   "type": "pbr",
+   "set": "Metal032",
+   "scale": 0.07,
+   "tint": [
+    0.6,
+    0.43,
+    0.25
+   ],
+   "rough": [
+    0.4,
+    0.62
+   ],
+   "metallic": 0.35,
+   "normal": 1.0,
+   "vcol": false
+  },
+  "RfWhite": {
+   "type": "pbr",
+   "set": "PaintedPlaster017",
+   "scale": 0.16,
+   "tint": [
+    0.86,
+    0.87,
+    0.89
+   ],
+   "rough": [
+    0.3,
+    0.5
+   ],
+   "metallic": 0.0,
+   "normal": 0.3,
+   "vcol": false
+  },
+  "ScreenCyan": {
+   "type": "plain",
+   "color": [
+    0.0,
+    0.02,
+    0.03
+   ],
+   "rough": 0.5,
+   "metallic": 0.0,
+   "emit": [
+    0.15,
+    0.85,
+    1.0
+   ],
+   "emit_strength": 6.0,
+   "alpha": 1.0,
+   "transmission": 0.0,
+   "linked": false
+  },
+  "SignGreen": {
+   "type": "plain",
+   "color": [
+    0.0,
+    0.03,
+    0.01
+   ],
+   "rough": 0.5,
+   "metallic": 0.0,
+   "emit": [
+    0.2,
+    1.0,
+    0.45
+   ],
+   "emit_strength": 5.0,
+   "alpha": 1.0,
+   "transmission": 0.0,
+   "linked": false
+  },
+  "StatusOrange": {
+   "type": "plain",
+   "color": [
+    0.03,
+    0.01,
+    0.0
+   ],
+   "rough": 0.5,
+   "metallic": 0.0,
+   "emit": [
+    1.0,
+    0.45,
+    0.1
+   ],
+   "emit_strength": 8.0,
+   "alpha": 1.0,
+   "transmission": 0.0,
+   "linked": false
+  },
+  "Steel": {
+   "type": "pbr",
+   "set": "Metal032",
+   "scale": 1.0,
+   "tint": [
+    0.62,
+    0.64,
+    0.67
+   ],
+   "rough": [
+    0.3,
+    0.55
+   ],
+   "metallic": 1.0,
+   "normal": 1.0,
+   "vcol": false
+  },
+  "TankLight": {
+   "type": "plain",
+   "color": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "rough": 0.5,
+   "metallic": 0.0,
+   "emit": [
+    0.75,
+    0.95,
+    1.0
+   ],
+   "emit_strength": 20.0,
+   "alpha": 1.0,
+   "transmission": 0.0,
+   "linked": false
+  },
+  "TankLiquid": {
+   "type": "plain",
+   "color": [
+    0.82,
+    0.96,
+    0.97
+   ],
+   "rough": 0.02,
+   "metallic": 0.0,
+   "emit": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "emit_strength": 0.0,
+   "alpha": 1.0,
+   "transmission": 1.0,
+   "linked": false
+  },
+  "WallPanel": {
+   "type": "pbr",
+   "set": "PaintedPlaster017",
+   "scale": 2.0,
+   "tint": [
+    0.9,
+    0.94,
+    1.0
+   ],
+   "rough": [
+    0.3,
+    0.55
+   ],
+   "metallic": 0.0,
+   "normal": 0.6,
+   "vcol": true
+  }
+ },
+ "gloves": {
+  "Glove_R_pistol": {
+   "min": [
+    -0.4986937344074249,
+    -0.32653626799583435,
+    0.11650493741035461
+   ],
+   "size": [
+    0.3398641496896744,
+    0.364658921957016,
+    0.38766035437583923
+   ]
+  },
+  "Glove_L_pistol": {
+   "min": [
+    0.15882961452007294,
+    -0.32653626799583435,
+    0.11650493741035461
+   ],
+   "size": [
+    0.339864119887352,
+    0.3646589145064354,
+    0.38766035437583923
+   ]
+  },
+  "Glove_R_rifle": {
+   "min": [
+    -0.4986937344074249,
+    -0.32653626799583435,
+    0.11650493741035461
+   ],
+   "size": [
+    0.3398641496896744,
+    0.364658921957016,
+    0.38766035437583923
+   ]
+  },
+  "Glove_L_rifle": {
+   "min": [
+    0.15882961452007294,
+    -0.32653626799583435,
+    0.11650493741035461
+   ],
+   "size": [
+    0.339864119887352,
+    0.3646589145064354,
+    0.38766035437583923
+   ]
+  }
+ },
+ "camera": {
+  "fov_h": 80.0,
+  "eye": [
+   0.20000000298023224,
+   0.0,
+   1.6200000047683716
+  ]
+ }
+}

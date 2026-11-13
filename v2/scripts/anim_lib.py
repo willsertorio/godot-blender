@@ -255,7 +255,7 @@ class Baker(Recorder):
         self._trs(self.cam, "", "cam", f, *cam_m.decompose(), "Object Transforms")
         for name, ob in self.objs.items():
             m = st.get("objs", {}).get(name, self.parts[name])
-            if isinstance(m, tuple):                     # ("cam", matrix): given in the eye's frame
+            if isinstance(m, tuple) and m[0] == "cam":   # ("cam", matrix): given in the eye's frame
                 m = inv @ m[1]
             if isinstance(m, tuple):                     # ("hidden", matrix): scale 0 at that place
                 self.last_loc[name] = m[1].decompose()[:2]
