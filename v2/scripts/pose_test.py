@@ -18,6 +18,7 @@ for name, c in H.COLL.items():
     bpy.data.collections[c].hide_render = bpy.data.collections[c].hide_viewport = name != "pistol"
 CAM = H.cam_in_gun("pistol")
 rig = bpy.data.objects["ArmRig.L.pistol"]
+rig.animation_data_clear()                     # (the baked clips would put the hold pose back at render time)
 H.pose(rig, "L",
        curls={2: (8, 14, 8), 3: (10, 16, 9), 4: (14, 20, 10), 5: (20, 26, 12)},
        F_t=Vector((0.1, 0.25, 1.0)), A_hint=Vector((-1.0 if BACK else 1.0, 0.0, 0.0)),

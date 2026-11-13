@@ -20,8 +20,8 @@ from mathutils import Matrix, Vector
 sys.path.insert(0, os.path.dirname(__file__))
 import hands as H  # noqa: E402
 import build_pistol as P  # noqa: E402
-from anim_lib import (Baker, FPS, I4, back_out, cam_rot, ease_out, lerp, mix_m, mix_spec, move, rot, seg, smooth,  # noqa: E402
-                      table, xform_spec)
+from anim_lib import (Baker, FPS, I4, away_left, back_out, cam_rot, ease_out, lerp, mix_m, mix_spec, move, rot, seg,  # noqa: E402
+                      smooth, sway, table, xform_spec)
 
 W = "pistol"
 AN = P.ANCHORS
@@ -46,11 +46,7 @@ def gun(right=0.0, fwd=0.0, up=0.0, pitch=0.0, yaw=0.0, roll=0.0, base=L0):
 
 # ---------------------------------------------------------------------- left-hand poses
 PALM = HOLD["L"]["anchor_fn"]                              # all left-hand poses are anchored at the palm centre
-# away: low and to the left, out of frame, relaxed, palm turned in (given in the eye's frame)
-L_AWAY_CAM = dict(curls={2: (22, 32, 18), 3: (26, 36, 20), 4: (30, 40, 22), 5: (34, 44, 24)},
-                  F_t=Vector((0.15, 0.25, -0.95)), A_hint=Vector((0.0, -1.0, 0.0)), anchor_fn=PALM,
-                  anchor_target=Vector((-0.2, -0.4, -0.2)),
-                  thumb_dirs=((0.25, 0.6, -0.75), (0.2, 0.7, -0.7), (0.15, 0.75, -0.65)))
+L_AWAY_CAM = away_left(PALM)
 
 
 def l_away(root_m):
@@ -68,15 +64,6 @@ L_MAG = dict(curls={2: (52, 62, 34), 3: (56, 66, 36), 4: (58, 68, 36), 5: (60, 7
              thumb_dirs=((-0.55, 0.25, 0.8), (-0.3, 0.2, 0.93), (-0.1, 0.25, 0.96)))
 L_SEAT = dict(L_MAG, curls={2: (14, 18, 10), 3: (16, 20, 10), 4: (18, 22, 12), 5: (20, 24, 12)},
               thumb_dirs=((-0.7, 0.5, 0.5), (-0.5, 0.7, 0.5), (-0.4, 0.8, 0.45)))
-
-
-def sway(t, k=1.0, period=3.0):
-    """The idle figure-eight (breathing + a little tremor): side to side once, up and down twice per period."""
-    ph = TAU * t / period
-    return dict(right=k * (0.0045 * math.sin(ph) + 0.0004 * math.sin(7 * ph + 1.0)),
-                up=k * (0.0028 * math.sin(2 * ph) + 0.002 * math.sin(ph - 0.5) + 0.0003 * math.sin(9 * ph)),
-                fwd=k * 0.0015 * math.sin(ph + 2.0),
-                pitch=k * 0.45 * math.sin(2 * ph + 0.4), yaw=k * 0.5 * math.sin(ph + 1.0), roll=k * 0.7 * math.sin(ph + 0.3))
 
 
 # ---------------------------------------------------------------------- clips
@@ -226,16 +213,7 @@ def inspect(t):
 CLIPS = [("Idle", 3.0, idle, True), ("Walk", 1.0, walk, True), ("Sprint", SPRINT_IN + SPRINT_RUN + SPRINT_OUT, sprint, False),
          ("Fire", 0.5, fire, False), ("ADS", ADS_IN + ADS_HOLD + ADS_OUT, ads, False), ("Draw", DRAW_T, draw, False),
          ("Reload", RELOAD_T, reload, False), ("Inspect", INSPECT_T, inspect, False)]
-only = [a.split("=")[1].split(",") for a in sys.argv if a.startswith("only=")]
-start = 1
-for name, dur, fn, loop in CLIPS:
-    n = round(dur * FPS)
-    if only and name not in only[0]:
-        B.clips[name] = dict(start=start, end=start + n - 1, loop=loop)
-        start += n + 8
-        continue
-    start = B.clip(name, start, n, fn, loop) + 8
-clips = B.write()
+clips = B.run(CLIPS, sys.argv)
 if "nosave" not in sys.argv:
     bpy.ops.wm.save_mainfile()
 print("clips:", clips)

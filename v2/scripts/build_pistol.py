@@ -421,43 +421,49 @@ def props(collection, parent, gun_parts):
     c = cs.cut()
     c.cyl((0, -6, 0), (0, 10, 0), 4.3, segs=20)
     res["P_Casing"] = cs.finish(collection, parent)
-    # muzzle flash: three crossed kite-shaped blades along the barrel and a star across it, at the origin
-    bm = bmesh.new()
-    for i in range(3):
-        rot = Matrix.Rotation(i * math.pi / 3, 4, "Y")
-        bm.faces.new([bm.verts.new(rot @ Vector(v)) for v in ((0, 0, 0), (0.03, 0.045, 0), (0, 0.15, 0), (-0.03, 0.045, 0))])
-    star = []
-    for i in range(16):
-        a = i * math.tau / 16
-        r = 0.05 if i % 2 == 0 else 0.016
-        star.append(bm.verts.new((r * math.cos(a), 0.012, r * math.sin(a))))
-    bm.faces.new(star)
-    me = bpy.data.meshes.new("P_Flash")
-    bm.to_mesh(me)
-    bm.free()
-    fl = bpy.data.objects.new("P_Flash", me)
-    collection.objects.link(fl)
-    fl.parent = parent
-    fl.location = MUZZLE
-    fl.visible_shadow = False
-    me.materials.append(flash_material())
-    res["P_Flash"] = fl
-    ld = bpy.data.lights.new("P_FlashLight", "POINT")
-    ld.color = (1.0, 0.7, 0.4)
-    ld.energy = 0.0
-    ld.shadow_soft_size = 0.03
-    lo = bpy.data.objects.new("P_FlashLight", ld)
-    collection.objects.link(lo)
-    lo.parent = parent
-    lo.location = MUZZLE + Vector((0, 0.06, 0.01))
-    res["P_FlashLight"] = lo
+    res["P_Flash"], res["P_FlashLight"] = make_flash("P_Flash", collection, parent, MUZZLE)
     for n in ("P_Magazine2", "P_Casing", "P_Flash"):
         res[n].scale = (0, 0, 0)
     return res
 
 
+def make_flash(name, collection, parent, muzzle, size=1.0):
+    """Muzzle flash (three crossed kite-shaped blades along the barrel and a star across it) and its point light,
+    both at the muzzle. Returns (flash object, light object); the caller hides the flash by scale 0."""
+    bm = bmesh.new()
+    for i in range(3):
+        rot = Matrix.Rotation(i * math.pi / 3, 4, "Y")
+        bm.faces.new([bm.verts.new(rot @ Vector(v) * size) for v in ((0, 0, 0), (0.03, 0.045, 0), (0, 0.15, 0), (-0.03, 0.045, 0))])
+    star = []
+    for i in range(16):
+        a = i * math.tau / 16
+        r = 0.05 if i % 2 == 0 else 0.016
+        star.append(bm.verts.new(Vector((r * math.cos(a), 0.012, r * math.sin(a))) * size))
+    bm.faces.new(star)
+    me = bpy.data.meshes.new(name)
+    bm.to_mesh(me)
+    bm.free()
+    fl = bpy.data.objects.new(name, me)
+    collection.objects.link(fl)
+    fl.parent = parent
+    fl.location = muzzle
+    fl.visible_shadow = False
+    me.materials.append(flash_material())
+    ld = bpy.data.lights.new(name + "Light", "POINT")
+    ld.color = (1.0, 0.7, 0.4)
+    ld.energy = 0.0
+    ld.shadow_soft_size = 0.03
+    lo = bpy.data.objects.new(name + "Light", ld)
+    collection.objects.link(lo)
+    lo.parent = parent
+    lo.location = Vector(muzzle) + Vector((0, 0.06, 0.01))
+    return fl, lo
+
+
 def flash_material():
     """White-hot at the muzzle, orange and fading to nothing at the tips (emission mixed with transparency)."""
+    if bpy.data.materials.get("PFlash"):
+        return bpy.data.materials["PFlash"]
     m = bpy.data.materials.new("PFlash")
     m.use_nodes = True
     nt = m.node_tree

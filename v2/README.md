@@ -11,7 +11,8 @@ xvfb-run -a blender -b -P v2/scripts/build_pistol.py -- /tmp/pistol       # the 
 blender -b -P v2/scripts/build_robots.py                                 # stage 3: spider, drone, ceiling turret (rebuilds the Robots collection)
 xvfb-run -a blender -b -P v2/scripts/build_robots.py -- review /tmp/rob   # each robot alone, 3 views
 blender -b v2/scene.blend -P v2/scripts/anim_pistol.py                    # bake the pistol clips onto the timeline (after build_viewmodel.py; saves); only=Fire,Reload nosave to try
-v2/scripts/make_gifs.sh pistol 16 480                                     # GIF of every clip -> v2/renders/anim/ (Cycles, ~10 s a frame, ~35 min); ONLY=Fire,Draw for some
+blender -b v2/scene.blend -P v2/scripts/anim_rifle.py                     # bake the machine gun clips after them (frames 601+; saves). Always: build_viewmodel -> anim_pistol -> anim_rifle
+v2/scripts/make_gifs.sh pistol 16 480                                     # GIF of every clip of pistol | rifle -> v2/renders/anim/ (Cycles, ~10 s a frame, ~35 min); ONLY=Fire,Draw for some
 blender -b v2/scene.blend -P v2/scripts/pose_test.py -- out.png 40 80 [back]   # rig check: left hand open, off the pistol
 blender -b v2/scene.blend -P v2/scripts/debug_viewmodel.py -- /tmp/vm    # quick views of one viewmodel only (DBG_SCALE, DBG_C, DBG_VIEW=ViewmodelRifle)
 blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100 view=rifle   # Cycles render (samples, size %, view=pistol|rifle); ~5 min at 1280x720 on 4 CPU cores
@@ -29,19 +30,32 @@ blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100 view=rifle  
   Glove and sleeve fabrics are projected from the point attribute `rest` (rest positions), not object space, or the
   weave would slide over the moving hand (`coord_attr` in `v2lib.pbr` / `layered`).
   Materials made by an earlier run are removed first (they would be reused unchanged).
-- Animation (`scripts/anim_lib.py`, `anim_pistol.py`): 24 fps, clips one after another on the timeline with a marker
-  each (ranges in the scene property `v2_clips_pistol`): Idle 1-72 (loop), Walk 81-104 (loop), Sprint 113-159,
-  Fire 168-179, ADS 188-236, Draw 245-264, Reload 273-308 (from empty), Inspect 317-388. A clip is a function of
-  time returning a state (gun placement in the eye's frame, camera offset, part matrices, a pose spec per hand);
-  the baker re-solves both arms on every frame from shoulders fixed to the eye and writes a key per frame.
-  The view roots are children of `PlayerCamera`, so camera bob / view punch carries the gun.
-  Pistol parts that move: `P_Slide` (+ everything parented to it), `P_Trigger`, `P_Magazine` (+ base, top round);
-  hidden by scale 0 until used: `P_Magazine2`, `P_Casing`, `P_Flash`, light `P_FlashLight` (`build_pistol.props`).
-  Left-hand poses besides the hold: away (out of frame), magazine on the palm, flat palm seating it. The right index
-  finger stays along the frame (the trigger side of the gun is hidden from the eye), only the trigger blade moves.
-  A reload has to lift and tilt the gun (up 8 cm, pitch 24, roll 30) or it happens below the frame.
+- Animation (`scripts/anim_lib.py`, `anim_pistol.py`, `anim_rifle.py`): 24 fps, clips one after another on the
+  timeline with a marker each. Each view owns 600 frames (`anim_lib.WINDOW`); ranges are in the scene properties
+  `v2_clips_pistol` / `v2_clips_rifle`. Show the matching collection (Viewmodel / ViewmodelRifle) when scrubbing.
+  - Pistol: Idle 1-72 (loop), Walk 81-104 (loop), Sprint 113-159, Fire 168-179, ADS 188-236, Draw 245-264,
+    Reload 273-308 (from empty), Inspect 317-388.
+  - Machine gun (markers "MG ..."): Idle 601-696 (loop), Walk 705-728 (loop), Sprint 737-785, Fire 794-819 (8-round
+    burst, 2 frames a round), ADS 828-877 (aim, 6-round burst, lower), Draw 886-911, ReloadTactical 920-965,
+    ReloadEmpty 974-1028 (handle locked back, slap on the bolt catch), Inspect 1037-1113.
+  A clip is a function of time returning a state (gun placement in the eye's frame, camera offset, part matrices, a
+  pose spec per hand); the baker re-solves both arms on every frame from shoulders fixed to the eye and writes a key
+  per frame. The view roots are children of `PlayerCamera`, so camera bob / view punch carries the gun; the camera's
+  keys of the other view are kept when one view is re-baked.
+  Parts that move: pistol `P_Slide` (+ everything parented to it), `P_Trigger`, `P_Magazine` (+ base, top round);
+  machine gun `R_ChargingHandle` (cycles with every shot: the ejection port is on the far side), `R_Trigger`,
+  `R_Magazine` (+ base, light). Hidden by scale 0 until used: `P_Magazine2`, `P_Casing`, `P_Flash`, `R_Casing0-4`,
+  `R_Flash`, lights `P_FlashLight` / `R_FlashLight` (`props()` in the gun scripts).
+  Left-hand poses besides the holds: away (out of frame); pistol: magazine on the palm, flat palm seating it;
+  machine gun: on the magazine below the well (the same magazine goes out of frame and comes back), flat palm on
+  the bolt catch. The right hands never leave the grips, and the index fingers stay along the frame (the trigger
+  side is hidden from the eye); only the trigger blades move.
+  A reload has to lift and tilt the gun (pistol: up 8 cm, pitch 24, roll 30) or it happens below the frame.
+- Pads: the knuckle guard lies along the real knuckle line and wholly behind it (reaching past the knuckles, it cut
+  through the finger bases of an open hand); finger pads are fitted in the rest pose, fingers apart (fitted on the
+  closed hand they also wrapped onto the neighbouring finger).
 - `scripts/pose_test.py`: rig check (opens the pistol's left hand, palm or `back` toward the eye; saves nothing).
-  Known from it: the knuckle guard overlaps the finger bases when the hand opens; the palm is plain leather.
+  Known from it: the palm is plain leather.
 - `scripts/build_pistol.py` (`Part`: mm, profiles + boolean cuts + bevels) is reused by `build_robots.py`.
 - `v2lib.pbr` options: `round_edges`, `edge_wear` (+ `wear_radius`, `wear_noise`, `wear_metal`), `cavity`, `wrinkle`.
 - Glove fabrics (knit back, leather palm, grippy tips) are one material, `v2lib.layered`: the edges come from the point

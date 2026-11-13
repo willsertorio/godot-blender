@@ -16,6 +16,7 @@ from mathutils import Matrix, Vector
 import hands as H
 
 FPS = 24
+WINDOW = 600                    # frames of the timeline each weapon view owns (pistol 1-600, machine gun 601-1200)
 I4 = Matrix.Identity(4)
 
 
@@ -112,18 +113,48 @@ def mix_spec(a, b, t):
     return s
 
 
+def away_left(anchor_fn):
+    """Left hand out of the way: low and to the left, out of frame, relaxed, palm turned in. Given in the eye's
+    frame: use xform_spec(spec, root_matrix.inverted())."""
+    return dict(curls={2: (22, 32, 18), 3: (26, 36, 20), 4: (30, 40, 22), 5: (34, 44, 24)},
+                F_t=Vector((0.15, 0.25, -0.95)), A_hint=Vector((0.0, -1.0, 0.0)), anchor_fn=anchor_fn,
+                anchor_target=Vector((-0.2, -0.4, -0.2)),
+                thumb_dirs=((0.25, 0.6, -0.75), (0.2, 0.7, -0.7), (0.15, 0.75, -0.65)))
+
+
+def sway(t, k=1.0, period=3.0, tremor=1.0):
+    """The idle figure-eight (breathing + a little tremor): side to side once, up and down twice per period."""
+    ph = math.tau * t / period
+    return dict(right=k * (0.0045 * math.sin(ph) + tremor * 0.0004 * math.sin(7 * ph + 1.0)),
+                up=k * (0.0028 * math.sin(2 * ph) + 0.002 * math.sin(ph - 0.5) + tremor * 0.0003 * math.sin(9 * ph)),
+                fwd=k * 0.0015 * math.sin(ph + 2.0),
+                pitch=k * 0.45 * math.sin(2 * ph + 0.4), yaw=k * 0.5 * math.sin(ph + 1.0), roll=k * 0.7 * math.sin(ph + 0.3))
+
+
 # ---------------------------------------------------------------------- baking
 class Baker:
-    def __init__(self, weapon, hold, parts, props=None):
+    def __init__(self, weapon, hold, parts, props=None, first_frame=1, label=""):
         """hold = {side: hold pose spec}; parts = {object name: rest matrix in gun space, None = hidden, or
         ("hidden", matrix) = hidden at that place};
         props = {(datablock, data_path): rest value} for extra animated numbers (a light's energy)."""
-        self.weapon = weapon
+        self.weapon, self.first_frame, self.label = weapon, first_frame, label
         self.root = bpy.data.objects[H.COLL[weapon]]
         self.cam = bpy.data.objects["PlayerCamera"]
         self.local0 = H.view_local(weapon)
-        for ob in (self.root, self.cam):
-            ob.animation_data_clear()
+        self.ch = {}            # (datablock, data_path, index, group) -> {frame: value}
+        # the camera is shared by the weapon views: keep the keys the other view baked (each view owns WINDOW frames)
+        ad = self.cam.animation_data
+        if ad and ad.action:
+            for fc in ad.action.fcurves:
+                keep = {kp.co[0]: kp.co[1] for kp in fc.keyframe_points
+                        if not first_frame - 1 <= kp.co[0] < first_frame - 1 + WINDOW}
+                if keep:
+                    self.ch[(self.cam, fc.data_path, fc.array_index, "Object Transforms")] = keep
+            old = ad.action
+            self.cam.animation_data_clear()
+            if old.users == 0:
+                bpy.data.actions.remove(old)
+        self.root.animation_data_clear()
         self.root.matrix_basis = self.local0
         self.cam0 = self.cam.matrix_basis.copy()
         self.rigs = {s: bpy.data.objects[f"ArmRig.{s}.{weapon}"] for s in hold}
@@ -135,7 +166,6 @@ class Baker:
         self.objs = {n: bpy.data.objects[n] for n in parts}
         self.props = dict(props or {})
         self.last_loc = {n: I4.decompose()[:2] for n in parts}
-        self.ch = {}            # (datablock, data_path, index, group) -> {frame: value}
         self.last = {}
         self.clips = {}
         self.worst = {}
@@ -238,13 +268,30 @@ class Baker:
             ob.rotation_mode = "QUATERNION"
         for m in self.mods:
             m.show_viewport = True
+        mine = {self.label + name for name in self.clips}
         for mk in list(sc.timeline_markers):
-            sc.timeline_markers.remove(mk)
+            if mk.name in mine or self.first_frame - 1 <= mk.frame < self.first_frame - 1 + WINDOW:
+                sc.timeline_markers.remove(mk)
         for name, c in self.clips.items():
-            sc.timeline_markers.new(name, frame=c["start"])
+            sc.timeline_markers.new(self.label + name, frame=c["start"])
+        sc["v2_clips_" + self.weapon] = json.dumps(self.clips)
         sc.render.fps = FPS
         sc.frame_start = 1
-        sc.frame_end = max(c["end"] for c in self.clips.values())
-        sc["v2_clips_" + self.weapon] = json.dumps(self.clips)
+        sc.frame_end = max(c["end"] for k in sc.keys() if k.startswith("v2_clips_") for c in json.loads(sc[k]).values())
         sc.frame_set(1)
         return self.clips
+
+    def run(self, clips, argv=()):
+        """Bake [(name, seconds, fn, loop), ...] one after another (8 frames apart) and write the actions.
+        argv may hold only=Name,Name to bake some of them (the others keep their slot, without keys)."""
+        only = [a.split("=")[1].split(",") for a in argv if a.startswith("only=")]
+        start = self.first_frame
+        for name, dur, fn, loop in clips:
+            n = round(dur * FPS)
+            if only and name not in only[0]:
+                self.clips[name] = dict(start=start, end=start + n - 1, loop=loop)
+                start += n + 8
+                continue
+            start = self.clip(name, start, n, fn, loop) + 8
+        assert start - self.first_frame <= WINDOW, "clips do not fit the view's frame window"
+        return self.write()

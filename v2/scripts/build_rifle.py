@@ -381,7 +381,40 @@ def build(collection, parent=None):
     lt.box((-22.2, 40, -2.0), (-21.6, 98, -0.4))                                                # receiver light strip
     lt.box((-7.4, -122, 34.8), (-3.8, -118.5, 36.6))                                            # top indicator
     done(lt)
+    by = {o.name.split(".")[0]: o for o in out}                # the base plate and light strip follow the magazine
+    for n in ("R_MagBase", "R_MagLight"):
+        by[n].parent = by["R_Magazine"]
     return out
+
+
+MUZZLE = Vector((0, 326, 0)) * S
+PORT = Vector((26, 52, 11)) * S                               # where a spent case leaves the ejection port (right side)
+TRIGGER_PIVOT = Vector((0, 46 + DY, 11 + DZ)) * S
+HANDLE_TRAVEL = 0.058                                         # the charging handle runs back this far in its slot
+MAG_AXIS = Vector((0, -10, 168)).normalized()                 # the magazine comes out along -MAG_AXIS
+MAG_GRIP = Vector((-12.6, 93, -150)) * S                      # left face of the magazine where the hand takes it
+BOLT_CATCH = Vector((-25.6, 37, -2)) * S
+N_CASINGS = 5
+
+
+def props(collection, parent, gun_parts):
+    """Things only the animations show (hidden at rest by scale 0): spent cases, the muzzle flash and its light."""
+    import build_pistol
+    brass = bpy.data.materials.get("RfBrass") or L.plain("RfBrass", (0.8, 0.58, 0.22), rough=0.28, metallic=1.0)
+    res = {}
+    for i in range(N_CASINGS):
+        cs = Part(f"R_Casing{i}", brass, bevel=0.2)           # rifle case, centred on the origin, mouth toward +Y
+        cs.cyl((0, -15, 0), (0, 6, 0), 4.8, segs=18)
+        cs.cyl((0, 6, 0), (0, 9, 0), 4.8, segs=18, r2=3.2)
+        cs.cyl((0, 9, 0), (0, 15, 0), 3.2, segs=18)
+        cs.cyl((0, -15, 0), (0, -13.8, 0), 5.1, segs=18)
+        o = cs.finish(collection, parent)
+        o.scale = (0, 0, 0)
+        res[o.name] = o
+    fl, lo = build_pistol.make_flash("R_Flash", collection, parent, MUZZLE, size=1.5)
+    fl.scale = (0, 0, 0)
+    res["R_Flash"], res["R_FlashLight"] = fl, lo
+    return res
 
 
 if __name__ == "__main__":

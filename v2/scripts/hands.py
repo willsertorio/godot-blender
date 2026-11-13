@@ -7,8 +7,8 @@ Each arm is the MakeHuman base mesh with its skeleton and skin weights (CC0, mh_
   knuckles, index -> pinky, palm normal) with an anchor point, a two-bone arm solve from a shoulder point (forearm
   twist spread over the twist bones) and thumb directions. It starts from the rest pose every time, so it can be
   called again for any frame of an animation. Everything is in gun space (= armature space).
-- `Hands.add_pads(rig, glove, side)`: pads are shrink-wrapped onto the hand in the hold pose, frozen, and parented
-  to the bone they sit on (hand, thumb, finger phalanx); the cuff bands are parented to the forearm.
+- Pads are shrink-wrapped onto the glove, frozen, and parented to the bone they sit on: the finger pads in the rest
+  pose (`add_finger_pads`), the hand and thumb pads and the forearm cuff bands in the hold pose (`add_pads`).
 - `pistol_hold()` / `rifle_hold()`: the hold poses of the two weapons.
 
 Bones (no side suffix): upperarm01/02, lowerarm01/02, wrist, metacarpal1-4, finger<1-5>-<1-3> (finger1 = thumb).
@@ -272,6 +272,72 @@ class Hands:
         o.matrix_parent_inverse = par.inverted()
         o.matrix_basis = mw
 
+    def _wrapped(self, rig, glove, side, name, bone, centre, x_axis, y_axis, sx, sy, material, power=4.0, offset=0.0022,
+                 thick=0.003):
+        """A rounded pad lying on the surface: disc -> wrapped onto the glove -> thickness -> smooth -> frozen."""
+        bm = bmesh.new()                       # superellipse disc (smooth outline), rings x segments
+        RINGS, SEGS = 6, 36
+        centre_v = bm.verts.new((0, 0, 0))
+        prev = None
+        for r in range(1, RINGS + 1):
+            ring = []
+            for i in range(SEGS):
+                t = i * math.tau / SEGS
+                c, s_ = math.cos(t), math.sin(t)
+                rad = 0.5 / (abs(c) ** power + abs(s_) ** power) ** (1.0 / power) * r / RINGS
+                ring.append(bm.verts.new((c * rad, s_ * rad, 0)))
+            for i in range(SEGS):
+                j = (i + 1) % SEGS
+                if prev is None:
+                    bm.faces.new((centre_v, ring[i], ring[j]))
+                else:
+                    bm.faces.new((prev[i], ring[i], ring[j], prev[j]))
+            prev = ring
+        m2 = bpy.data.meshes.new(name)
+        bm.to_mesh(m2)
+        bm.free()
+        o = bpy.data.objects.new(name, m2)
+        self.coll.objects.link(o)
+        z = x_axis.cross(y_axis).normalized()
+        mat = Matrix((x_axis * sx, y_axis * sy, z)).transposed().to_4x4()
+        mat.translation = centre + z * 0.004
+        o.matrix_world = mat
+        sw = o.modifiers.new("Wrap", "SHRINKWRAP")
+        sw.target = glove
+        sw.wrap_method = "NEAREST_SURFACEPOINT"     # (projection left ragged edges where rays missed the hand)
+        sw.wrap_mode = "ABOVE_SURFACE"
+        sw.offset = offset
+        so = o.modifiers.new("Solid", "SOLIDIFY")
+        so.thickness = thick
+        so.offset = 1.0
+        s2 = o.modifiers.new("Smooth", "SUBSURF")
+        s2.levels = s2.render_levels = 2
+        upd()
+        me2 = bpy.data.meshes.new_from_object(o.evaluated_get(bpy.context.evaluated_depsgraph_get()))
+        mw = o.matrix_world.copy()
+        bpy.data.objects.remove(o)
+        o2 = bpy.data.objects.new(self.name(name, side), me2)
+        self.coll.objects.link(o2)
+        o2.matrix_world = mw
+        me2.materials.append(material)
+        for p in me2.polygons:
+            p.use_smooth = True
+        self._to_bone(o2, rig, bone)
+        return o2
+
+    def add_finger_pads(self, rig, glove, side):
+        """Pads on the first phalanx of each finger. Fitted in the rest pose, where the fingers are apart: fitted on
+        a closed hand, a pad also wraps onto the neighbouring finger and sits crooked once the hand opens."""
+        pb = rig.pose.bones
+        w0, k, F, A, pn = hand_frame(pb, side)
+        AX = A if side == "R" else -A
+        for f in range(2, 6):
+            b0, b1 = pb[f"finger{f}-1"].head.copy(), pb[f"finger{f}-1"].tail.copy()
+            fd = (b1 - b0).normalized()
+            ax = (AX - fd * AX.dot(fd)).normalized()
+            self._wrapped(rig, glove, side, f"FingerPad{f}", f"finger{f}-1", b0.lerp(b1, 0.55), ax, fd, 0.012, 0.022,
+                          self.mats["pad"], power=3.5, thick=0.0028, offset=0.0015)
+
     def add_pads(self, rig, glove, side):
         pb = rig.pose.bones
         mats = self.mats
@@ -280,79 +346,25 @@ class Hands:
         out = -pn
         coll = self.coll
 
-        def wrapped(name, bone, centre, x_axis, y_axis, sx, sy, material, power=4.0, offset=0.0022, thick=0.003):
-            """A rounded pad lying on the surface: disc -> wrapped onto the glove -> thickness -> smooth -> frozen."""
-            bm = bmesh.new()                       # superellipse disc (smooth outline), rings x segments
-            RINGS, SEGS = 6, 36
-            centre_v = bm.verts.new((0, 0, 0))
-            prev = None
-            for r in range(1, RINGS + 1):
-                ring = []
-                for i in range(SEGS):
-                    t = i * math.tau / SEGS
-                    c, s_ = math.cos(t), math.sin(t)
-                    rad = 0.5 / (abs(c) ** power + abs(s_) ** power) ** (1.0 / power) * r / RINGS
-                    ring.append(bm.verts.new((c * rad, s_ * rad, 0)))
-                for i in range(SEGS):
-                    j = (i + 1) % SEGS
-                    if prev is None:
-                        bm.faces.new((centre_v, ring[i], ring[j]))
-                    else:
-                        bm.faces.new((prev[i], ring[i], ring[j], prev[j]))
-                prev = ring
-            m2 = bpy.data.meshes.new(name)
-            bm.to_mesh(m2)
-            bm.free()
-            o = bpy.data.objects.new(name, m2)
-            coll.objects.link(o)
-            z = x_axis.cross(y_axis).normalized()
-            mat = Matrix((x_axis * sx, y_axis * sy, z)).transposed().to_4x4()
-            mat.translation = centre + z * 0.004
-            o.matrix_world = mat
-            sw = o.modifiers.new("Wrap", "SHRINKWRAP")
-            sw.target = glove
-            sw.wrap_method = "NEAREST_SURFACEPOINT"     # (projection left ragged edges where rays missed the hand)
-            sw.wrap_mode = "ABOVE_SURFACE"
-            sw.offset = offset
-            so = o.modifiers.new("Solid", "SOLIDIFY")
-            so.thickness = thick
-            so.offset = 1.0
-            s2 = o.modifiers.new("Smooth", "SUBSURF")
-            s2.levels = s2.render_levels = 2
-            upd()
-            me2 = bpy.data.meshes.new_from_object(o.evaluated_get(bpy.context.evaluated_depsgraph_get()))
-            mw = o.matrix_world.copy()
-            bpy.data.objects.remove(o)
-            o2 = bpy.data.objects.new(self.name(name, side), me2)
-            coll.objects.link(o2)
-            o2.matrix_world = mw
-            me2.materials.append(material)
-            for p in me2.polygons:
-                p.use_smooth = True
-            self._to_bone(o2, rig, bone)
-            return o2
-
         kc = sum(k.values(), Vector()) / 4
         AX = A if side == "R" else -A            # so that AX x F points out of the back of the hand on both sides
         # the pads sit toward the thumb side of the back of the hand: that is the part the player's eye sees
         back = w0.lerp(kc, 0.5) - A * 0.014
-        wrapped("BackPad", "wrist", back, AX, F, 0.07, 0.05, mats["pad"], power=5.0, thick=0.0035)
+        self._wrapped(rig, glove, side, "BackPad", "wrist", back, AX, F, 0.07, 0.05, mats["pad"], power=5.0, thick=0.0035)
         # the top edge of the hand (thumb side, from the index knuckle back to the wrist): faces the player's eye
         rad_x, rad_y = (out, F) if side == "R" else (F, out)
-        wrapped("EdgePad", "wrist", k[2].lerp(w0, 0.42) - A * 0.016, rad_x, rad_y, 0.03 if side == "R" else 0.046,
+        self._wrapped(rig, glove, side, "EdgePad", "wrist", k[2].lerp(w0, 0.42) - A * 0.016, rad_x, rad_y, 0.03 if side == "R" else 0.046,
                 0.046 if side == "R" else 0.03, mats["pad"], power=4.0, thick=0.003)
-        wrapped("KnuckleGuard", "wrist", kc + F * 0.003, AX, F, 0.08, 0.02, mats["pad"], power=6.0, thick=0.004)
+        # knuckle guard: along the real knuckle line (index -> pinky) and wholly behind it, on the back of the hand:
+        # a guard that reaches past the knuckles cuts through the finger bases when the hand opens
+        kx = (k[5] - k[2]).normalized() * (1 if side == "R" else -1)
+        ky = (F - kx * F.dot(kx)).normalized()
+        self._wrapped(rig, glove, side, "KnuckleGuard", "wrist", kc - ky * 0.013, kx, ky, 0.078, 0.017, mats["pad"], power=6.0, thick=0.004)
         t0, t1 = pb["finger1-1"].head.copy(), pb["finger1-1"].tail.copy()     # thumb: along its first bone, facing out
         td = (t1 - t0).normalized()
         tx = (out - td * out.dot(td)).cross(td).normalized()
-        wrapped("ThumbPad", "finger1-1", t0.lerp(t1, 0.6), tx if side == "R" else -tx, td, 0.015, 0.03, mats["pad"],
+        self._wrapped(rig, glove, side, "ThumbPad", "finger1-1", t0.lerp(t1, 0.6), tx if side == "R" else -tx, td, 0.015, 0.03, mats["pad"],
                 power=3.5, thick=0.003, offset=0.0015)
-        for f in range(2, 6):
-            b0, b1 = pb[f"finger{f}-1"].head.copy(), pb[f"finger{f}-1"].tail.copy()
-            fd = (b1 - b0).normalized()
-            ax = (AX - fd * AX.dot(fd)).normalized()
-            wrapped(f"FingerPad{f}", f"finger{f}-1", b0.lerp(b1, 0.55), ax, fd, 0.012, 0.022, mats["pad"], power=3.5,
-                    thick=0.0028, offset=0.0015)
 
         ev = glove.evaluated_get(bpy.context.evaluated_depsgraph_get())
         em = ev.to_mesh()
@@ -406,6 +418,7 @@ class Hands:
         """Both arms: build, put in the hold pose, add the pads."""
         for side, spec in specs:
             rig, glove = self.new_arm(side)
+            self.add_finger_pads(rig, glove, side)
             pose(rig, side, **spec)
             self.add_pads(rig, glove, side)
 

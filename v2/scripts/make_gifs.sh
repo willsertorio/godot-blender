@@ -7,7 +7,9 @@ W=${1:-pistol}; SAMPLES=${2:-16}; WIDTH=${3:-480}
 TMP=${TMPDIR:-/tmp}/v2_gif_$W
 OUT=v2/renders/anim
 mkdir -p "$OUT"
-for spec in Fire:1 Draw:1 Reload:1 Walk:1 Sprint:2 Idle:2 ADS:2 Inspect:2; do
+CLIPS="Fire:1 Draw:1 Reload:1 Walk:1 Sprint:2 Idle:2 ADS:2 Inspect:2"
+[ "$W" = rifle ] && CLIPS="Fire:1 Draw:1 ReloadTactical:1 ReloadEmpty:1 Walk:1 Sprint:2 Idle:2 ADS:2 Inspect:2"
+for spec in $CLIPS; do
   clip=${spec%%:*}; step=${spec##*:}
   if [ -n "$ONLY" ] && [[ ",$ONLY," != *",$clip,"* ]]; then continue; fi
   rm -rf "$TMP/$clip"
