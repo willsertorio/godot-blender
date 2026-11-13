@@ -318,9 +318,10 @@ class Baker(Recorder):
         sc.frame_set(1)
         return self.clips
 
-    def run(self, clips, argv=()):
+    def run(self, clips, argv=(), extra=()):
         """Bake [(name, seconds, fn, loop), ...] one after another (8 frames apart) and write the actions.
-        argv may hold only=Name,Name to bake some of them (the others keep their slot, without keys)."""
+        argv may hold only=Name,Name to bake some of them (the others keep their slot, without keys).
+        extra = [(name, first frame, frames, fn)]: clips at fixed frames outside the view's window (Firefight)."""
         only = [a.split("=")[1].split(",") for a in argv if a.startswith("only=")]
         start = self.first_frame
         for name, dur, fn, loop in clips:
@@ -331,4 +332,6 @@ class Baker(Recorder):
                 continue
             start = self.clip(name, start, n, fn, loop) + 8
         assert start - self.first_frame <= WINDOW, "clips do not fit the view's frame window"
+        for name, first, n, fn in extra:
+            self.clip(name, first, n, fn)
         return self.write()

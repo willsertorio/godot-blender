@@ -19,6 +19,7 @@ from mathutils import Matrix, Vector
 sys.path.insert(0, os.path.dirname(__file__))
 import hands as H  # noqa: E402
 import build_rifle as R  # noqa: E402
+import fx_plan as PLAN  # noqa: E402
 from anim_lib import (Baker, FPS, I4, WINDOW, away_left, back_out, cam_rot, clamp, ease_out, lerp, mix_m, mix_spec, move,  # noqa: E402
                       rot, seg, smooth, sway, table, xform_spec)
 
@@ -218,7 +219,20 @@ CLIPS = [("Idle", 4.0, idle, True), ("Walk", 1.0, walk, True), ("Sprint", SPRINT
          ("Fire", 1.1, fire, False), ("ADS", ADS_T, ads, False), ("Draw", DRAW_T, draw, False),
          ("ReloadTactical", RELOAD_T, reload, False), ("ReloadEmpty", RELOAD_EMPTY_T, reload_empty, False),
          ("Inspect", INSPECT_T, inspect, False)]
-clips = B.run(CLIPS, sys.argv)
+def firefight(t):
+    """Two long bursts at the spider while the robots shoot back (fx_plan.py has the frames; no view shake: the
+    camera's keys in this section are shared with the other weapon view)."""
+    i = round(t * FPS)
+    k = smooth(seg(t, 0.0, 0.2)) * (1 - smooth(seg(t, PLAN.FF_N / FPS - 0.25, PLAN.FF_N / FPS)))
+    base = gun(right=-0.02 * k, up=-0.015 * k, yaw=15.0 * k, pitch=-16.0 * k)   # turned toward the spider
+    started = [(a0, n) for a0, n in PLAN.FF_RIFLE if a0 - 1 <= i]
+    a0, n = started[-1] if started else (10 ** 6, 1)
+    st = burst(i - a0, n, base, seed=a0)
+    st.pop("cam", None)
+    return st
+
+
+clips = B.run(CLIPS, sys.argv, extra=[("Firefight", PLAN.FF_START, PLAN.FF_N, firefight)])
 if "nosave" not in sys.argv:
-    bpy.ops.wm.save_mainfile()
+    bpy.ops.wm.save_mainfile(compress=True)
 print("clips:", clips)

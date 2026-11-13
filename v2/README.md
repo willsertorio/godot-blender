@@ -14,6 +14,8 @@ blender -b v2/scene.blend -P v2/scripts/anim_pistol.py                    # bake
 blender -b v2/scene.blend -P v2/scripts/anim_rifle.py                     # bake the machine gun clips after them (frames 601+; saves). Always: build_viewmodel -> anim_pistol -> anim_rifle
 v2/scripts/make_gifs.sh pistol 16 480                                     # GIF of every clip of pistol | rifle -> v2/renders/anim/ (Cycles, ~10 s a frame, ~35 min); ONLY=Fire,Draw for some
 blender -b v2/scene.blend -P v2/scripts/anim_robots.py                    # bake the robots' sections (frames 1201+; run after build_robots.py; saves)
+blender -b v2/scene.blend -P v2/scripts/anim_fx.py                        # effects for every shot, the deaths and the Firefight (run LAST; saves)
+blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100 view=pistol frame=1637   # the Firefight still
 blender -b v2/scene.blend -P v2/scripts/pose_test.py -- out.png 40 80 [back]   # rig check: left hand open, off the pistol
 blender -b v2/scene.blend -P v2/scripts/debug_viewmodel.py -- /tmp/vm    # quick views of one viewmodel only (DBG_SCALE, DBG_C, DBG_VIEW=ViewmodelRifle)
 blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100 view=rifle   # Cycles render (samples, size %, view=pistol|rifle); ~5 min at 1280x720 on 4 CPU cores
@@ -75,6 +77,18 @@ blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100 view=rifle  
   Spider legs are solved from ankle targets (hip swing + two-bone solve in the leg's plane, knee up), so the feet
   stay planted while the body moves. Lights going out = the emissive parts keyed to scale 0. Rebuilding the robots
   drops their animation: build_robots -> anim_robots.
+- Effects (`anim_fx.py`, timing shared through `fx_plan.py`): tracers (two frames per round), impact sparks with a
+  two-frame light, dust / smoke puffs, debris chips, scorch marks, muzzle smoke. All plain meshes with keyed
+  transform and object colour (materials `FxGlow`, `FxTracerGlow`, `FxSmoke`, `FxDebris`, `FxScorch` read Object Info
+  colour / alpha), handed out from pools and hidden by scale 0. The player's effects are in that weapon view's
+  collection, the robots' in `FX`. Positions are sampled from the baked scene at each shot's frame; the guns'
+  Fire / ADS rounds land where a ray from the eye hits.
+  Firefight = frames 1601-1672, every view and robot firing; frame 1637 has them all firing at once (the still).
+  The gun is turned toward the spider there and its rounds hit the spider and the floor at its feet.
+  Order after any rebuild: build_viewmodel -> anim_pistol -> anim_rifle -> (build_robots ->) anim_robots -> anim_fx.
+  Learned: a tracer at spark strength burns out to a thick white bar (own material, strength 7, 5 mm);
+  a tracer passing within ~1.5 m of the eye fills the frame (cut it short); smoke as one mesh of merged balls
+  shows hard seams (several single soft balls instead); dark smoke needs a third of the alpha of pale dust.
 - Pads: the knuckle guard lies along the real knuckle line and wholly behind it (reaching past the knuckles, it cut
   through the finger bases of an open hand); finger pads are fitted in the rest pose, fingers apart (fitted on the
   closed hand they also wrapped onto the neighbouring finger).
@@ -95,4 +109,6 @@ blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100 view=rifle  
   angle between sight and grip against the width of the sight is fixed by the model. So the body is slim (60 mm
   receiver) and the sight wide and low (52 mm hood, 75 mm above the bore); a taller gun hid the hand at any distance.
   Parts that overlap a curved shell (screen on the pod) need a flat seat cut into every shell under them.
-- Stages: 1 room + lighting, 2 pistol + gloved hands, 3 robots (done, robots and gloves polished once); next: effects.
+- `scene.blend` is saved compressed (`save_mainfile(compress=True)` in every script): uncompressed it passed
+  GitHub's 100 MB file limit once the animation and effects were in (119 MB -> 20 MB). Blender opens it as usual.
+- Stages: 1 room + lighting, 2 weapon views + gloved hands, 3 robots, 4 animation + effects (all done in Blender); next: Godot.

@@ -10,6 +10,7 @@ The robots play together, section by section (markers "Robots ..."):
   Move    spider walks (0.6 m/s, 1 s cycle, in place); drone flies a banked figure; turret whips up / down and round
   Run     spider runs (1.5 m/s, 15-frame cycle, in place); the others idle
   Death   turret spasms and goes limp, drone spirals out of the air and bounces, spider staggers and slams down
+  Firefight (frames from fx_plan.py, with the weapon views' Firefight clips): all three keep firing at the player
 The motion is deliberately broad: anticipation before an action, overshoot and settle on every stop (`steps`),
 recoil as damped oscillation (`imp`) that the lighter parts pick up later than the heavy ones.
 Only joints move (the empties build_robots.py hangs the parts from). The spider's legs are solved from foot targets
@@ -26,6 +27,7 @@ from mathutils import Matrix, Vector
 
 sys.path.insert(0, os.path.dirname(__file__))
 import build_robots as RB  # noqa: E402
+import fx_plan as PLAN  # noqa: E402
 from anim_lib import FPS, I4, Recorder, back_out, clamp, seg, smooth, table, write_fcurves  # noqa: E402
 
 FIRST = 1201
@@ -104,7 +106,7 @@ def flicker(t, until):
     return t < until and (t < 0.12 or math.sin(t * 61.0) * math.sin(t * 23.0 + 1.0) > -0.15)
 
 
-SHOT_T = (0.25, 0.5, 0.75)                         # when the bursts' rounds go off (s into the Shoot section)
+SHOT_T = tuple(x / FPS for x in PLAN.SHOOT_SPIDER)  # when the bursts' rounds go off (s into the Shoot section)
 
 
 def fired(t, times=SHOT_T):
@@ -164,13 +166,13 @@ def spider_idle(t):
                   pitch=4 * math.sin(2 * ph) - 4 * imp(t, [x + 0.05 for x, _ in snaps], 0.25, 0.12))
 
 
-def spider_shoot(t):
-    """Crouch and lean in, three twin shots that rock the whole machine back on its legs, rise again."""
-    c = smooth(seg(t, 0.0, 0.18)) * (1 - smooth(seg(t, 1.0, 1.4)))
-    rock = imp(t, SHOT_T, 0.36, 0.13)                       # the body takes the shot and rings
+def spider_shoot(t, times=SHOT_T, end=1.4):
+    """Crouch and lean in, twin shots that rock the whole machine back on its legs, rise again (by `end` s)."""
+    c = smooth(seg(t, 0.0, 0.18)) * (1 - smooth(seg(t, end - 0.4, end)))
+    rock = imp(t, times, 0.36, 0.13)                        # the body takes the shot and rings
     st = spider(Tm(0, 0.03 * c - 0.04 * rock, -0.05 * c + 0.012 * rock) @ Rx(-3 * c + 4.5 * rock) @ Ry(0.8 * rock),
-                recoil=0.09 * bump(t, SHOT_T, 0.055), pitch=3.5 * imp(t, [x + 0.03 for x in SHOT_T], 0.3, 0.1) - 2 * c)
-    hit = fired(t)
+                recoil=0.09 * bump(t, times, 0.055), pitch=3.5 * imp(t, [x + 0.03 for x in times], 0.3, 0.1) - 2 * c)
+    hit = fired(t, times)
     if hit is not None:
         flash(st, "Spider_FlashL", 10 + hit)
         flash(st, "Spider_FlashR", 20 + hit)
@@ -268,13 +270,13 @@ def drone_idle(t, f):
     return drone(f, w, l)
 
 
-def drone_shoot(t, f):
-    """Rises and drops its nose to aim, three shots that throw it back and up, swings back level."""
-    c = smooth(seg(t, 0.0, 0.2)) * (1 - smooth(seg(t, 0.95, 1.4)))
-    kick = imp(t, SHOT_T, 0.38, 0.14)
+def drone_shoot(t, f, times=SHOT_T, end=1.4):
+    """Rises and drops its nose to aim, shots that throw it back and up, swings back level (by `end` s)."""
+    c = smooth(seg(t, 0.0, 0.2)) * (1 - smooth(seg(t, end - 0.45, end)))
+    kick = imp(t, times, 0.38, 0.14)
     st = drone(f, Tm(0, 0, 0.04 * c + 0.02 * kick), Tm(y=-0.03 * c - 0.07 * kick) @ Rx(-6 * c + 8 * kick) @ Ry(1.5 * kick),
-               recoil=0.05 * bump(t, SHOT_T, 0.05))
-    hit = fired(t)
+               recoil=0.05 * bump(t, times, 0.05))
+    hit = fired(t, times)
     if hit is not None:
         flash(st, "Drone_Flash", 30 + hit)
     return st
@@ -350,18 +352,18 @@ def turret_idle(t):
                   elbow=3 * math.sin(ph + 1.0) - 2 * stop, shoulder=0.8 * math.sin(ph))
 
 
-TURRET_SHOT_T = (0.25, 0.42, 0.58, 0.75)
+TURRET_SHOT_T = tuple(x / FPS for x in PLAN.SHOOT_TURRET)
 
 
-def turret_shoot(t):
-    """Draws its head back and locks, four shots: the guns slam back, the head kicks up, and the kick runs up the
-    arm joint by joint; then it shakes itself still."""
-    c = smooth(seg(t, 0.0, 0.2)) * (1 - smooth(seg(t, 0.95, 1.35)))
-    kick = imp(t, TURRET_SHOT_T, 0.3, 0.1)
-    st = turret(yaw=1.3 * imp(t, [x + 0.02 for x in TURRET_SHOT_T], 0.22, 0.08), head=-3 * c - 5 * kick,
-                elbow=6 * c + 3.2 * imp(t, [x + 0.03 for x in TURRET_SHOT_T], 0.34, 0.12),
-                shoulder=-1.8 * imp(t, [x + 0.06 for x in TURRET_SHOT_T], 0.4, 0.14), recoil=0.09 * bump(t, TURRET_SHOT_T, 0.05))
-    hit = fired(t, TURRET_SHOT_T)
+def turret_shoot(t, times=TURRET_SHOT_T, end=1.35):
+    """Draws its head back and locks, then the shots: the guns slam back, the head kicks up, and the kick runs up
+    the arm joint by joint; then it shakes itself still (by `end` s)."""
+    c = smooth(seg(t, 0.0, 0.2)) * (1 - smooth(seg(t, end - 0.4, end)))
+    kick = imp(t, times, 0.3, 0.1)
+    st = turret(yaw=1.3 * imp(t, [x + 0.02 for x in times], 0.22, 0.08), head=-3 * c - 5 * kick,
+                elbow=6 * c + 3.2 * imp(t, [x + 0.03 for x in times], 0.34, 0.12),
+                shoulder=-1.8 * imp(t, [x + 0.06 for x in times], 0.4, 0.14), recoil=0.09 * bump(t, times, 0.05))
+    hit = fired(t, times)
     if hit is not None:
         flash(st, "Turret_FlashL" if hit % 2 == 0 else "Turret_FlashR", 40 + hit)
     return st
@@ -438,11 +440,16 @@ f = section("Run", f, 60, lambda t, i: merge(spider_run(t), drone_idle(t, i), tu
 DEATH_N = 76
 f = section("Death", f, DEATH_N, lambda t, i: merge(spider_death(t), drone_death(t, i), turret_death(t)),
             {"Spider Death": (0, DEATH_N, False), "Drone Death": (0, DEATH_N, False), "Turret Death": (0, DEATH_N, False)})
+FF_END = PLAN.FF_N / FPS
+_sp, _dr, _tu = (tuple(x / FPS for x in v) for v in (PLAN.FF_SPIDER, PLAN.FF_DRONE, PLAN.FF_TURRET))
+section("Firefight", PLAN.FF_START, PLAN.FF_N,
+        lambda t, i: merge(spider_shoot(t, _sp, FF_END), drone_shoot(t, i, _dr, FF_END), turret_shoot(t, _tu, FF_END)),
+        {"Spider Firefight": (0, PLAN.FF_N, False), "Drone Firefight": (0, PLAN.FF_N, False), "Turret Firefight": (0, PLAN.FF_N, False)})
 write_fcurves(rec.ch, "Robots")
 sc["v2_clips_robots"] = json.dumps(clips)
 sc.render.fps = FPS
 sc.frame_end = max(c["end"] for k in sc.keys() if k.startswith("v2_clips_") for c in json.loads(sc[k]).values())
 sc.frame_set(1)
 if "nosave" not in sys.argv:
-    bpy.ops.wm.save_mainfile()
+    bpy.ops.wm.save_mainfile(compress=True)
 print("clips:", clips)

@@ -574,5 +574,5 @@ if __name__ == "__main__":
             "turret_drop": 1700, "turret_pitch": -14,
         }
         robots = build(coll, place)
-        bpy.ops.wm.save_mainfile()
+        bpy.ops.wm.save_mainfile(compress=True)
         print("robots built:", sum(len(r.objs) for r in robots), "objects")

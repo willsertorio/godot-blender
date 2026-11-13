@@ -1,9 +1,12 @@
-"""Render the open scene with Cycles: blender -b v2/scene.blend -P v2/scripts/render.py -- out.png [samples] [percent] [crop x0,y0,x1,y1] [view=pistol|rifle]"""
+"""Render the open scene with Cycles: blender -b v2/scene.blend -P v2/scripts/render.py -- out.png [samples] [percent] [crop x0,y0,x1,y1] [view=pistol|rifle] [frame=N]"""
 import sys
 import bpy
 a = sys.argv[sys.argv.index("--") + 1:]
 view = next((v.split("=")[1] for v in a if v.startswith("view=")), None)     # view=pistol | view=rifle
-a = [v for v in a if not v.startswith("view=")]
+frame = next((int(v.split("=")[1]) for v in a if v.startswith("frame=")), None)   # frame=1637: a moment of the timeline
+a = [v for v in a if not v.startswith(("view=", "frame="))]
+if frame is not None:
+    bpy.context.scene.frame_set(frame)
 if view:
     for name, c in (("pistol", "Viewmodel"), ("rifle", "ViewmodelRifle")):
         if bpy.data.collections.get(c):

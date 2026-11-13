@@ -20,6 +20,7 @@ from mathutils import Matrix, Vector
 sys.path.insert(0, os.path.dirname(__file__))
 import hands as H  # noqa: E402
 import build_pistol as P  # noqa: E402
+import fx_plan as PLAN  # noqa: E402
 from anim_lib import (Baker, FPS, I4, away_left, back_out, cam_rot, ease_out, lerp, mix_m, mix_spec, move, rot, seg,  # noqa: E402
                       smooth, sway, table, xform_spec)
 
@@ -213,7 +214,22 @@ def inspect(t):
 CLIPS = [("Idle", 3.0, idle, True), ("Walk", 1.0, walk, True), ("Sprint", SPRINT_IN + SPRINT_RUN + SPRINT_OUT, sprint, False),
          ("Fire", 0.5, fire, False), ("ADS", ADS_IN + ADS_HOLD + ADS_OUT, ads, False), ("Draw", DRAW_T, draw, False),
          ("Reload", RELOAD_T, reload, False), ("Inspect", INSPECT_T, inspect, False)]
-clips = B.run(CLIPS, sys.argv)
+FF_BASE = dict(yaw=12.0, pitch=-15.0, right=-0.01, up=-0.01)   # the gun turned toward the spider, low on the left
+
+
+def firefight(t):
+    """Steady fire at the spider while the robots shoot back (fx_plan.py has the frames; no view punch: the
+    camera's keys in this section are shared with the other weapon view)."""
+    i = round(t * FPS)
+    k = smooth(seg(t, 0.0, 0.2)) * (1 - smooth(seg(t, PLAN.FF_N / FPS - 0.25, PLAN.FF_N / FPS)))
+    base = {n: v * k for n, v in FF_BASE.items()}
+    last = max([x for x in PLAN.FF_PISTOL if x - 1 <= i] or [-99])
+    st = shot(i - (last - 1), root_fn=lambda **r: gun(**{n: r.get(n, 0.0) + base.get(n, 0.0) for n in set(r) | set(base)}))
+    st.pop("cam", None)
+    return st
+
+
+clips = B.run(CLIPS, sys.argv, extra=[("Firefight", PLAN.FF_START, PLAN.FF_N, firefight)])
 if "nosave" not in sys.argv:
-    bpy.ops.wm.save_mainfile()
+    bpy.ops.wm.save_mainfile(compress=True)
 print("clips:", clips)

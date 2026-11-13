@@ -52,4 +52,4 @@ for weapon, (gun, hold) in GUNS.items():
 
 for weapon, cname in H.COLL.items():                           # one view at a time
     bpy.data.collections[cname].hide_render = bpy.data.collections[cname].hide_viewport = weapon != SHOW
-bpy.ops.wm.save_mainfile()
+bpy.ops.wm.save_mainfile(compress=True)
