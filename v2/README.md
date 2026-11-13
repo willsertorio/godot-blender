@@ -91,6 +91,10 @@ blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100 view=rifle  
   barrel as a canvas; materials `FlashFire` / `FlashCore` draw a ragged tongue / burst from the UVs with a
   per-object noise. These two materials are shared: build_viewmodel must not delete them, or the robots' flashes
   render as white squares until build_robots runs again.
+  Air: `FxHaze`, one box of thin volume filling the room (density 0.026, +25 % render time): distance fades a
+  little and lights glow in the air. 0.045 already washes the far wall out.
+  Drone rotors turn 173 deg a frame (= 120 + 53: same apparent motion with three blades), so the blur sweeps
+  86 deg and the blades become a disc; the three spokes still seen in each duct are the fixed struts.
   Smoke is a volume in a ball (`FxSmoke_dust|smoke|wreck`, three fixed tones). A Cycles volume shader gets nothing
   from Object Info (colour, alpha and pass index all read as zero there) and nothing from object attributes, but
   it does see the object's transform: each puff is flattened along its own Z by up to 20 % and the shader turns
@@ -100,7 +104,9 @@ blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100 view=rifle  
   Order after any rebuild: build_viewmodel -> anim_pistol -> anim_rifle -> (build_robots ->) anim_robots -> anim_fx.
   Learned: glow as emissive balls (tried first) reads as flat discs: real bloom in the compositor replaced it.
   Smoke as surface blobs with see-through rims reads as solid lumps. A hard-edged star mesh for the flash looks
-  drawn; a flash as large as its light (24 cm on the pistol) hides the target: 0.55 x for the pistol, 0.9 x rifle.
+  drawn; a flash as large as its light (24 cm on the pistol) hides the target: 0.55 x for the pistol, 0.62 x rifle.
+  The flash's emission strength follows its alpha (bright core, dim edge): at constant strength the edge of each
+  plane shows as a cut-out outline. `flash_materials()` rebuilds the two shared materials in place.
   A tracer at spark strength burns out to a thick white bar (own material, strength 7, 5 mm);
   a tracer passing within ~1.5 m of the eye fills the frame (cut it short); smoke as one mesh of merged balls
   shows hard seams (several single soft balls instead); dark smoke needs a third of the alpha of pale dust.

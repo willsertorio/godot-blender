@@ -238,7 +238,9 @@ def spider_death(ts):
 
 # ====================================================================== drone
 DRONE_M = OBJ["Drone_Root"].matrix_world.copy()            # its placement (it leans toward the eye)
-PROP_STEP = 53.0                                           # degrees a rotor turns per frame
+# degrees a rotor turns per frame. 173 = 120 + 53: with three blades it looks the same from frame to frame as 53, but
+# the blades sweep 86 degrees during the shutter, so motion blur turns them into a disc (at 53 they stayed sharp)
+PROP_STEP = 173.0
 
 
 def drone(f, world=None, local=I4, spin=None, recoil=0.0, lights=True):

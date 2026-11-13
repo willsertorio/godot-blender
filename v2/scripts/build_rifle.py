@@ -412,7 +412,7 @@ def props(collection, parent, gun_parts):
         o = cs.finish(collection, parent)
         o.scale = (0, 0, 0)
         res[o.name] = o
-    fl, lo = build_pistol.make_flash("R_Flash", collection, parent, MUZZLE, size=0.9)
+    fl, lo = build_pistol.make_flash("R_Flash", collection, parent, MUZZLE, size=0.62)
     fl.scale = (0, 0, 0)
     res["R_Flash"], res["R_FlashLight"] = fl, lo
     return res

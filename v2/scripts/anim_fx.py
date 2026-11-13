@@ -12,7 +12,7 @@ Everything is a plain mesh with keyed transform and colour, so it plays on the t
 - debris: small chunks on ballistic paths that come to rest on the floor
 - scorch: a dark soft-edged disc left where a round hit (Firefight only)
 The scene also gets its lens here (v2lib.setup_post): motion blur and a compositor with bloom, a trace of colour
-fringing and a vignette. The objects come from pools and are hidden (scale 0) when not in use. Effects of the player's shots live in that
+fringing and a vignette, and the room gets its air (a thin haze). The objects come from pools and are hidden (scale 0) when not in use. Effects of the player's shots live in that
 weapon view's collection (so they show with the gun that fired them); the robots' in the collection `FX`.
 Where things are comes from the baked scene: muzzle and body positions are sampled at the frame of each shot;
 the guns' Fire / ADS rounds go where a ray from the eye lands.
@@ -167,6 +167,25 @@ def scorch_material():
 
 SQUASH = 0.2                                       # how much a puff is flattened at full density
 TONES = {"dust": (0.78, 0.77, 0.74), "smoke": (0.42, 0.42, 0.43), "wreck": (0.09, 0.09, 0.1)}
+def haze():
+    """The air of the room: a thin, even haze filling it (one box of volume). Distance fades a little, lights and
+    flashes get a soft halo in the air. Room: x -4.6..6.4, y -3..14, z 0..5.2 (build_room.py)."""
+    bm = bmesh.new()
+    bmesh.ops.create_cube(bm, size=1.0, matrix=Matrix.Translation((0.9, 5.5, 2.6)) @ Matrix.Diagonal((10.9, 16.9, 5.1, 1)))
+    m = bpy.data.materials.new("FxHaze")
+    m.use_nodes = True
+    nt = m.node_tree
+    nt.nodes.clear()
+    vol = nt.nodes.new("ShaderNodeVolumePrincipled")
+    vol.inputs["Density"].default_value = 0.026
+    vol.inputs["Anisotropy"].default_value = 0.5
+    vol.inputs["Color"].default_value = (0.9, 0.93, 1.0, 1)
+    nt.links.new(vol.outputs[0], nt.nodes.new("ShaderNodeOutputMaterial").inputs["Volume"])
+    ob = bpy.data.objects.new("FxHaze", mesh("FxHaze", bm, m))
+    ob.visible_shadow = False
+    FX.objects.link(ob)
+
+
 M_GLOW, M_SCORCH = glow_material(), scorch_material()
 M_SMOKE = {k: smoke_material("FxSmoke_" + k, c) for k, c in TONES.items()}
 M_TRACER = glow_material("FxTracerGlow", 7.0)      # (dimmer than the sparks: at full strength a tracer burns out white)
@@ -256,6 +275,7 @@ MESHES = {"puff_" + k: [puff_mesh(k)] for k in TONES}
 MESHES.update({"tracer": [tracer_mesh()], "sparks": [sparks_mesh(i) for i in range(4)], 
           "chunk": [chunk_mesh(i) for i in range(5)], "scorch": [disc_mesh()]})
 rec = Recorder()
+haze()
 
 
 class Pool:

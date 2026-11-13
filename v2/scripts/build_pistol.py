@@ -429,7 +429,7 @@ def props(collection, parent, gun_parts):
 
 
 def make_flash(name, collection, parent, muzzle, size=1.0):
-    """Muzzle flash and its point light, both at the muzzle. The mesh is only a canvas: four crossed planes along
+    """Muzzle flash and its point light, both at the muzzle. The mesh is only a canvas: six crossed planes along
     the barrel and a square across it; the flame (a tongue with soft, ragged edges, a spiky burst seen end-on) is
     drawn by the materials from the UVs. Returns (flash object, light object); the caller hides the flash by scale 0."""
     fire, core = flash_materials()
@@ -442,8 +442,8 @@ def make_flash(name, collection, parent, muzzle, size=1.0):
         f.material_index = mat
         for lp, c in zip(f.loops, corners):
             lp[uvl].uv = c[1]
-    for i in range(4):                                     # u = -1..1 across the flame, v = 0..1 along it
-        rot = Matrix.Rotation(i * math.pi / 4, 4, "Y")
+    for i in range(6):                                     # u = -1..1 across the flame, v = 0..1 along it
+        rot = Matrix.Rotation(i * math.pi / 6, 4, "Y")
         quad([(rot @ Vector((-w, 0, 0)), (-1, 0)), (rot @ Vector((w, 0, 0)), (1, 0)),
               (rot @ Vector((w, ln, 0)), (1, 1)), (rot @ Vector((-w, ln, 0)), (-1, 1))], 0)
     quad([(Vector((-r, y0, -r)), (-1, -1)), (Vector((r, y0, -r)), (1, -1)), (Vector((r, y0, r)), (1, 1)),
@@ -474,15 +474,12 @@ def flash_materials():
     that differs from object to object: white-yellow where it is dense, orange and gone at the ragged edge."""
     out = []
     for name, is_core in (("FlashFire", False), ("FlashCore", True)):
-        m = bpy.data.materials.get(name)
-        if m:
-            out.append(m)
-            continue
-        m = bpy.data.materials.new(name)
+        m = bpy.data.materials.get(name) or bpy.data.materials.new(name)    # rebuilt in place: the robots share it
         m.use_nodes = True
         nt = m.node_tree
-        nt.nodes.remove(nt.nodes["Principled BSDF"])
+        nt.nodes.clear()
         new, link = nt.nodes.new, nt.links.new
+        mat_out = new("ShaderNodeOutputMaterial")
 
         def mt(op, x, y=None, clamp=False):
             n = new("ShaderNodeMath")
@@ -529,19 +526,20 @@ def flash_materials():
             edge = mt("MAXIMUM", edge, 0.001)
             a = mt("POWER", mt("SUBTRACT", 1.0, mt("DIVIDE", mt("ABSOLUTE", u), edge), clamp=True), 1.3)
         a = mt("MULTIPLY", a, remap(noise(tc.outputs["UV"], 3.2), 0.3, 0.7, 0.3, 1.5), clamp=True)
+        a = mt("MULTIPLY", a, remap(noise(tc.outputs["UV"], 10.0, 3.0), 0.3, 0.7, 0.55, 1.25), clamp=True)   # wisps
         col = new("ShaderNodeMix")
         col.data_type = "RGBA"
         link(mt("POWER", a, 0.6), col.inputs[0])
         col.inputs[6].default_value = (1.0, 0.27, 0.04, 1)
         col.inputs[7].default_value = (1.0, 0.86, 0.55, 1)
         em = new("ShaderNodeEmission")
-        em.inputs["Strength"].default_value = 30.0
+        link(mt("MULTIPLY", mt("POWER", a, 1.2), 42.0), em.inputs["Strength"])   # dims toward the edge: no outline
         link(col.outputs[2], em.inputs["Color"])
         mix = new("ShaderNodeMixShader")
-        link(mt("MULTIPLY", a, 1.7, clamp=True), mix.inputs[0])
+        link(mt("MULTIPLY", a, 1.25, clamp=True), mix.inputs[0])
         link(new("ShaderNodeBsdfTransparent").outputs[0], mix.inputs[1])
         link(em.outputs[0], mix.inputs[2])
-        link(mix.outputs[0], nt.nodes["Material Output"].inputs["Surface"])
+        link(mix.outputs[0], mat_out.inputs["Surface"])
         out.append(m)
     return out
 
