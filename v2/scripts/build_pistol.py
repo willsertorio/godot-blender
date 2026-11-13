@@ -152,7 +152,7 @@ class Part:
 
 def materials():
     for n in ("PSlide", "PFrame", "PGripTex", "PSteel", "PBlack", "PBarrel", "PLens", "PDotRed", "PSightDot", "PCyan",
-              "PLightLens", "PRubber", "PBrass", "PFlash"):
+              "PLightLens", "PRubber", "PBrass", "PFlash"):    # (not FlashFire / FlashCore: the robots' flashes share them)
         if bpy.data.materials.get(n):
             bpy.data.materials.remove(bpy.data.materials[n])
     m = {}
@@ -422,34 +422,42 @@ def props(collection, parent, gun_parts):
     c = cs.cut()
     c.cyl((0, -6, 0), (0, 10, 0), 4.3, segs=20)
     res["P_Casing"] = cs.finish(collection, parent)
-    res["P_Flash"], res["P_FlashLight"] = make_flash("P_Flash", collection, parent, MUZZLE)
+    res["P_Flash"], res["P_FlashLight"] = make_flash("P_Flash", collection, parent, MUZZLE, size=0.55)
     for n in ("P_Magazine2", "P_Casing", "P_Flash"):
         res[n].scale = (0, 0, 0)
     return res
 
 
 def make_flash(name, collection, parent, muzzle, size=1.0):
-    """Muzzle flash (three crossed kite-shaped blades along the barrel and a star across it) and its point light,
-    both at the muzzle. Returns (flash object, light object); the caller hides the flash by scale 0."""
+    """Muzzle flash and its point light, both at the muzzle. The mesh is only a canvas: four crossed planes along
+    the barrel and a square across it; the flame (a tongue with soft, ragged edges, a spiky burst seen end-on) is
+    drawn by the materials from the UVs. Returns (flash object, light object); the caller hides the flash by scale 0."""
+    fire, core = flash_materials()
     bm = bmesh.new()
-    for i in range(3):
-        rot = Matrix.Rotation(i * math.pi / 3, 4, "Y")
-        bm.faces.new([bm.verts.new(rot @ Vector(v) * size) for v in ((0, 0, 0), (0.03, 0.045, 0), (0, 0.15, 0), (-0.03, 0.045, 0))])
-    star = []
-    for i in range(16):
-        a = i * math.tau / 16
-        r = 0.05 if i % 2 == 0 else 0.016
-        star.append(bm.verts.new(Vector((r * math.cos(a), 0.012, r * math.sin(a))) * size))
-    bm.faces.new(star)
+    uvl = bm.loops.layers.uv.new("UVMap")
+    ln, w, r, y0 = 0.24 * size, 0.08 * size, 0.12 * size, 0.02 * size
+
+    def quad(corners, mat):
+        f = bm.faces.new([bm.verts.new(c[0]) for c in corners])
+        f.material_index = mat
+        for lp, c in zip(f.loops, corners):
+            lp[uvl].uv = c[1]
+    for i in range(4):                                     # u = -1..1 across the flame, v = 0..1 along it
+        rot = Matrix.Rotation(i * math.pi / 4, 4, "Y")
+        quad([(rot @ Vector((-w, 0, 0)), (-1, 0)), (rot @ Vector((w, 0, 0)), (1, 0)),
+              (rot @ Vector((w, ln, 0)), (1, 1)), (rot @ Vector((-w, ln, 0)), (-1, 1))], 0)
+    quad([(Vector((-r, y0, -r)), (-1, -1)), (Vector((r, y0, -r)), (1, -1)), (Vector((r, y0, r)), (1, 1)),
+          (Vector((-r, y0, r)), (-1, 1))], 1)
     me = bpy.data.meshes.new(name)
     bm.to_mesh(me)
     bm.free()
+    me.materials.append(fire)
+    me.materials.append(core)
     fl = bpy.data.objects.new(name, me)
     collection.objects.link(fl)
     fl.parent = parent
     fl.location = muzzle
     fl.visible_shadow = False
-    me.materials.append(flash_material())
     ld = bpy.data.lights.new(name + "Light", "POINT")
     ld.color = (1.0, 0.7, 0.4)
     ld.energy = 0.0
@@ -461,42 +469,81 @@ def make_flash(name, collection, parent, muzzle, size=1.0):
     return fl, lo
 
 
-def flash_material():
-    """White-hot at the muzzle, orange and fading to nothing at the tips (emission mixed with transparency)."""
-    if bpy.data.materials.get("PFlash"):
-        return bpy.data.materials["PFlash"]
-    m = bpy.data.materials.new("PFlash")
-    m.use_nodes = True
-    nt = m.node_tree
-    nt.nodes.remove(nt.nodes["Principled BSDF"])
-    out = nt.nodes["Material Output"]
-    tc = nt.nodes.new("ShaderNodeTexCoord")
-    ln = nt.nodes.new("ShaderNodeVectorMath")
-    ln.operation = "LENGTH"
-    nt.links.new(tc.outputs["Object"], ln.inputs[0])
-    mr = nt.nodes.new("ShaderNodeMapRange")                    # 1 at the muzzle -> 0 at 15 cm
-    mr.inputs["From Min"].default_value, mr.inputs["From Max"].default_value = 0.0, 0.15
-    mr.inputs["To Min"].default_value, mr.inputs["To Max"].default_value = 1.0, 0.0
-    nt.links.new(ln.outputs["Value"], mr.inputs["Value"])
-    ramp = nt.nodes.new("ShaderNodeValToRGB")
-    ramp.color_ramp.elements[0].color = (1.0, 0.28, 0.04, 1)
-    ramp.color_ramp.elements[1].color = (1.0, 0.8, 0.42, 1)
-    ramp.color_ramp.elements[1].position = 0.95
-    nt.links.new(mr.outputs["Result"], ramp.inputs["Fac"])
-    em = nt.nodes.new("ShaderNodeEmission")
-    em.inputs["Strength"].default_value = 9.0
-    nt.links.new(ramp.outputs["Color"], em.inputs["Color"])
-    tr = nt.nodes.new("ShaderNodeBsdfTransparent")
-    pw = nt.nodes.new("ShaderNodeMath")
-    pw.operation = "POWER"
-    pw.inputs[1].default_value = 1.4
-    nt.links.new(mr.outputs["Result"], pw.inputs[0])
-    mix = nt.nodes.new("ShaderNodeMixShader")
-    nt.links.new(pw.outputs[0], mix.inputs[0])
-    nt.links.new(tr.outputs[0], mix.inputs[1])
-    nt.links.new(em.outputs[0], mix.inputs[2])
-    nt.links.new(mix.outputs[0], out.inputs["Surface"])
-    return m
+def flash_materials():
+    """(FlashFire, FlashCore): emission over transparency. The shape is a function of the UVs, broken up by a noise
+    that differs from object to object: white-yellow where it is dense, orange and gone at the ragged edge."""
+    out = []
+    for name, is_core in (("FlashFire", False), ("FlashCore", True)):
+        m = bpy.data.materials.get(name)
+        if m:
+            out.append(m)
+            continue
+        m = bpy.data.materials.new(name)
+        m.use_nodes = True
+        nt = m.node_tree
+        nt.nodes.remove(nt.nodes["Principled BSDF"])
+        new, link = nt.nodes.new, nt.links.new
+
+        def mt(op, x, y=None, clamp=False):
+            n = new("ShaderNodeMath")
+            n.operation, n.use_clamp = op, clamp
+            for i, v in enumerate((x, y)):
+                if v is None:
+                    continue
+                if isinstance(v, (int, float)):
+                    n.inputs[i].default_value = v
+                else:
+                    link(v, n.inputs[i])
+            return n.outputs[0]
+
+        def remap(x, a, b, c, d):
+            n = new("ShaderNodeMapRange")
+            n.inputs["From Min"].default_value, n.inputs["From Max"].default_value = a, b
+            n.inputs["To Min"].default_value, n.inputs["To Max"].default_value = c, d
+            link(x, n.inputs["Value"])
+            return n.outputs["Result"]
+        tc = new("ShaderNodeTexCoord")
+        sep = new("ShaderNodeSeparateXYZ")
+        link(tc.outputs["UV"], sep.inputs[0])
+        u, v = sep.outputs[0], sep.outputs[1]
+        seed = mt("MULTIPLY", new("ShaderNodeObjectInfo").outputs["Random"], 60.0)
+
+        def noise(vec, scale, detail=2.0):
+            n = new("ShaderNodeTexNoise")
+            n.noise_dimensions = "4D"
+            n.inputs["Scale"].default_value, n.inputs["Detail"].default_value = scale, detail
+            link(vec, n.inputs["Vector"])
+            link(seed, n.inputs["W"])
+            return n.outputs["Fac"]
+        if is_core:                                        # a burst: bright in the middle, rays of uneven length
+            ln = new("ShaderNodeVectorMath")
+            ln.operation = "LENGTH"
+            link(tc.outputs["UV"], ln.inputs[0])
+            nm = new("ShaderNodeVectorMath")
+            nm.operation = "NORMALIZE"
+            link(tc.outputs["UV"], nm.inputs[0])
+            reach = remap(noise(nm.outputs[0], 2.6, 0.0), 0.35, 0.65, 0.3, 1.0)
+            a = mt("POWER", mt("SUBTRACT", 1.0, mt("DIVIDE", ln.outputs["Value"], reach), clamp=True), 1.7)
+        else:                                              # a tongue: widest a third of the way out, pointed at the tip
+            edge = mt("MULTIPLY", mt("MULTIPLY", mt("SQRT", v), mt("POWER", mt("SUBTRACT", 1.0, v, clamp=True), 1.2)), 2.3)
+            edge = mt("MAXIMUM", edge, 0.001)
+            a = mt("POWER", mt("SUBTRACT", 1.0, mt("DIVIDE", mt("ABSOLUTE", u), edge), clamp=True), 1.3)
+        a = mt("MULTIPLY", a, remap(noise(tc.outputs["UV"], 3.2), 0.3, 0.7, 0.3, 1.5), clamp=True)
+        col = new("ShaderNodeMix")
+        col.data_type = "RGBA"
+        link(mt("POWER", a, 0.6), col.inputs[0])
+        col.inputs[6].default_value = (1.0, 0.27, 0.04, 1)
+        col.inputs[7].default_value = (1.0, 0.86, 0.55, 1)
+        em = new("ShaderNodeEmission")
+        em.inputs["Strength"].default_value = 30.0
+        link(col.outputs[2], em.inputs["Color"])
+        mix = new("ShaderNodeMixShader")
+        link(mt("MULTIPLY", a, 1.7, clamp=True), mix.inputs[0])
+        link(new("ShaderNodeBsdfTransparent").outputs[0], mix.inputs[1])
+        link(em.outputs[0], mix.inputs[2])
+        link(mix.outputs[0], nt.nodes["Material Output"].inputs["Surface"])
+        out.append(m)
+    return out
 
 
 if __name__ == "__main__":

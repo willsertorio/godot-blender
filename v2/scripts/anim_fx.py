@@ -7,12 +7,12 @@ Firefight section (fx_plan.py).
 Everything is a plain mesh with keyed transform and colour, so it plays on the timeline and can be exported:
 - tracer: a thin bright rod stretched along a stretch of the bullet's path, two frames per shot
 - sparks: one mesh of streaks that grows and fades over five frames (+ a point light for two)
-- halo / trail: a soft glow round a flash, a burst of sparks or a tracer (stands in for lens bloom)
 - puff: balls of smoke (a volume) that swell, rise, drift and thin out
 - litter: chips and scorch marks already on the floor in the Firefight
 - debris: small chunks on ballistic paths that come to rest on the floor
 - scorch: a dark soft-edged disc left where a round hit (Firefight only)
-The objects come from pools and are hidden (scale 0) when not in use. Effects of the player's shots live in that
+The scene also gets its lens here (v2lib.setup_post): motion blur and a compositor with bloom, a trace of colour
+fringing and a vignette. The objects come from pools and are hidden (scale 0) when not in use. Effects of the player's shots live in that
 weapon view's collection (so they show with the gun that fired them); the robots' in the collection `FX`.
 Where things are comes from the baked scene: muzzle and body positions are sampled at the frame of each shot;
 the guns' Fire / ADS rounds go where a ray from the eye lands.
@@ -138,39 +138,6 @@ def smoke_material(name, color):
     return m
 
 
-def halo_material():
-    """A soft glow round something bright: emission that is strongest where the ball faces the eye and gone at its
-    rim, in the object's colour, times its alpha. (Stands in for lens bloom, and exports as a plain mesh.)"""
-    m = bpy.data.materials.new("FxHalo")
-    m.use_nodes = True
-    nt = m.node_tree
-    nt.nodes.remove(nt.nodes["Principled BSDF"])
-    oi = nt.nodes.new("ShaderNodeObjectInfo")
-    lw = nt.nodes.new("ShaderNodeLayerWeight")
-    lw.inputs["Blend"].default_value = 0.5
-    inv = nt.nodes.new("ShaderNodeMath")
-    inv.operation = "SUBTRACT"
-    inv.inputs[0].default_value = 1.0
-    nt.links.new(lw.outputs["Facing"], inv.inputs[1])
-    pw = nt.nodes.new("ShaderNodeMath")
-    pw.operation = "POWER"
-    pw.inputs[1].default_value = 2.6
-    nt.links.new(inv.outputs[0], pw.inputs[0])
-    fa = nt.nodes.new("ShaderNodeMath")
-    fa.operation = "MULTIPLY"
-    nt.links.new(pw.outputs[0], fa.inputs[0])
-    nt.links.new(oi.outputs["Alpha"], fa.inputs[1])
-    em = nt.nodes.new("ShaderNodeEmission")
-    em.inputs["Strength"].default_value = 4.0
-    nt.links.new(oi.outputs["Color"], em.inputs["Color"])
-    mix = nt.nodes.new("ShaderNodeMixShader")
-    nt.links.new(fa.outputs[0], mix.inputs[0])
-    nt.links.new(nt.nodes.new("ShaderNodeBsdfTransparent").outputs[0], mix.inputs[1])
-    nt.links.new(em.outputs[0], mix.inputs[2])
-    nt.links.new(mix.outputs[0], nt.nodes["Material Output"].inputs["Surface"])
-    return m
-
-
 def scorch_material():
     """Soot: black, dense in the middle, gone at the rim."""
     m = bpy.data.materials.new("FxScorch")
@@ -202,7 +169,6 @@ SQUASH = 0.2                                       # how much a puff is flattene
 TONES = {"dust": (0.78, 0.77, 0.74), "smoke": (0.42, 0.42, 0.43), "wreck": (0.09, 0.09, 0.1)}
 M_GLOW, M_SCORCH = glow_material(), scorch_material()
 M_SMOKE = {k: smoke_material("FxSmoke_" + k, c) for k, c in TONES.items()}
-M_HALO = halo_material()
 M_TRACER = glow_material("FxTracerGlow", 7.0)      # (dimmer than the sparks: at full strength a tracer burns out white)
 
 
@@ -240,19 +206,23 @@ def tracer_mesh():
 
 
 def sparks_mesh(seed):
-    """Streaks flying out over a half-sphere about +Z, from a small core."""
+    """A shower of fine streaks flying out over a half-sphere about +Z, a few long ones, and a small hot core."""
     rng = random.Random(seed)
     bm = bmesh.new()
-    for _ in range(20):
-        d = Vector((rng.gauss(0, 1), rng.gauss(0, 1), abs(rng.gauss(0, 1)) + 0.15)).normalized()
-        r0, r1, w = rng.uniform(0.08, 0.3), rng.uniform(0.45, 1.0), rng.uniform(0.006, 0.014)
+    for i in range(56):
+        d = Vector((rng.gauss(0, 1), rng.gauss(0, 1), abs(rng.gauss(0, 1)) + 0.1)).normalized()
+        far = rng.uniform(0.75, 1.25) if i < 8 else rng.uniform(0.3, 0.8)
+        r0 = far * rng.uniform(0.45, 0.8)
+        w = rng.uniform(0.0025, 0.006)
         side = d.orthogonal().normalized() * w
         up = d.cross(side).normalized() * w
-        a, b = d * r0, d * r1
-        vs = [bm.verts.new(a + side), bm.verts.new(a + up), bm.verts.new(a - side), bm.verts.new(a - up), bm.verts.new(b)]
-        for i in range(4):
-            bm.faces.new((vs[i], vs[(i + 1) % 4], vs[4]))
-    bmesh.ops.create_icosphere(bm, subdivisions=1, radius=0.09)
+        a, b = d * r0, d * far
+        vs = [bm.verts.new(a), bm.verts.new((a + b) / 2 + side), bm.verts.new((a + b) / 2 + up), bm.verts.new((a + b) / 2 - side),
+              bm.verts.new((a + b) / 2 - up), bm.verts.new(b)]
+        for k in range(4):
+            bm.faces.new((vs[0], vs[1 + k], vs[1 + (k + 1) % 4]))
+            bm.faces.new((vs[5], vs[1 + (k + 1) % 4], vs[1 + k]))
+    bmesh.ops.create_icosphere(bm, subdivisions=1, radius=0.05)
     return mesh(f"FxSparks{seed}", bm, M_GLOW)
 
 
@@ -261,19 +231,6 @@ def puff_mesh(tone):
     bm = bmesh.new()
     bmesh.ops.create_icosphere(bm, subdivisions=2, radius=0.56)
     return mesh("FxPuff_" + tone, bm, M_SMOKE[tone])
-
-
-def halo_mesh():
-    bm = bmesh.new()
-    bmesh.ops.create_icosphere(bm, subdivisions=3, radius=1.0)
-    return mesh("FxHalo", bm, M_HALO)
-
-
-def trail_mesh():
-    bm = bmesh.new()                                # the glow round a tracer: a fat rod from 0 to 1 along +Y
-    bmesh.ops.create_cone(bm, cap_ends=True, segments=12, radius1=0.016, radius2=0.016, depth=1.0,
-                          matrix=Matrix.Translation((0, 0.5, 0)) @ Matrix.Rotation(-math.pi / 2, 4, "X"))
-    return mesh("FxTrail", bm, M_HALO)
 
 
 def chunk_mesh(seed):
@@ -296,7 +253,7 @@ def disc_mesh():
 
 
 MESHES = {"puff_" + k: [puff_mesh(k)] for k in TONES}
-MESHES.update({"tracer": [tracer_mesh()], "sparks": [sparks_mesh(i) for i in range(4)], "halo": [halo_mesh()], "trail": [trail_mesh()],
+MESHES.update({"tracer": [tracer_mesh()], "sparks": [sparks_mesh(i) for i in range(4)], 
           "chunk": [chunk_mesh(i) for i in range(5)], "scorch": [disc_mesh()]})
 rec = Recorder()
 
@@ -359,20 +316,6 @@ def tracer(where, f, a, b, color):
     hide(ob, f - 1, m)
     show(ob, f, m, (*color, 1.0))
     hide(ob, f + 1, m)
-    gl = take("trail", where, f, f)                         # its glow
-    hide(gl, f - 1, m)
-    show(gl, f, m, (*color, 0.2))
-    hide(gl, f + 1, m)
-
-
-def halo(where, f, p, radius, color, alpha=0.6, life=2):
-    """A soft glow at p for a couple of frames (muzzle flashes, sparks)."""
-    ob = take("halo", where, f, f + life - 1)
-    hide(ob, f - 1, Matrix.Translation(p))
-    for i in range(life):
-        k = i / life
-        show(ob, f + i, Matrix.Translation(p) @ Matrix.Scale(radius * (1 + 0.25 * k), 4), (*color, alpha * (1 - k) ** 1.5))
-    hide(ob, f + life, Matrix.Translation(p))
 
 
 def sparks(where, f, p, n, size, color=SPARK, life=5, light=6.0):
@@ -384,7 +327,6 @@ def sparks(where, f, p, n, size, color=SPARK, life=5, light=6.0):
         m = Matrix.Translation(p + Vector((0, 0, -0.12 * size * k * k))) @ rot @ Matrix.Scale(size * (0.35 + 0.65 * ease_out(k, 2)), 4)
         show(ob, f + i, m, (*color, (1 - k) ** 1.3))
     hide(ob, f + life, Matrix.Translation(p))
-    halo(where, f, p + n * 0.03, size * 0.6, color, alpha=0.2, life=3)
     if light > 0:
         lo = take("light", where, f, f + 2)
         for i, e in enumerate((light, light * 0.3, 0.0)):
@@ -576,8 +518,7 @@ for where, frames, flash in (("pistol", P_FIRE, "P_Flash"), ("rifle", R_FIRE + R
         p, n = gun_hits[f]
         shot(where, f, at[(f, flash)], p, YELLOW, (n, "wall"), seed=f)
         if where == "pistol" or j % 3 == 0:
-            puff(where, f + 1, at[(f, flash)], 0.16, 18, rise=0.14, color=GUNSMOKE, alpha=0.45, seed=f)
-        halo(where, f, at[(f, flash)], 0.085 if where == "pistol" else 0.13, YELLOW, alpha=0.22)
+            puff(where, f + 1, at[(f, flash)], 0.13, 16, rise=0.12, color=GUNSMOKE, alpha=0.2, seed=f)
 
 # ---- the robots' shots: half at the floor in front of the player (sparks, dust, chips), half streaking past
 eye = CAM0.translation
@@ -601,7 +542,6 @@ for name, frames in ROBOT_SHOTS.items():
                 aim = eye + right * r.choice((-1, 1)) * r.uniform(0.55, 1.0) + Vector((0, 0, r.uniform(-0.45, 0.3)))
                 shot("fx", f, mz, mz + (aim - mz) * (1 - 1.6 / (aim - mz).length), RED)
             puff("fx", f + 1, mz, 0.3, 22, rise=0.25, color=GUNSMOKE, alpha=0.3, seed=k)
-            halo("fx", f, mz, 0.2, RED, alpha=0.22)
 
 # ---- Firefight: the player's rounds hit the spider and the floor at its feet; smoke gathers round it
 FF_END = FF + PLAN.FF_N - 1
@@ -620,12 +560,11 @@ for where, frames in (("pistol", P_FF), ("rifle", R_FF)):
             hit = ((eye - tgt).normalized(), "metal")
         shot(where, f, at[(f, "P_Flash" if where == "pistol" else "R_Flash")], tgt, YELLOW, hit, seed=f, until=FF_END)
         if where == "pistol" or j % 3 == 0:
-            puff(where, f + 1, at[(f, "P_Flash" if where == "pistol" else "R_Flash")], 0.16, 18, rise=0.14, color=GUNSMOKE, alpha=0.45, seed=f)
-        halo(where, f, at[(f, "P_Flash" if where == "pistol" else "R_Flash")], 0.085 if where == "pistol" else 0.13, YELLOW, alpha=0.22)
+            puff(where, f + 1, at[(f, "P_Flash" if where == "pistol" else "R_Flash")], 0.13, 16, rise=0.12, color=GUNSMOKE, alpha=0.2, seed=f)
 sp_rest = OBJ["Spider_Body"].matrix_world.translation.copy()
 # the fight has been going on: the spider smokes, dust hangs at its feet, the floor round it is littered and scorched
 smoke("fx", FF, FF_END - 30, 4, lambda f_: sp_rest + Vector((random.Random(f_).uniform(-0.15, 0.15), 0.05, 0.3)), 0.75, 36,
-      1.0, (0.3, 0.2, 0.0), SMOKE, 0.26, seed=100)
+      1.0, (0.3, 0.2, 0.0), SMOKE, 0.34, seed=100)
 smoke("fx", FF, FF_END - 26, 9, lambda f_: Vector((sp_rest.x + random.Random(f_).uniform(-0.7, 0.7),
                                                    sp_rest.y + random.Random(f_ + 1).uniform(-0.7, 0.5), 0.12)), 0.8, 30,
       0.2, (0.15, -0.1, 0.0), DUST, 0.16, seed=200)
@@ -665,6 +604,15 @@ for f in range(slam + 5, DEATH_END - 14, 6):
     puff("fx", f, at[(f, "Spider_Turret")] + Vector((0, 0, 0.1)), 0.55, 30, rise=0.9, color=WRECK, alpha=0.5, seed=f)
 
 write_fcurves(rec.ch, "Fx")
+L.setup_post(sc)
+for o in OBJ:                                      # things that pop in and out (scale 0) would smear if blurred
+    if (o.name.startswith("Fx") and "Chunk" not in o.name) or "Flash" in o.name or "Casing" in o.name \
+            or o.name.startswith("P_Magazine2") or o.name in ("P_MagBase2", "P_MagRound2"):
+        L.no_motion_blur(o)
+for cname in H.COLL.values():                      # the weapon views stay sharp, as in a first-person game: blurred,
+    for o in bpy.data.collections[cname].all_objects:      # the gun is a smear on the very frame it fires
+        if "Chunk" not in o.name:
+            L.no_motion_blur(o)
 sc.frame_set(1)
 print("fx:", {f"{k}/{w}": len(p.items) for (k, w), p in POOLS.items()})
 if "nosave" not in sys.argv:

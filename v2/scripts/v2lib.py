@@ -470,6 +470,44 @@ class Builder:
         return ob
 
 
+def setup_post(sc):
+    """The camera's part of the look, stored in the scene: motion blur (half-frame shutter) and a compositor chain:
+    bloom on everything bright (fog glow), a trace of colour fringing, a soft vignette."""
+    sc.render.use_motion_blur = True
+    sc.render.motion_blur_shutter = 0.5
+    sc.use_nodes = True
+    sc.render.use_compositing = True
+    nt = sc.node_tree
+    nt.nodes.clear()
+    rl = nt.nodes.new("CompositorNodeRLayers")
+    gl = nt.nodes.new("CompositorNodeGlare")
+    gl.glare_type, gl.quality = "FOG_GLOW", "HIGH"
+    gl.threshold, gl.size, gl.mix = 3.0, 7, -0.35
+    nt.links.new(rl.outputs["Image"], gl.inputs["Image"])
+    ld = nt.nodes.new("CompositorNodeLensdist")
+    ld.use_fit = True
+    ld.inputs["Dispersion"].default_value = 0.012
+    nt.links.new(gl.outputs["Image"], ld.inputs["Image"])
+    mask = nt.nodes.new("CompositorNodeEllipseMask")
+    mask.width, mask.height = 0.92, 0.86
+    bl = nt.nodes.new("CompositorNodeBlur")
+    bl.filter_type, bl.use_relative = "FAST_GAUSS", True
+    bl.factor_x = bl.factor_y = 22.0
+    nt.links.new(mask.outputs[0], bl.inputs["Image"])
+    vg = nt.nodes.new("CompositorNodeMixRGB")
+    vg.blend_type = "MULTIPLY"
+    vg.inputs[0].default_value = 0.38
+    nt.links.new(ld.outputs["Image"], vg.inputs[1])
+    nt.links.new(bl.outputs["Image"], vg.inputs[2])
+    out = nt.nodes.new("CompositorNodeComposite")
+    nt.links.new(vg.outputs["Image"], out.inputs["Image"])
+
+
+def no_motion_blur(ob):
+    """For things that pop in and out by scale 0, or jump: blurred, they would smear across their first frame."""
+    ob.cycles.use_motion_blur = False
+
+
 def coll(name):
     c = bpy.data.collections.get(name)
     if not c:
