@@ -67,8 +67,11 @@ blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100 view=rifle  
   `<Robot>_<Joint>` (`Robot.joint/add/cable/flash`); only joints are keyed, so the clips are plain node animation.
   Spider: Body, Hip/Thigh/Shin/Foot 0-3, Turret, Guns. Drone: Body, PropL/R, Gun. Turret: Yaw, Shoulder, Elbow,
   Head, Guns. The robots play together in sections (markers "Robots ..."; per-robot ranges in `v2_clips_robots`):
-  Idle 1201-1272, Shoot 1281-1310, Move 1319-1390 (Spider Walk = 24-frame loop at 0.6 m/s, in place; Drone Fly;
-  Turret Aim), Run 1399-1458 (Spider Run = 15-frame loop at 1.5 m/s, in place), Death 1467-1526.
+  Idle 1201-1272, Shoot 1281-1320, Move 1329-1400 (Spider Walk = 24-frame loop at 0.6 m/s, in place; Drone Fly;
+  Turret Aim), Run 1409-1468 (Spider Run = 15-frame loop at 1.5 m/s, in place), Death 1477-1552.
+  The motion is deliberately broad (user's direction: juicier, exaggerated, dramatic): anticipation before an
+  action, every stop overshoots and settles (`steps`), recoil is a damped swing (`imp`) that reaches the outer
+  joints a few hundredths of a second later, deaths have a stagger / spasm / spiral before the fall and a bounce.
   Spider legs are solved from ankle targets (hip swing + two-bone solve in the leg's plane, knee up), so the feet
   stay planted while the body moves. Lights going out = the emissive parts keyed to scale 0. Rebuilding the robots
   drops their animation: build_robots -> anim_robots.

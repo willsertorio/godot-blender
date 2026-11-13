@@ -4,11 +4,14 @@
     blender -b v2/scene.blend -P v2/scripts/anim_robots.py            (run after build_robots.py; saves the file)
 
 The robots play together, section by section (markers "Robots ..."):
-  Idle    spider breathes and scans with its turret; drone hovers; ceiling turret scans
-  Shoot   each fires a short burst (recoil, muzzle flashes)
-  Move    spider walks (0.6 m/s, 1 s cycle, in place); drone flies a banked figure; turret aims up / down and round
+  Idle    spider shifts its weight, snaps its turret from target to target, stamps a foot; drone hovers and looks
+          about; ceiling turret scans in snaps
+  Shoot   each braces, fires a short burst (recoil running through the whole body, muzzle flashes) and settles
+  Move    spider walks (0.6 m/s, 1 s cycle, in place); drone flies a banked figure; turret whips up / down and round
   Run     spider runs (1.5 m/s, 15-frame cycle, in place); the others idle
-  Death   turret goes limp, drone falls out of the air, spider collapses; their lights go out
+  Death   turret spasms and goes limp, drone spirals out of the air and bounces, spider staggers and slams down
+The motion is deliberately broad: anticipation before an action, overshoot and settle on every stop (`steps`),
+recoil as damped oscillation (`imp`) that the lighter parts pick up later than the heavy ones.
 Only joints move (the empties build_robots.py hangs the parts from). The spider's legs are solved from foot targets
 (hip swing + two-bone solve in the leg's plane), so the feet stay planted while the body moves.
 """
@@ -23,7 +26,7 @@ from mathutils import Matrix, Vector
 
 sys.path.insert(0, os.path.dirname(__file__))
 import build_robots as RB  # noqa: E402
-from anim_lib import FPS, I4, Recorder, clamp, seg, smooth, table, write_fcurves  # noqa: E402
+from anim_lib import FPS, I4, Recorder, back_out, clamp, seg, smooth, table, write_fcurves  # noqa: E402
 
 FIRST = 1201
 TAU = math.tau
@@ -68,11 +71,47 @@ def flash(st, name, seed):
     st[("energy", name + "Light")] = 8.0
 
 
-def shots(f, frames):
-    """(index of the shot fired on this frame or None, recoil 0..1 that decays over three frames)."""
-    hit = frames.index(f) if f in frames else None
-    rec = max([(1.0, 0.45, 0.15)[f - s] for s in frames if 0 <= f - s <= 2] or [0.0])
-    return hit, rec
+def steps(t, keys, d=0.28, s=2.0, start=0.0):
+    """Snappy moves: at each (time, value) go to that value in d seconds, overshooting and settling."""
+    prev = val = start
+    for ti, vi in keys:
+        if t >= ti:
+            val = prev + (vi - prev) * back_out(seg(t, ti, ti + d), s)
+        prev = vi
+    return val
+
+
+def imp(t, times, period, decay):
+    """What a hit at each of `times` leaves behind: a swing that dies away (1 at the hit, then ringing)."""
+    return sum(math.exp(-(t - x) / decay) * math.cos(TAU * (t - x) / period) for x in times if t >= x)
+
+
+def bump(t, times, decay):
+    """1 at each of `times`, falling straight back (no ringing): a barrel's recoil."""
+    return sum(math.exp(-(t - x) / decay) for x in times if t >= x)
+
+
+def swing(t, t0, amp, period, decay):
+    """A limp part swinging to rest: 0 before t0, then amp * (1 - a damped cosine)."""
+    if t < t0:
+        return 0.0
+    x = t - t0
+    return amp * (1 - math.exp(-x / decay) * math.cos(TAU * x / period))
+
+
+def flicker(t, until):
+    """Lights failing: on, then stuttering, then off for good."""
+    return t < until and (t < 0.12 or math.sin(t * 61.0) * math.sin(t * 23.0 + 1.0) > -0.15)
+
+
+SHOT_T = (0.25, 0.5, 0.75)                         # when the bursts' rounds go off (s into the Shoot section)
+
+
+def fired(t, times=SHOT_T):
+    """Index of the round fired on this frame, or None."""
+    f = round(t * FPS)
+    hits = [i for i, x in enumerate(times) if round(x * FPS) == f]
+    return hits[0] if hits else None
 
 
 # ====================================================================== spider
@@ -112,60 +151,87 @@ def spider(body=I4, feet=None, yaw=0.0, pitch=0.0, recoil=0.0, lights=True):
 
 
 def spider_idle(t):
+    """Weight shifting from side to side, the turret snapping from target to target, one foot stamped."""
     ph = TAU * t / 3.0
-    return spider(Tm(0.006 * math.sin(ph), 0.004 * math.sin(2 * ph), 0.008 * math.sin(2 * ph + 0.5)) @ Ry(0.8 * math.sin(ph)),
-                  yaw=13 * math.sin(ph), pitch=2.5 * math.sin(2 * ph + 1.0))
-
-
-SPIDER_SHOTS = (3, 11, 19)
+    stamp = seg(t, 1.7, 2.0)
+    feet = list(FEET0)
+    feet[1] = FEET0[1] + Vector((0, 0.04 * math.sin(math.pi * stamp), 0.11 * math.sin(math.pi * stamp)))
+    land = imp(t, [2.0], 0.3, 0.12)
+    body = Tm(0.03 * math.sin(ph), 0.012 * math.sin(ph + 1.0), 0.022 * math.sin(2 * ph + 0.5) - 0.012 * land) \
+        @ Ry(2.2 * math.sin(ph) + 1.0 * land) @ Rx(1.2 * math.sin(2 * ph))
+    snaps = [(0.25, 30), (1.25, -26), (2.35, 0)]
+    return spider(body, feet, yaw=steps(t, snaps, 0.28, 2.2),
+                  pitch=4 * math.sin(2 * ph) - 4 * imp(t, [x + 0.05 for x, _ in snaps], 0.25, 0.12))
 
 
 def spider_shoot(t):
-    f = round(t * FPS)
-    hit, rec = shots(f, SPIDER_SHOTS)
-    st = spider(Tm(y=-0.012 * rec, z=-0.004 * rec) @ Rx(1.3 * rec), recoil=0.055 * rec, pitch=1.0 * rec)
+    """Crouch and lean in, three twin shots that rock the whole machine back on its legs, rise again."""
+    c = smooth(seg(t, 0.0, 0.18)) * (1 - smooth(seg(t, 1.0, 1.4)))
+    rock = imp(t, SHOT_T, 0.36, 0.13)                       # the body takes the shot and rings
+    st = spider(Tm(0, 0.03 * c - 0.04 * rock, -0.05 * c + 0.012 * rock) @ Rx(-3 * c + 4.5 * rock) @ Ry(0.8 * rock),
+                recoil=0.09 * bump(t, SHOT_T, 0.055), pitch=3.5 * imp(t, [x + 0.03 for x in SHOT_T], 0.3, 0.1) - 2 * c)
+    hit = fired(t)
     if hit is not None:
         flash(st, "Spider_FlashL", 10 + hit)
         flash(st, "Spider_FlashR", 20 + hit)
     return st
 
 
-def gait(t, period, stride, lift, body):
-    """Trot: diagonal pairs of legs. A foot is on the ground for half the cycle, moving back under the body."""
+def gait(t, period, stride, lift, body, yaw, pitch):
+    """Trot: diagonal pairs of legs. A foot is on the ground for half the cycle, moving back under the body; in the
+    air it snaps up high early and reaches forward before it comes down."""
     feet = []
     for i in range(4):
         ph = (t / period + (0.0 if i in (0, 2) else 0.5)) % 1.0
         if ph < 0.5:
             y, z = stride * (0.5 - ph / 0.5), 0.0
         else:
-            s = (ph - 0.5) / 0.5
-            y, z = stride * (smooth(s) - 0.5), lift * math.sin(math.pi * s)
+            s_ = (ph - 0.5) / 0.5
+            y, z = stride * (back_out(s_, 1.2) - 0.5), lift * math.sin(math.pi * s_ ** 0.7)
         feet.append(FEET0[i] + Vector((0, y, z)))
-    return spider(body, feet, yaw=-20)                     # turret faces the way it walks
+    return spider(body, feet, yaw=yaw, pitch=pitch)
 
 
 def spider_walk(t):
+    """A heavy swagger: the body rolls and sways over the planted pair, the turret lags behind it."""
     ph = TAU * t
-    return gait(t, 1.0, 0.30, 0.09, Tm(0.008 * math.sin(ph), 0, -0.006 - 0.008 * math.cos(2 * ph)) @ Ry(1.4 * math.sin(ph)) @ Rx(0.8 * math.sin(2 * ph)))
+    body = Tm(0.025 * math.sin(ph), 0, -0.01 - 0.022 * math.cos(2 * ph)) @ Rz(2.5 * math.sin(ph)) @ Ry(3.5 * math.sin(ph)) \
+        @ Rx(1.8 * math.sin(2 * ph + 0.6))
+    return gait(t, 1.0, 0.30, 0.16, body, yaw=-20 + 5 * math.sin(ph + 1.2), pitch=3 * math.sin(2 * ph + 1.5))
 
 
 RUN_T = 15 / FPS
 
 
 def spider_run(t):
+    """Nose down, pounding: the body pitches and drops with every pair of feet, guns bouncing."""
     ph = TAU * t / RUN_T
-    return gait(t, RUN_T, 0.47, 0.15, Tm(0.012 * math.sin(ph), 0, -0.03 - 0.016 * math.cos(2 * ph)) @ Rx(-4 + 1.5 * math.sin(2 * ph)) @ Ry(2.2 * math.sin(ph)))
+    body = Tm(0.02 * math.sin(ph), 0, -0.035 - 0.04 * math.cos(2 * ph)) @ Rx(-7 + 4 * math.sin(2 * ph)) @ Ry(4 * math.sin(ph))
+    return gait(t, RUN_T, 0.47, 0.24, body, yaw=-20 + 7 * math.sin(ph + 1.0), pitch=5 * math.sin(2 * ph + 1.2))
 
 
-def spider_death(t):
-    """Hit, the lights flicker out, the legs give way: the body drops onto its belly, feet sliding outward."""
-    k = table(t, [(0.25, 0), (0.75, 1.0), (0.85, 0.93), (0.95, 1.0)])           # fall, bounce, rest
-    k = k * k if t < 0.75 else k
-    jolt = table(t, [(0.0, 0), (0.06, 1), (0.25, 0)])
-    body = Tm(0.03 * k, -0.02 * jolt - 0.05 * k, -0.40 * k) @ Ry(11 * k) @ Rx(-5 * k + 2 * jolt)
-    feet = [p + Vector((p.x, p.y, 0)).normalized() * 0.13 * k for p in FEET0]
-    on = t < 0.2 or 0.26 < t < 0.33 or 0.4 < t < 0.44
-    return spider(body, feet, yaw=-14 * k, pitch=-19 * smooth(seg(t, 0.3, 0.9)), lights=on)
+SPIDER_DIES = 0.35                                         # seconds into the Death section
+
+
+def spider_death(ts):
+    """Hit: knocked back, it staggers with the turret whipping round and a front leg pawing the air, the lights
+    stutter, then the legs give way and it slams down, bounces, and a rear leg twitches twice."""
+    t = max(ts - SPIDER_DIES, 0.0)
+    jolt = imp(t, [0.0], 0.4, 0.16) if ts >= SPIDER_DIES else 0.0
+    stag = math.sin(TAU * 2.6 * t) * math.exp(-t / 0.45) * seg(t, 0.0, 0.1)
+    k = table(t, [(0.7, 0), (1.05, 1.0), (1.17, 0.83), (1.3, 1.0), (1.37, 0.96), (1.45, 1.0)])   # fall, bounce, rest
+    if t < 1.05:
+        k = k * k                                           # (falls faster and faster)
+    body = Tm(0.05 * stag + 0.03 * k, -0.06 * jolt - 0.05 * k, 0.03 * jolt - 0.40 * k) \
+        @ Ry(6 * stag + 14 * k) @ Rx(8 * jolt - 5 * k)
+    feet = [p + Vector((p.x, p.y, 0)).normalized() * 0.16 * k for p in FEET0]
+    paw = seg(t, 0.18, 0.55)                                # a front leg off the ground
+    feet[0] = feet[0] + Vector((0, 0.1 * math.sin(math.pi * paw), 0.22 * math.sin(math.pi * paw) ** 0.6 if paw > 0 else 0))
+    for t0 in (1.75, 2.05):                                 # after the fall: a rear leg kicks
+        tw = seg(t, t0, t0 + 0.16)
+        feet[2] = feet[2] + Vector((0, 0, 0.07 * math.sin(math.pi * tw)))
+    return spider(body, feet, yaw=steps(t, [(0.05, 150), (0.6, 110)], 0.4, 2.4) * (1 if ts >= SPIDER_DIES else 0),
+                  pitch=12 * stag - swing(t, 1.0, 24, 0.5, 0.25), lights=flicker(t, 0.95))
 
 
 # ====================================================================== drone
@@ -185,9 +251,16 @@ def drone(f, world=None, local=I4, spin=None, recoil=0.0, lights=True):
     return st
 
 
+LOOKS = [(0.3, 22), (1.3, -18), (2.3, 0)]
+
+
 def hover(t):
+    """Never still: it drifts and bobs, and snaps its nose from side to side, banking into each look."""
     ph = TAU * t / 3.0
-    return Tm(0.015 * math.sin(ph + 1.0), 0, 0.03 * math.sin(ph)), Ry(1.6 * math.sin(ph + 0.4)) @ Rz(2.0 * math.sin(ph))
+    look = steps(t, LOOKS, 0.26, 2.4)
+    lean = imp(t, [x for x, _ in LOOKS], 0.45, 0.16)
+    return (Tm(0.04 * math.sin(ph + 1.0), 0, 0.05 * math.sin(ph) + 0.015 * math.sin(3 * ph)),
+            Rz(look) @ Ry(3.5 * math.sin(ph + 0.4) + 5 * lean) @ Rx(2.5 * math.sin(2 * ph)))
 
 
 def drone_idle(t, f):
@@ -195,51 +268,65 @@ def drone_idle(t, f):
     return drone(f, w, l)
 
 
-DRONE_SHOTS = (4, 12, 20)
-
-
 def drone_shoot(t, f):
-    hit, rec = shots(round(t * FPS), DRONE_SHOTS)
-    w, l = hover(t)
-    st = drone(f, w, l @ Tm(y=-0.02 * rec) @ Rx(2.2 * rec), recoil=0.03 * rec)
+    """Rises and drops its nose to aim, three shots that throw it back and up, swings back level."""
+    c = smooth(seg(t, 0.0, 0.2)) * (1 - smooth(seg(t, 0.95, 1.4)))
+    kick = imp(t, SHOT_T, 0.38, 0.14)
+    st = drone(f, Tm(0, 0, 0.04 * c + 0.02 * kick), Tm(y=-0.03 * c - 0.07 * kick) @ Rx(-6 * c + 8 * kick) @ Ry(1.5 * kick),
+               recoil=0.05 * bump(t, SHOT_T, 0.05))
+    hit = fired(t)
     if hit is not None:
         flash(st, "Drone_Flash", 30 + hit)
     return st
 
 
 def drone_fly(t, f):
-    """A banked figure-eight in front of the player (3 s loop)."""
+    """A wide, steeply banked figure-eight (3 s loop), nose swinging into each turn."""
     ph = TAU * t / 3.0
-    return drone(f, Tm(0, 0, 0.08 * math.sin(2 * ph)),
-                 Tm(0.38 * math.sin(ph), 0.12 * math.sin(2 * ph)) @ Ry(-13 * math.sin(ph)) @ Rx(-4 - 5 * math.cos(2 * ph)) @ Rz(-6 * math.cos(ph)))
+    return drone(f, Tm(0, 0, 0.16 * math.sin(2 * ph + 0.5)),
+                 Tm(0.6 * math.sin(ph), 0.2 * math.sin(2 * ph)) @ Rz(-14 * math.cos(ph)) @ Ry(-24 * math.sin(ph)) @ Rx(-6 - 8 * math.cos(2 * ph)))
 
 
-DRONE_DROP = DRONE_M.translation.z - 0.31                  # how far it falls before a rotor duct hits the floor
+DRONE_DROP = DRONE_M.translation.z - 0.34                  # how far it falls before a rotor duct hits the floor
 _yaw0 = math.atan2(DRONE_M.col[1].y, DRONE_M.col[1].x) - math.pi / 2
-DRONE_LAND = (Matrix.Rotation(_yaw0 + 0.5, 4, "Z") @ Ry(19)).to_quaternion()   # how it lies on the floor
-
-
 DRONE_DIES = 0.15                                          # seconds into the Death section
+DRONE_G = 7.0                                              # it falls slower than a stone: the rotors still bite
+DRONE_HIT = 0.12 + math.sqrt(2 * DRONE_DROP / DRONE_G)     # when it reaches the floor (s after it is hit)
 
 
 def drone_death(ts, f):
-    """Hit: the rotors run down, it rolls over and falls, bounces once and lies on a duct. ts = section time."""
+    """Hit: thrown sideways, it corkscrews down spinning about its own axis with the rotors sputtering, slams into
+    the floor, bounces twice while skidding, and rocks to rest on a duct. ts = section time."""
     t = max(ts - DRONE_DIES, 0.0)
-    tf = max(t - 0.12, 0.0)                                # falls after a moment of hanging
-    t_hit = math.sqrt(2 * DRONE_DROP / 9.8)
-    if tf < t_hit:
-        z = -4.9 * tf * tf
+    jolt = imp(t, [0.0], 0.3, 0.1) if ts >= DRONE_DIES else 0.0
+    tf = max(t - 0.12, 0.0)
+    k = seg(t, 0.12, DRONE_HIT)                            # 0 at the start of the fall, 1 on the floor
+    tb = t - DRONE_HIT
+    if tb < 0:
+        z = -0.5 * DRONE_G * tf * tf
+    elif tb < 0.47:
+        z = -DRONE_DROP + 2.3 * tb - 4.9 * tb * tb         # first bounce
+    elif tb < 0.71:
+        x = tb - 0.47
+        z = -DRONE_DROP + 1.15 * x - 4.9 * x * x           # second, smaller
     else:
-        tb = tf - t_hit
-        z = -DRONE_DROP + (max(0.0, 1.5 * tb - 4.9 * tb * tb) if tb < 0.31 else 0.0)
-    k = smooth(seg(tf, 0.0, t_hit))
-    tumble = Matrix.Rotation(math.radians(160) * k * (1 - k) * 1.6, 4, "Y")
-    world_rot = DRONE_M.to_quaternion().slerp(DRONE_LAND, k).to_matrix().to_4x4() @ tumble
-    pos = DRONE_M.translation + Vector((0.25 * k, -0.35 * k, z))
-    # rotor angle = the integral of a speed that runs down to nothing in 0.8 s
-    spin = PROP_STEP * FPS * (min(ts, DRONE_DIES) + (t - t * t / 1.6 if t < 0.8 else 0.4))
-    st = drone(f, spin=spin, lights=t < 0.1 or 0.16 < t < 0.22 or 0.3 < t < 0.34)
-    st["Drone_Body"] = REST["Drone_Body"] @ DRONE_M.inverted() @ Matrix.Translation(pos) @ world_rot
+        z = -DRONE_DROP
+    ang = 9.0 * min(tf, DRONE_HIT - 0.12)                  # the corkscrew (stops where it lands)
+    rad = 0.1 + 0.3 * k
+    skid = 0.35 * smooth(seg(tb, 0.0, 0.9))
+    # (it drifts toward the middle of the floor: the other way it ends against the tank, half out of the frame)
+    pos = DRONE_M.translation + Vector((-0.12 * jolt + rad * math.sin(ang) - 0.3 * k - skid * 0.7,
+                                        -0.06 * jolt + rad * (1 - math.cos(ang)) - 0.15 * k - skid * 0.5, z))
+    turns = math.radians(900) * smooth(seg(t, 0.05, DRONE_HIT + 0.5))             # spinning about the vertical
+    rock = 14 * math.exp(-max(tb, 0) / 0.3) * math.cos(TAU * max(tb, 0) / 0.36) if tb >= 0 else 0.0
+    land = (Matrix.Rotation(_yaw0 + 0.5, 4, "Z") @ Ry(19 + rock)).to_quaternion()
+    fall_rot = (Matrix.Rotation(turns, 4, "Z") @ DRONE_M.to_3x3().to_4x4() @ Ry(25 * jolt + 38 * math.sin(7.0 * tf) * (1 - k))).to_quaternion()
+    world_rot = fall_rot.slerp(Matrix.Rotation(turns, 4, "Z").to_quaternion() @ land, smooth(seg(t, DRONE_HIT - 0.25, DRONE_HIT + 0.05)))
+    # rotor angle = the integral of a speed that sputters and runs down in a second
+    run = t - t * t / 2.0 if t < 1.0 else 0.5
+    spin = PROP_STEP * FPS * (min(ts, DRONE_DIES) + run + 0.03 * math.sin(30 * t) * (1 - seg(t, 0, 1.0)))
+    st = drone(f, spin=spin, lights=flicker(t, DRONE_HIT))
+    st["Drone_Body"] = REST["Drone_Body"] @ DRONE_M.inverted() @ Matrix.Translation(pos) @ world_rot.to_matrix().to_4x4()
     return st
 
 
@@ -255,40 +342,51 @@ def turret(yaw=0.0, shoulder=0.0, elbow=0.0, head=0.0, recoil=0.0, lights=True):
 
 
 def turret_idle(t):
+    """Scans in snaps: the mount whips round and stops dead, the head nods as the arm catches up, then it peers."""
     ph = TAU * t / 3.0
-    return turret(yaw=16 * math.sin(ph), head=3.5 * math.sin(2 * ph + 0.6), elbow=1.5 * math.sin(ph + 1.0))
+    snaps = [(0.2, 24), (1.2, -20), (2.3, 0)]
+    stop = imp(t, [x + 0.12 for x, _ in snaps], 0.3, 0.13)
+    return turret(yaw=steps(t, snaps, 0.3, 2.2), head=steps(t, [(0.6, -8), (1.6, 7), (2.55, 0)], 0.22, 2.0) + 3 * stop,
+                  elbow=3 * math.sin(ph + 1.0) - 2 * stop, shoulder=0.8 * math.sin(ph))
 
 
-TURRET_SHOTS = (3, 8, 13, 18)
+TURRET_SHOT_T = (0.25, 0.42, 0.58, 0.75)
 
 
 def turret_shoot(t):
-    hit, rec = shots(round(t * FPS), TURRET_SHOTS)
-    st = turret(head=-1.8 * rec, elbow=-0.8 * rec, recoil=0.05 * rec)
+    """Draws its head back and locks, four shots: the guns slam back, the head kicks up, and the kick runs up the
+    arm joint by joint; then it shakes itself still."""
+    c = smooth(seg(t, 0.0, 0.2)) * (1 - smooth(seg(t, 0.95, 1.35)))
+    kick = imp(t, TURRET_SHOT_T, 0.3, 0.1)
+    st = turret(yaw=1.3 * imp(t, [x + 0.02 for x in TURRET_SHOT_T], 0.22, 0.08), head=-3 * c - 5 * kick,
+                elbow=6 * c + 3.2 * imp(t, [x + 0.03 for x in TURRET_SHOT_T], 0.34, 0.12),
+                shoulder=-1.8 * imp(t, [x + 0.06 for x in TURRET_SHOT_T], 0.4, 0.14), recoil=0.09 * bump(t, TURRET_SHOT_T, 0.05))
+    hit = fired(t, TURRET_SHOT_T)
     if hit is not None:
         flash(st, "Turret_FlashL" if hit % 2 == 0 else "Turret_FlashR", 40 + hit)
     return st
 
 
 def turret_aim(t):
-    """Swings left and up, then right and down, and back (3 s)."""
-    yaw = table(t, [(0, 0), (0.6, 36), (1.1, 36), (1.9, -30), (2.4, -30), (3.0, 0)])
-    head = table(t, [(0, 0), (0.6, -15), (1.1, -15), (1.9, 12), (2.4, 12), (3.0, 0)])
-    return turret(yaw=yaw, head=head, elbow=0.4 * head, shoulder=-0.15 * head)
-
-
-def swing(t, t0, amp, period, decay):
-    """A limp part swinging to rest: 0 before t0, then amp * (1 - a damped cosine)."""
-    if t < t0:
-        return 0.0
-    x = t - t0
-    return amp * (1 - math.exp(-x / decay) * math.cos(TAU * x / period))
+    """Whips left and up, then right and down, and back (3 s): the head leads, the mount follows, the elbow reaches
+    last, and everything overshoots its mark and settles."""
+    return turret(yaw=steps(t, [(0.1, 42), (1.2, -36), (2.3, 0)], 0.36, 2.0),
+                  head=steps(t, [(0.05, -18), (1.15, 14), (2.25, 0)], 0.25, 2.4),
+                  elbow=steps(t, [(0.18, -10), (1.28, 8), (2.38, 0)], 0.42, 2.6),
+                  shoulder=steps(t, [(0.2, 3), (1.3, -3), (2.4, 0)], 0.45, 2.0))
 
 
 def turret_death(t):
-    """Power out: the arm sags on its joints and the head drops and swings; the eye goes dark."""
-    return turret(yaw=9 * smooth(seg(t, 0.0, 1.2)), shoulder=swing(t, 0.05, 20, 1.3, 0.5), elbow=swing(t, 0.12, 52, 1.0, 0.45),
-                  head=swing(t, 0.2, 38, 0.8, 0.5), lights=t < 0.08 or 0.14 < t < 0.2 or 0.3 < t < 0.33)
+    """Short circuit: half a second of spasms (head whipping, mount jerking), then the power goes: the arm drops on
+    its joints, the head hangs and swings a long time, and it twitches once more at the end."""
+    sp = math.exp(-t / 0.22) * seg(t, 0.0, 0.04)            # the spasms
+    off = 0.45
+    late = imp(t, [2.2], 0.18, 0.07)                        # the last twitch
+    return turret(yaw=16 * math.sin(41 * t) * sp + swing(t, off, 30, 2.2, 0.9),
+                  shoulder=5 * math.sin(33 * t + 1) * sp + swing(t, off, 26, 1.4, 0.7),
+                  elbow=-9 * math.sin(37 * t) * sp + swing(t, off + 0.05, 66, 1.1, 0.6) + 3 * late,
+                  head=22 * math.sin(47 * t + 2) * sp + swing(t, off + 0.1, 55, 0.85, 0.7) - 7 * late,
+                  lights=flicker(t, 0.6))
 
 
 # ====================================================================== baking
@@ -332,13 +430,13 @@ for mk in list(sc.timeline_markers):
 f = FIRST
 f = section("Idle", f, 72, lambda t, i: merge(spider_idle(t), drone_idle(t, i), turret_idle(t)),
             {"Spider Idle": (0, 72, True), "Drone Idle": (0, 72, True), "Turret Idle": (0, 72, True)})
-f = section("Shoot", f, 30, lambda t, i: merge(spider_shoot(t), drone_shoot(t, i), turret_shoot(t)),
-            {"Spider Shoot": (0, 30, False), "Drone Shoot": (0, 30, False), "Turret Shoot": (0, 30, False)})
+f = section("Shoot", f, 40, lambda t, i: merge(spider_shoot(t), drone_shoot(t, i), turret_shoot(t)),
+            {"Spider Shoot": (0, 40, False), "Drone Shoot": (0, 40, False), "Turret Shoot": (0, 40, False)})
 f = section("Move", f, 72, lambda t, i: merge(spider_walk(t), drone_fly(t, i), turret_aim(t)),
             {"Spider Walk": (0, 24, True), "Drone Fly": (0, 72, True), "Turret Aim": (0, 72, False)})
 f = section("Run", f, 60, lambda t, i: merge(spider_run(t), drone_idle(t, i), turret_idle(t)), {"Spider Run": (0, 15, True)})
-DEATH_N = 60
-f = section("Death", f, DEATH_N, lambda t, i: merge(spider_death(max(t - 0.35, 0.0)), drone_death(t, i), turret_death(t)),
+DEATH_N = 76
+f = section("Death", f, DEATH_N, lambda t, i: merge(spider_death(t), drone_death(t, i), turret_death(t)),
             {"Spider Death": (0, DEATH_N, False), "Drone Death": (0, DEATH_N, False), "Turret Death": (0, DEATH_N, False)})
 write_fcurves(rec.ch, "Robots")
 sc["v2_clips_robots"] = json.dumps(clips)
