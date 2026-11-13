@@ -26,10 +26,26 @@ def _img(set_name, suffix, non_color=False):
     return im
 
 
+class _Coords:
+    """Stands in for a Texture Coordinate node: .outputs["Object"] is the socket the projections read."""
+    def __init__(self, socket):
+        self.outputs = {"Object": socket}
+
+
+def _coords(nt, coord_attr=None):
+    """Projection coordinates: object space, or (coord_attr) a vector point attribute holding each vertex's rest
+    position. A skinned mesh needs the second: in object space the pattern would slide over the moving surface."""
+    if coord_attr:
+        at = nt.nodes.new("ShaderNodeAttribute")
+        at.attribute_name = coord_attr
+        return _Coords(at.outputs["Vector"])
+    return nt.nodes.new("ShaderNodeTexCoord")
+
+
 def pbr(name, set_name, scale=1.0, tint=(1, 1, 1), rough=(0.0, 1.0), metallic=None, normal=1.0, bright=1.0,
         tint_attr=None, grunge=0.0, grunge_scale=0.7, round_edges=0.0, edge_wear=0.0, wear_color=(0.72, 0.72, 0.7),
         cavity=0.0, wrinkle=0.0, wrinkle_scale=90.0, wear_radius=0.0012, wear_noise=260.0, cavity_dist=0.004,
-        wear_metal=1.0):
+        wear_metal=1.0, coord_attr=None):
     """... edge_wear (Cycles): the coating is rubbed down to `wear_color` metal along edges (found by comparing a
     bevelled normal with the flat one), broken up by noise. cavity: darkening + roughening in recesses (AO).
     wrinkle: soft cloth wrinkles as bump."""
@@ -42,7 +58,7 @@ def pbr(name, set_name, scale=1.0, tint=(1, 1, 1), rough=(0.0, 1.0), metallic=No
     m.use_nodes = True
     nt = m.node_tree
     bsdf = nt.nodes["Principled BSDF"]
-    tc = nt.nodes.new("ShaderNodeTexCoord")
+    tc = _coords(nt, coord_attr)
     mp = nt.nodes.new("ShaderNodeMapping")
     mp.inputs["Scale"].default_value = (1 / scale,) * 3
     nt.links.new(tc.outputs["Object"], mp.inputs["Vector"])
@@ -139,7 +155,8 @@ def pbr(name, set_name, scale=1.0, tint=(1, 1, 1), rough=(0.0, 1.0), metallic=No
     return m
 
 
-def layered(name, layers, masks, seam=0.03, seam_depth=0.0007, stitch=True, wrinkle=0.3, wrinkle_scale=90.0):
+def layered(name, layers, masks, seam=0.03, seam_depth=0.0007, stitch=True, wrinkle=0.3, wrinkle_scale=90.0,
+            coord_attr=None):
     """One material made of several scanned fabrics. layers = [dict(set, scale, tint, bright, rough, normal), ...];
     masks[i] = name of a float point attribute that puts layer i+1 over the layers before it (sharp line at 0.5).
     The edge follows the interpolated attribute, so it is a smooth line whatever the mesh is. A sewn seam is drawn
@@ -151,7 +168,7 @@ def layered(name, layers, masks, seam=0.03, seam_depth=0.0007, stitch=True, wrin
     m.use_nodes = True
     nt = m.node_tree
     bsdf = nt.nodes["Principled BSDF"]
-    tc = nt.nodes.new("ShaderNodeTexCoord")
+    tc = _coords(nt, coord_attr)
 
     def math(op, a, b=None, clamp=False):
         n = nt.nodes.new("ShaderNodeMath")
