@@ -141,12 +141,21 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
   or the player: the capture tour drives the player by code, so it passed while a HUD ColorRect at screen centre
   (mouse filter STOP by default) was swallowing every mouse event. HUD controls are `MOUSE_FILTER_IGNORE`, and the
   player reads the mouse in `_input`.
+- Performance: `F3` in the lab shows fps / frame time / draw calls / triangles / objects / video memory / adapter;
+  `-- --perf` prints that line for 12 s and quits; `-- --quality=low` = no shadows, glow or MSAA.
+  Measured here (counts do not depend on the GPU; fps here is llvmpipe, ~8 whatever is drawn): 380 draw calls,
+  905k triangles with shadows; 244 / 689k without. Shadow-casting omni lights were the cost: two per room in three
+  rooms = 1,935 draw calls and 7.8 M triangles. Now one light casts shadows, only in the room the player is in
+  (`_shadows`), and the room shell casts none (`NO_SHADOW`). Dual-paraboloid omni shadows drew nothing in
+  Compatibility here: cube shadows stay. The base 689k is the two view glbs (~200k each: subdivided gloves) plus
+  three rooms and robots; the weapon views are the first place to cut if a real GPU needs it.
+  Real-GPU frame rate: still unmeasured (the user reads it with F3).
 - `tools/capture_v2.sh` -> `captures/v2/` (rooms, robots, the doorways walked through, gun clips; ~20 min here:
   software GL draws about a frame a second with three rooms in view).
 - Learned: "hidden by scale 0" breaks Godot's glTF import (node comes in at scale 1): export hides at 0.001.
   The wear / cavity / edge rounding of the Blender materials (Cycles Bevel + AO nodes) does not exist here yet.
-- Not done yet: smoke, camera kick from the
-  clips (the camera's keyed motion is not exported), sound (user: not needed now), real-GPU frame rate check.
+- Not done yet: smoke, camera kick from the clips (the camera's keyed motion is not exported).
+  User decisions: no sound for now; no browser build of V2 for now (`tools/export_web.sh` is untested with the V2 lab).
 
 ## Conventions (fixed on day one; do not drift)
 

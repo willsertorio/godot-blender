@@ -5,6 +5,8 @@ extends Node3D
 ##   LMB fire · RMB aim · R reload · T reload from empty · F inspect · Q switch gun · Shift sprint · Space jump
 ##   godot --path . -- --v1          the V1 game / lab (scenes/main.tscn)
 ##   godot --path . -- --capture=DIR  save a tour of screenshots and quit
+##   godot --path . -- --quality=low   no shadows, glow or MSAA (for a weak graphics card)
+##   godot --path . -- --perf          print the performance line every second for 12 s and quit (F3 shows it in play)
 ##   godot --path . -- --input-test   send real mouse / key events and report what the player did (PASS / FAIL)
 const KINDS := ["spider", "drone", "turret"]
 const ROOM_DX := 11.6             # room width 11 + the two 0.3 m walls: neighbours share the doorway at Blender y = 10.2
@@ -19,11 +21,25 @@ const XR := 6.4
 const NO_COLLISION := ["Cable", "TrayCable", "Loop", "Bubbles", "CoveLights", "LightStrips", "CeilingLights", "Screens",
 	"FloorTiles", "FloorBase", "FloorPaint", "Drains"]
 
+# Room meshes that cast no shadow: the shell and what hangs above the lights. The things standing in the room
+# (mezzanine, stairs, railings, tanks, door frames) and the robots do.
+const NO_SHADOW := ["Floor", "Wall", "Ceiling", "Trim", "Cable", "TrayCable", "Loop", "LightGrid", "Ducts", "Pipes",
+	"CoveLights", "LightStrips", "Screens", "Signs", "StatusLights", "Drains", "Bubbles", "Hazard"]
+
 var rooms: Array[Node3D] = []
 var robots: Array[V2Robot] = []
 var player: V2Player
 var current := 0
 var _hud: Label
+var _shadow_lights: Array[OmniLight3D] = []
+var _shadow_room := -1
+var _low := false                 # --quality=low: no shadows, no glow, no MSAA
+var _perf: Label                  # F3: frame rate and what the frame costs to draw
+var _perf_log := false            # --perf: print that line every second, quit after 12 s
+var _perf_t := 0.0
+var _perf_frames := 0
+var _perf_worst := 0.0
+var _perf_line := ""
 var _quick := false
 var _door_only := false
 
@@ -48,12 +64,20 @@ func _ready() -> void:
 	_hud_setup()
 	goto(0)
 	var capture := ""
+	_perf_log = "--perf" in args
+	_low = "--quality=low" in args
+	if _low:
+		get_viewport().msaa_3d = Viewport.MSAA_DISABLED
 	_quick = "--quick" in args
 	_door_only = "--doors" in args
 	for a in args:
 		if a.begins_with("--capture="):
 			capture = a.trim_prefix("--capture=")
-	if "--input-test" in args:
+	if _perf_log:
+		_perf.visible = true
+		player.mouse_look = false
+		get_tree().create_timer(12.0).timeout.connect(get_tree().quit)
+	elif "--input-test" in args:
 		_input_test()
 	elif capture != "":
 		_capture(capture)
@@ -76,7 +100,7 @@ func _environment() -> void:
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 	env.tonemap_exposure = 0.9
-	env.glow_enabled = true                         # the bloom of the Blender look
+	env.glow_enabled = not _low                     # the bloom of the Blender look
 	env.glow_intensity = 0.6
 	env.glow_bloom = 0.08
 	env.glow_hdr_threshold = 1.1
@@ -103,6 +127,9 @@ func _room(i: int) -> void:
 				skip = true
 		if not skip:
 			(n as MeshInstance3D).create_trimesh_collision()
+		for prefix in NO_SHADOW:
+			if String(n.name).begins_with(prefix):
+				(n as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var floor_body := StaticBody3D.new()               # the floor: one box, top at y = 0, out to the outer wall faces
 	var floor_shape := CollisionShape3D.new()
 	var floor_box := BoxShape3D.new()
@@ -120,9 +147,11 @@ func _room(i: int) -> void:
 			l.light_energy = 0.55
 			l.omni_range = 11.0
 			l.omni_attenuation = 0.8
-			l.shadow_enabled = z == -5.5
 			l.light_cull_mask = _layer(i)
 			room.add_child(l)
+			if z == -5.5 and x > 0.0:                    # the one light per room that may cast shadows (see _shadows);
+				# (the right-hand one: from the left, the drone's shadow falls on the wall outside the view)
+				_shadow_lights.append(l)
 	var robot := V2Robot.new()
 	room.add_child(robot)
 	robot.setup(KINDS[i])
@@ -186,6 +215,18 @@ func _door_plug(i: int, x: float) -> void:
 			"Steel", _layer(i))
 
 
+## Shadows are the expensive part of a frame: a shadow-casting omni light draws everything in its range again (six
+## times, as a cube map; the cheaper dual-paraboloid mode drew no shadows at all here). Two such lights in each of
+## the three rooms made a frame 7.8 million triangles and 1900 draw calls; one, in the room the player is in, is
+## what the picture needs.
+func _shadows(room: int) -> void:
+	if room == _shadow_room:
+		return
+	_shadow_room = room
+	for i in _shadow_lights.size():
+		_shadow_lights[i].shadow_enabled = i == room and not _low
+
+
 func _room_at(x: float) -> int:
 	return clampi(int(floor((x - XL + 0.3) / ROOM_DX)), 0, rooms.size() - 1)
 
@@ -209,6 +250,15 @@ func _hud_setup() -> void:
 	_hud.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
 	_hud.add_theme_constant_override("outline_size", 5)
 	layer.add_child(_hud)
+	_perf = Label.new()
+	_perf.position = Vector2(16, 88)
+	_perf.add_theme_font_size_override("font_size", 15)
+	_perf.add_theme_color_override("font_color", Color(1.0, 0.9, 0.5))
+	_perf.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+	_perf.add_theme_constant_override("outline_size", 5)
+	_perf.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_perf.visible = false
+	layer.add_child(_perf)
 	var dot := ColorRect.new()
 	dot.color = Color(1, 1, 1, 0.8)
 	dot.size = Vector2(4, 4)
@@ -219,13 +269,40 @@ func _hud_setup() -> void:
 	layer.add_child(dot)
 
 
-func _process(_delta: float) -> void:
+## Once a second: average frame rate, the slowest frame of that second, and the renderer's counts for the last frame
+## (draw calls, triangles and objects do not depend on the graphics card; the frame rate does).
+func _perf_update(delta: float) -> void:
+	_perf_t += delta
+	_perf_frames += 1
+	_perf_worst = maxf(_perf_worst, delta)
+	if _perf_t < 1.0:
+		return
+	_perf_line = "%.0f fps (avg %.1f ms, worst %.1f ms)   draw calls %d   triangles %dk   objects %d   video memory %.0f MB   %dx%d   %s" % [
+		_perf_frames / _perf_t, 1000.0 * _perf_t / _perf_frames, 1000.0 * _perf_worst,
+		Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
+		Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1000.0,
+		Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME),
+		Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0,
+		get_viewport().get_visible_rect().size.x, get_viewport().get_visible_rect().size.y,
+		RenderingServer.get_video_adapter_name()]
+	_perf.text = _perf_line + "\nF3 hides this"
+	if _perf_log:
+		print("[perf] room %d  " % (current + 1), _perf_line)
+	_perf_t = 0.0
+	_perf_frames = 0
+	_perf_worst = 0.0
+
+
+func _process(delta: float) -> void:
 	if _hud == null:
 		return
+	if _perf.visible:
+		_perf_update(delta)
 	current = _room_at(player.global_position.x)
 	player.set_layer(_layer(current))                # the gun is lit by the lights of the room it is in
+	_shadows(current)
 	var r := robots[current]
-	_hud.text = "V2 LAB   room %d / %d: %s   clip: %s%s   gun: %s\nwalk through the doors or 1 2 3  ·  N next clip  ·  M auto-cycle  ·  LMB fire  ·  RMB aim  ·  R reload  ·  T reload (empty)  ·  F inspect  ·  Q switch gun  ·  Shift sprint  ·  Space jump" % [
+	_hud.text = "V2 LAB   room %d / %d: %s   clip: %s%s   gun: %s\nwalk through the doors or 1 2 3  ·  N next clip  ·  M auto-cycle  ·  F3 performance\nLMB fire  ·  RMB aim  ·  R reload  ·  T reload (empty)  ·  F inspect  ·  Q switch gun  ·  Shift sprint  ·  Space jump" % [
 		current + 1, rooms.size(), r.kind.to_upper(), r.clip, "" if r.auto else " (held)", player.weapon]
 
 
@@ -244,6 +321,12 @@ func _unhandled_input(event: InputEvent) -> void:
 				robots[current].next()
 			KEY_M:
 				robots[current].auto = not robots[current].auto
+			KEY_F3:
+				_perf.visible = not _perf.visible
+				_perf_t = 0.0
+				_perf_frames = 0
+				_perf_worst = 0.0
+				_perf.text = "measuring ..."
 
 
 # ---------------------------------------------------------------- input check (--input-test)
