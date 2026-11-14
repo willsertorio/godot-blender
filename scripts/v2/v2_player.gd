@@ -13,10 +13,12 @@ var cam: Camera3D
 var weapon := "pistol"
 var busy := ""                    # the one-shot clip that is playing ("" = idle / walk)
 var mouse_look := true
+var auto_move := Vector3.ZERO       # walks by itself in this direction (local; for the capture tour)
 var _views: Dictionary = {}
 var _yaw := 0.0
 var _pitch := 0.0
 var _kick := 0.0
+var _layer := 1
 
 
 func _ready() -> void:
@@ -55,6 +57,16 @@ func _ready() -> void:
 		_views[w] = {"scene": scene, "ap": ap, "flashes": V2Fx.flashes(scene)}
 		scene.visible = w == weapon
 	_ap().play("Idle")
+
+
+## Put the gun and arms on a room's render layer (its lights only reach that layer).
+func set_layer(layer: int) -> void:
+	if layer == _layer:
+		return
+	_layer = layer
+	for w in _views:
+		for n in (_views[w].scene as Node).find_children("*", "VisualInstance3D", true, false):
+			(n as VisualInstance3D).layers = layer
 
 
 func _ap() -> AnimationPlayer:
@@ -127,6 +139,8 @@ func _physics_process(delta: float) -> void:
 		dir.x -= 1.0
 	if Input.is_key_pressed(KEY_D):
 		dir.x += 1.0
+	if auto_move != Vector3.ZERO:
+		dir = auto_move
 	var sprint := Input.is_key_pressed(KEY_SHIFT) and dir.z < 0.0
 	dir = (Basis(Vector3.UP, _yaw) * dir).normalized()
 	var speed := 6.2 if sprint else 3.4

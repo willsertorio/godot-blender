@@ -6,7 +6,8 @@
                                        are complete, the script checks that they were written)
     python3 -I v2/scripts/pack_textures_godot.py            # the texture sets, 1K, into assets/textures/v2/
 
-  room.glb                                the room (static), in Blender's world placement (glTF Y-up)
+  room.glb                                the room (static), in Blender's world placement (glTF Y-up), with a doorway
+                                          cut through each side wall for the lab (cut_doorways)
   spider.glb / drone.glb / turret.glb     each robot where it stands in the room, joints + one baked "Scene" animation
   view_pistol.glb / view_rifle.glb        gun + rigged gloved arms under an empty "Eye" that stands for the camera
   <name>_clips.json                       {"fps", "clips": {name: [first, last]}} in timeline frames (time = frame / fps)
@@ -191,6 +192,74 @@ def describe(m):
 
 
 
+# Doorways for the Godot lab, where the rooms stand side by side (11.6 m apart): one opening through each side wall
+# at y = 10.2, the size of the room's doors (1.3 x 2.25 m). That is the one stretch clear on both sides: between the
+# clad column (y < 9.26) and the mezzanine posts / tank (y > 10.9) on the left, past the gallery on the right.
+# Coming in through the left door one walks under the stair landing; y = 10.2 leaves a straight line (y = 10.45)
+# past the landing's support post (y 9.85..10.0).
+# The left wall's own door at y = 9 overlaps it and is taken out first (the wall panels behind it stay).
+XL, XR, DOOR_Y, DOOR_W, DOOR_H = -4.6, 6.4, 10.2, 1.3, 2.25
+# (the openings go below the floor line, and the floor's own meshes are left alone: cut at the floor line, the 6 mm
+# bevel at the foot of the skirting plate survived as a lip, and a walking capsule stops dead against it)
+OPENINGS = [(Vector((XL - 0.31, DOOR_Y - DOOR_W / 2, -0.05)), Vector((XL + 0.2, DOOR_Y + DOOR_W / 2, DOOR_H))),
+            (Vector((XR - 0.2, DOOR_Y - DOOR_W / 2, -0.05)), Vector((XR + 0.31, DOOR_Y + DOOR_W / 2, DOOR_H)))]
+FLOOR_PARTS = ("FloorTiles", "FloorBase", "FloorPaint", "Drains")
+OLD_DOOR = (Vector((XL - 0.01, 8.15, -0.01)), Vector((XL + 0.25, 10.25, 3.0)))
+OLD_DOOR_PARTS = ("DoorFrames", "DoorLeaves", "DoorGlass", "LightStrips", "Screens", "SignsGreen", "StatusLights")
+
+
+def cut_doorways(objs):
+    """Cut the openings out of every room mesh that crosses them: faces are split along the opening's sides and
+    top, and what lies inside is removed. The cut edges are left open (the walls are hollow boxes); in Godot a door
+    lining covers them (v2_lab.gd)."""
+    import bmesh
+    dg = bpy.context.evaluated_depsgraph_get()
+
+    def inside(p, box):
+        return all(box[0][i] + 1e-4 < p[i] < box[1][i] - 1e-4 for i in range(3))
+    for ob in objs:
+        if ob.type != "MESH" or ob.name in FLOOR_PARTS:
+            continue
+        corners = [ob.matrix_world @ Vector(c) for c in ob.bound_box]
+        blo = Vector([min(c[i] for c in corners) for i in range(3)])
+        bhi = Vector([max(c[i] for c in corners) for i in range(3)])
+        boxes = OPENINGS + ([OLD_DOOR] if ob.name in OLD_DOOR_PARTS else [])
+        if not any(all(blo[i] < hi[i] and bhi[i] > lo[i] for i in range(3)) for lo, hi in boxes):
+            continue
+        me = bpy.data.meshes.new_from_object(ob.evaluated_get(dg))
+        me.transform(ob.matrix_world)
+        bm = bmesh.new()
+        bm.from_mesh(me)
+        removed = 0
+        if ob.name in OLD_DOOR_PARTS:
+            dead = [f for f in bm.faces if inside(f.calc_center_median(), OLD_DOOR)]
+            removed += len(dead)
+            bmesh.ops.delete(bm, geom=dead, context="FACES")
+        for lo, hi in OPENINGS:
+            def crosses(f):
+                return all(min(v.co[i] for v in f.verts) < hi[i] and max(v.co[i] for v in f.verts) > lo[i] for i in range(3))
+            for co, no in ((lo, (0, 1, 0)), (hi, (0, 1, 0)), (hi, (0, 0, 1))):
+                faces = [f for f in bm.faces if crosses(f)]
+                geom = set(faces)
+                for f in faces:
+                    geom.update(f.edges)
+                    geom.update(f.verts)
+                if geom:
+                    bmesh.ops.bisect_plane(bm, geom=list(geom), dist=1e-5, plane_co=co, plane_no=no)
+            dead = [f for f in bm.faces if inside(f.calc_center_median(), (lo, hi))]
+            removed += len(dead)
+            bmesh.ops.delete(bm, geom=dead, context="FACES")
+        bm.to_mesh(me)
+        bm.free()
+        if removed:
+            ob.modifiers.clear()
+            ob.data = me
+            ob.matrix_world = Matrix.Identity(4)
+            wn = ob.modifiers.new("WeightedNormal", "WEIGHTED_NORMAL")
+            wn.keep_sharp = True
+            print(f"  doorway: {ob.name} -{removed} faces")
+
+
 def robot_clips(robot):
     return {k.split(" ", 1)[1]: c for k, c in rclips.items() if k.startswith(robot + " ") and "Firefight" not in k}
 
@@ -200,7 +269,9 @@ def view_clips(weapon):
 
 
 if WHAT == "room":
-    export("room", room_objects())
+    objs = room_objects()
+    cut_doorways(objs)
+    export("room", objs)
 elif WHAT == "clips":                              # only the clip tables
     for r in ROBOTS:
         write_clips(r.lower(), robot_clips(r), robot_objects(r))

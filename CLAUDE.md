@@ -112,9 +112,9 @@ rule no longer applies to the environment):
 V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`); it still runs with `-- --v1`.
 - **Blender side**: `v2/` (Godot ignores it). `v2/scene.blend` = room + three robots + two weapon views (pistol, machine
   gun) with rigged gloved arms, all animated, plus effects. Commands, method and what was learned: `v2/README.md`.
-- **Godot side**: pressing Play opens the **V2 lab** (`scenes/v2_lab.tscn`, `scripts/v2/`): three copies of the room,
-  one robot in each (spider, drone, ceiling turret) cycling through its clips; the player holds the V2 guns.
-  Keys: `1 2 3` / Tab rooms, `N` next robot clip, `M` auto-cycle, LMB fire, RMB aim, `R` reload, `T` reload from empty,
+- **Godot side**: pressing Play opens the **V2 lab** (`scenes/v2_lab.tscn`, `scripts/v2/`): three copies of the room
+  side by side (11.6 m apart) joined by doorways, one robot in each (spider, drone, ceiling turret) cycling through
+  its clips; the player holds the V2 guns. Walk through the doors, or keys: `1 2 3` / Tab jump to a room, `N` next robot clip, `M` auto-cycle, LMB fire, RMB aim, `R` reload, `T` reload from empty,
   `F` inspect, `Q` switch gun, Shift sprint, Space jump, Esc frees the mouse. Shooting a robot plays its Death clip.
 - Export: `v2/scripts/export_godot.sh` (one Blender process per asset; several animated exports in one process crash
   Blender 4.2) -> `assets/models/v2/*.glb` + `<name>_clips.json` + `materials.json`, textures 1K -> `assets/textures/v2/`.
@@ -129,10 +129,18 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
   `Eye` node (= the Blender camera): `scene.transform = Rx(90 deg) * Eye^-1`. `v2_robot.gd`: clip cycle, hit box on a
   joint, flash lights, tracers. `v2_fx.gd`: tracers, sparks, dust (CPUParticles3D), flash lights. `v2_lab.gd`: rooms
   (trimesh collision from the room meshes, a grid of omni lights, glow + fog), HUD, `--capture=DIR` tour.
-- `tools/capture_v2.sh` -> `captures/v2/` (27 shots; slow here, software GL: ~6 min).
+- Doorways: `export_godot.py cut_doorways` cuts an opening (1.3 x 2.25 m at Blender y = 10.2) through both side walls
+  of `room.glb` and takes out the left wall's old door at y = 9; `v2_lab.gd` adds the steel lining / frame
+  (`_door_frame`), a threshold, and closed leaves in the two outer doorways. Each room is on its own render layer
+  and its lights only reach that layer (`_layer`; the gun's layer follows the room the player is in): side by side,
+  a room's big meshes would be in range of more than the 8 lights a mesh can take in Compatibility.
+  The floor's collision is one flat box per room, not the tile mesh. Learned the hard way: a capsule stops dead
+  against a 6 mm lip (the bevel left at the foot of a cut skirting plate), so openings are cut below the floor line.
+- `tools/capture_v2.sh` -> `captures/v2/` (rooms, robots, the doorways walked through, gun clips; ~20 min here:
+  software GL draws about a frame a second with three rooms in view).
 - Learned: "hidden by scale 0" breaks Godot's glTF import (node comes in at scale 1): export hides at 0.001.
   The wear / cavity / edge rounding of the Blender materials (Cycles Bevel + AO nodes) does not exist here yet.
-- Not done yet: walking between rooms (rooms are 40 m apart, number keys teleport), smoke, camera kick from the
+- Not done yet: smoke, camera kick from the
   clips (the camera's keyed motion is not exported), sound (user: not needed now), real-GPU frame rate check.
 
 ## Conventions (fixed on day one; do not drift)
