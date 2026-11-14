@@ -5,6 +5,7 @@ extends Node3D
 ##   LMB fire · RMB aim · R reload · T reload from empty · F inspect · Q switch gun · Shift sprint · Space jump
 ##   godot --path . -- --v1          the V1 game / lab (scenes/main.tscn)
 ##   godot --path . -- --capture=DIR  save a tour of screenshots and quit
+##   godot --path . -- --input-test   send real mouse / key events and report what the player did (PASS / FAIL)
 const KINDS := ["spider", "drone", "turret"]
 const ROOM_DX := 11.6             # room width 11 + the two 0.3 m walls: neighbours share the doorway at Blender y = 10.2
 # The doorway (Godot metres, room frame): through the right wall at x 6.4..6.7 and the next room's left wall
@@ -52,7 +53,9 @@ func _ready() -> void:
 	for a in args:
 		if a.begins_with("--capture="):
 			capture = a.trim_prefix("--capture=")
-	if capture != "":
+	if "--input-test" in args:
+		_input_test()
+	elif capture != "":
 		_capture(capture)
 	else:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -209,6 +212,8 @@ func _hud_setup() -> void:
 	var dot := ColorRect.new()
 	dot.color = Color(1, 1, 1, 0.8)
 	dot.size = Vector2(4, 4)
+	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE   # (a ColorRect stops the mouse by default, and the captured cursor
+	_hud.mouse_filter = Control.MOUSE_FILTER_IGNORE  # sits right on it: it swallowed every look and click)
 	dot.set_anchors_preset(Control.PRESET_CENTER)
 	dot.position -= Vector2(2, 2)
 	layer.add_child(dot)
@@ -239,6 +244,55 @@ func _unhandled_input(event: InputEvent) -> void:
 				robots[current].next()
 			KEY_M:
 				robots[current].auto = not robots[current].auto
+
+
+# ---------------------------------------------------------------- input check (--input-test)
+## Sends real input events through the viewport (as the mouse and keyboard would) and reports what the player did
+## with them: PASS / FAIL lines, then quits. The capture tour drives the player by code and cannot catch a control
+## that swallows the mouse.
+func _input_test() -> void:
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	await _wait(0.5)
+	var centre := Vector2(get_viewport().get_visible_rect().size / 2.0)
+	var yaw0 := player._yaw
+	var pitch0 := player._pitch
+	for k in 5:
+		var mm := InputEventMouseMotion.new()
+		mm.position = centre
+		mm.global_position = centre
+		mm.relative = Vector2(40, 12)
+		Input.parse_input_event(mm)
+		await get_tree().process_frame
+	await get_tree().process_frame
+	print("[input] mouse mode captured: ", Input.mouse_mode == Input.MOUSE_MODE_CAPTURED)
+	print("[input] look: ", "PASS" if absf(player._yaw - yaw0) > 0.1 and absf(player._pitch - pitch0) > 0.02 else "FAIL",
+		" (yaw %.3f -> %.3f, pitch %.3f -> %.3f)" % [yaw0, player._yaw, pitch0, player._pitch])
+	for spec in [[MOUSE_BUTTON_LEFT, "Fire"], [MOUSE_BUTTON_RIGHT, "ADS"]]:
+		player.busy = ""
+		var mb := InputEventMouseButton.new()
+		mb.position = centre
+		mb.global_position = centre
+		mb.button_index = spec[0]
+		mb.pressed = true
+		Input.parse_input_event(mb)
+		await get_tree().process_frame
+		await get_tree().process_frame
+		print("[input] ", spec[1], ": ", "PASS" if player.busy == spec[1] else "FAIL", " (busy = '", player.busy, "')")
+		var up := mb.duplicate() as InputEventMouseButton
+		up.pressed = false
+		Input.parse_input_event(up)
+		await _wait(0.3)
+	for spec in [[KEY_R, "Reload"], [KEY_F, "Inspect"]]:
+		player.busy = ""
+		var ke := InputEventKey.new()
+		ke.keycode = spec[0]
+		ke.physical_keycode = spec[0]
+		ke.pressed = true
+		Input.parse_input_event(ke)
+		await get_tree().process_frame
+		await get_tree().process_frame
+		print("[input] key ", spec[1], ": ", "PASS" if player.busy == spec[1] else "FAIL", " (busy = '", player.busy, "')")
+	get_tree().quit()
 
 
 # ---------------------------------------------------------------- screenshots (--capture=DIR)

@@ -104,7 +104,8 @@ func _on_finished(_anim: StringName) -> void:
 	busy = ""
 
 
-func _unhandled_input(event: InputEvent) -> void:
+## (_input, not _unhandled_input: looking and shooting must not depend on what the HUD does with the mouse)
+func _input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and mouse_look and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		_yaw -= event.relative.x * 0.0022
 		_pitch = clampf(_pitch - event.relative.y * 0.0022, -1.45, 1.45)

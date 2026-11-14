@@ -136,6 +136,11 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
   a room's big meshes would be in range of more than the 8 lights a mesh can take in Compatibility.
   The floor's collision is one flat box per room, not the tile mesh. Learned the hard way: a capsule stops dead
   against a 6 mm lip (the bevel left at the foot of a cut skirting plate), so openings are cut below the floor line.
+- Input check: `xvfb-run -a godot --rendering-driver opengl3 --path . -- --input-test` sends real mouse / key events
+  through the viewport and prints PASS / FAIL for look, fire, aim, reload, inspect. Run it after touching the HUD
+  or the player: the capture tour drives the player by code, so it passed while a HUD ColorRect at screen centre
+  (mouse filter STOP by default) was swallowing every mouse event. HUD controls are `MOUSE_FILTER_IGNORE`, and the
+  player reads the mouse in `_input`.
 - `tools/capture_v2.sh` -> `captures/v2/` (rooms, robots, the doorways walked through, gun clips; ~20 min here:
   software GL draws about a frame a second with three rooms in view).
 - Learned: "hidden by scale 0" breaks Godot's glTF import (node comes in at scale 1): export hides at 0.001.
