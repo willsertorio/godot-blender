@@ -21,9 +21,10 @@ const HIT := {  # joint the hit box rides on, box size, box centre (in the joint
 	"turret": ["Turret_Head", Vector3(0.7, 0.4, 0.4), Vector3(0.15, -0.14, 0.0)],
 }
 # arena = the part of the room's floor (x, z; room frame) it may be in: clear of the tanks, columns and stairs
+# (the spider's also stays 1.6 m short of where the player starts and is put back)
 const SPEC := {
 	"spider": {"hp": 150.0, "damage": 6.0, "spread": 1.6, "walk": 0.75, "run": 2.1, "turn": 200.0, "eye": 0.9,
-		"keep": [5.0, 7.5], "cooldown": [1.2, 2.4], "arena": Rect2(-1.7, -6.4, 3.7, 7.6),
+		"keep": [5.0, 7.5], "cooldown": [1.2, 2.4], "arena": Rect2(-1.7, -6.4, 3.7, 4.8),
 		"clips": ["Walk", 0.6, "Run", 1.5, "Idle"]},
 	"drone": {"hp": 80.0, "damage": 7.0, "spread": 2.2, "walk": 1.3, "run": 2.6, "turn": 260.0, "eye": 2.4,
 		"keep": [4.0, 7.5], "cooldown": [1.0, 2.0], "arena": Rect2(-2.3, -7.0, 5.0, 8.5),
@@ -71,6 +72,8 @@ var _tpitch := 0.0                # turret: extra head pitch, down positive
 var _head: Node3D
 var _aim_node: Node3D
 var _head_pivot := Vector3.ZERO
+var _flinch := 0.0                # 1 when hit, dies away: a short shake
+var _seat := Vector3.ZERO         # where the Root joint sits on this node
 
 
 func setup(robot: String) -> void:
@@ -116,7 +119,8 @@ func _reseat() -> void:
 	var seat := _root.transform
 	_home = Vector3(seat.origin.x, 0.0, seat.origin.z)
 	position = _home
-	_root.position = Vector3(0.0, seat.origin.y, 0.0)
+	_seat = Vector3(0.0, seat.origin.y, 0.0)
+	_root.position = _seat
 	for a in ap.get_animation_list():                 # (the Root's own constant track would put it back)
 		var anim := ap.get_animation(a)
 		for i in range(anim.get_track_count() - 1, -1, -1):
@@ -219,9 +223,11 @@ func hit(damage: float = 34.0) -> void:
 		_play("Death", 1.0, true)
 		_t = ap.get_animation("Death").length + RESPAWN
 		_smoke.emitting = true
-		V2Fx.impact(hit_point(), Vector3.UP, true)
-	elif state == ROAM and kind != "turret":
-		_engage()                                      # it knows where that came from
+		V2Fx.burst(hit_point())
+	else:
+		_flinch = 1.0
+		if state == ROAM and kind != "turret":
+			_engage()                                  # it knows where that came from
 
 
 # ---------------------------------------------------------------- clips
@@ -490,6 +496,8 @@ func _process(delta: float) -> void:
 	_label.text = kind.to_upper()
 	_t -= delta
 	_cool -= delta
+	_flinch = maxf(_flinch - delta * 6.0, 0.0)         # a hit shakes it for a moment
+	_root.position = _seat + Vector3(randf_range(-1, 1), randf_range(-0.5, 0.5), randf_range(-1, 1)) * 0.035 * _flinch
 	if state == DEAD:
 		if _t <= 0.0:
 			respawn()

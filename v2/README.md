@@ -16,7 +16,8 @@ v2/scripts/make_gifs.sh pistol 16 480                                     # GIF 
 blender -b v2/scene.blend -P v2/scripts/anim_robots.py                    # bake the robots' sections (frames 1201+; run after build_robots.py; saves)
 blender -b v2/scene.blend -P v2/scripts/anim_fx.py                        # effects for every shot, the deaths and the Firefight (run LAST; saves)
 blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100 view=pistol frame=1637   # the Firefight still
-v2/scripts/export_godot.sh                                                # everything to Godot: assets/models/v2 + assets/textures/v2 (see CLAUDE.md, "V2")
+v2/scripts/export_godot.sh                                                # everything to Godot: assets/models/v2 + assets/textures/v2 (see CLAUDE.md, "V2"); `export_godot.sh pistol rifle` for some (materials room spider drone turret pistol rifle)
+                                                                          #   each asset also gets its wear mask baked (Cycles, ~2.5 min), the gun views a CamKick node and lighter gloves; then: godot --headless --import
 blender -b v2/scene.blend -P v2/scripts/pose_test.py -- out.png 40 80 [back]   # rig check: left hand open, off the pistol
 blender -b v2/scene.blend -P v2/scripts/debug_viewmodel.py -- /tmp/vm    # quick views of one viewmodel only (DBG_SCALE, DBG_C, DBG_VIEW=ViewmodelRifle)
 blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100 view=rifle   # Cycles render (samples, size %, view=pistol|rifle); ~5 min at 1280x720 on 4 CPU cores
@@ -133,5 +134,8 @@ blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100 view=rifle  
   Parts that overlap a curved shell (screen on the pod) need a flat seat cut into every shell under them.
 - `scene.blend` is saved compressed (`save_mainfile(compress=True)` in every script): uncompressed it passed
   GitHub's 100 MB file limit once the animation and effects were in (119 MB -> 20 MB). Blender opens it as usual.
+- The picture is graded with AgX (High Contrast); Godot's renderer has no AgX, and it takes shader colours as sRGB
+  while every number here is linear. For comparing the two, render the true surface colours: the Diffuse Color pass
+  with the Standard view transform (that is how the gloves' wrong tints in Godot were found).
 - Stages: 1 room + lighting, 2 weapon views + gloved hands, 3 robots, 4 animation + effects, 5 in Godot as the V2 lab
   (export_godot.py; the Godot side is described in CLAUDE.md).

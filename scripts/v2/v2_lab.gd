@@ -45,8 +45,6 @@ var _down_text: Label
 var _down_t := 0.0
 var downs := 0
 var _only := ""
-var _shadow_lights: Array[OmniLight3D] = []
-var _shadow_room := -1
 var _low := false                 # --quality=low: no shadows, no glow, no MSAA
 var _perf: Label                  # F3: frame rate and what the frame costs to draw
 var _perf_log := false            # --perf: print that line every second, quit after 12 s
@@ -64,6 +62,7 @@ func _ready() -> void:
 		get_tree().change_scene_to_file.call_deferred("res://scenes/main.tscn")
 		return
 	V2Fx.root = self
+	_low = "--quality=low" in args                 # (before the environment is built: it reads this)
 	_environment()
 	for i in KINDS.size():
 		_room(i)
@@ -84,7 +83,6 @@ func _ready() -> void:
 	goto(0)
 	var capture := ""
 	_perf_log = "--perf" in args
-	_low = "--quality=low" in args
 	if _low:
 		get_viewport().msaa_3d = Viewport.MSAA_DISABLED
 	_quick = "--quick" in args
@@ -113,8 +111,8 @@ func _environment() -> void:
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color(0.02, 0.025, 0.03)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.86, 0.89, 0.94)
-	env.ambient_light_energy = 0.32
+	env.ambient_light_color = Color(0.88, 0.92, 0.95)
+	env.ambient_light_energy = 0.16
 	var sky := Sky.new()                            # only for reflections on the metal (CC0 HDRI, as in V1)
 	var pano := PanoramaSkyMaterial.new()
 	pano.panorama = load("res://assets/sky/bank_vault_1k.hdr")
@@ -129,10 +127,29 @@ func _environment() -> void:
 	env.glow_hdr_threshold = 1.1
 	env.fog_enabled = true                          # its haze
 	env.fog_light_color = Color(0.82, 0.86, 0.92)
-	env.fog_density = 0.012
+	env.fog_density = 0.0035                        # (thin: at 0.012 it lifted every dark surface across the room to mid grey)
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
+	# The Blender room is lit by its ceiling panels: the floor and the tops of things are bright, the walls less so.
+	# Lights hung under the ceiling alone light the walls most. So half of the light comes straight down
+	# (no shadows: it is the soft light of a whole luminous ceiling), reaching every room's layer and the gun's.
+	var down := DirectionalLight3D.new()
+	down.rotation_degrees = Vector3(-84.0, 20.0, 0.0)
+	down.light_color = Color(0.98, 0.99, 1.0)
+	down.light_energy = 0.32
+	# Its shadows fall straight down: the pools under the robots, the stairs and the mezzanine. They are the only
+	# shadows: one flat pass over the three rooms (the shell casts none). A shadow-casting omni light draws
+	# everything in its range six times (a cube; the dual-paraboloid mode drew nothing here): two of those per room
+	# once made a frame 7.8 million triangles and 1900 draw calls.
+	# (measured: with shadows on, this light comes out about half as bright again as without, hence 0.32)
+	down.shadow_enabled = not _low
+	down.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
+	down.directional_shadow_max_distance = 34.0
+	down.shadow_blur = 2.2
+	down.shadow_bias = 0.06
+	down.shadow_normal_bias = 1.5
+	add_child(down)
 
 
 func _room(i: int) -> void:
@@ -166,15 +183,12 @@ func _room(i: int) -> void:
 		for x in [-2.0, 3.8]:
 			var l := OmniLight3D.new()
 			l.position = Vector3(x, 4.5, z)
-			l.light_color = Color(0.95, 0.97, 1.0)
-			l.light_energy = 0.55
+			l.light_color = Color(0.97, 0.98, 1.0)
+			l.light_energy = 0.27
 			l.omni_range = 11.0
 			l.omni_attenuation = 0.8
 			l.light_cull_mask = _layer(i)
 			room.add_child(l)
-			if z == -5.5 and x > 0.0:                    # the one light per room that may cast shadows (see _shadows);
-				# (the right-hand one: from the left, the drone's shadow falls on the wall outside the view)
-				_shadow_lights.append(l)
 	var robot := V2Robot.new()
 	room.add_child(robot)
 	robot.setup(KINDS[i])
@@ -236,18 +250,6 @@ func _door_plug(i: int, x: float) -> void:
 	for side in [-1.0, 1.0]:
 		_box(rooms[i], Vector3(x - 0.03, 0.02, DOOR_Z + side * 0.006), Vector3(x + 0.03, DOOR_H, DOOR_Z + side * DOOR_W / 2.0),
 			"Steel", _layer(i))
-
-
-## Shadows are the expensive part of a frame: a shadow-casting omni light draws everything in its range again (six
-## times, as a cube map; the cheaper dual-paraboloid mode drew no shadows at all here). Two such lights in each of
-## the three rooms made a frame 7.8 million triangles and 1900 draw calls; one, in the room the player is in, is
-## what the picture needs.
-func _shadows(room: int) -> void:
-	if room == _shadow_room:
-		return
-	_shadow_room = room
-	for i in _shadow_lights.size():
-		_shadow_lights[i].shadow_enabled = i == room and not _low
 
 
 func _room_at(x: float) -> int:
@@ -392,7 +394,6 @@ func _process(delta: float) -> void:
 		_perf_update(delta)
 	current = _room_at(player.global_position.x)
 	player.set_layer(_layer(current))                # the gun is lit by the lights of the room it is in
-	_shadows(current)
 	for k in robots.size():
 		robots[k].active = k == current
 	_hud_update(delta)
@@ -459,16 +460,29 @@ func _input_test() -> void:
 		up.pressed = false
 		Input.parse_input_event(up)
 		await _wait(0.3)
-	# the camera must follow the clip's own camera motion (view punch of a shot)
+	# the camera must follow the clip's own camera motion (view punch of a shot). Found by stepping through the
+	# clip, not by watching frames go by: the punch lasts two frames of the clip and a slow frame steps over it.
 	player.busy = ""
 	player.act("Fire")
-	var punch := 0.0
-	var tk := 0.0
-	while tk < 0.35:
-		await get_tree().process_frame
-		tk += get_process_delta_time()
-		punch = maxf(punch, rad_to_deg((Basis(Vector3.RIGHT, player._pitch + player._kick).inverse() * player.cam.basis).get_euler().length()))
-	print("[input] camera kick from the clip: ", "PASS" if punch > 0.2 else "FAIL", " (%.2f degrees)" % punch)
+	var kick_node: Node3D = player._views[player.weapon].kick
+	var kap := player._ap()
+	var kick_len := kap.get_animation("Fire").length
+	var in_clip := 0.0
+	var at := 0.0
+	for step in 48:
+		kap.seek(kick_len * step / 48.0, true)
+		var a := rad_to_deg(kick_node.transform.basis.get_euler().length()) if kick_node != null else 0.0
+		if a > in_clip:
+			in_clip = a
+			at = kick_len * step / 48.0
+	kap.seek(at, true)
+	kap.pause()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var punch := rad_to_deg((Basis(Vector3.RIGHT, player._pitch + player._kick).inverse() * player.cam.basis).get_euler().length())
+	kap.play()
+	print("[input] camera kick from the clip: ", "PASS" if in_clip > 0.3 and punch > 0.8 * in_clip else "FAIL",
+		" (%.2f degrees in the clip, %.2f on the camera)" % [in_clip, punch])
 	await _wait(0.4)
 	for spec in [[KEY_R, "Reload"], [KEY_F, "Inspect"]]:
 		player.busy = ""
@@ -592,6 +606,13 @@ func _capture(dir: String) -> void:
 				await _wait(1.6)
 				await _shot(dir, "rifle_hold")
 		player.switch_weapon()
+	if _want("tone"):
+		# the Blender camera's own view (v2/renders/stage3_scene.png is the same frame): for comparing light and colour
+		goto(0)
+		robots[0].play("Idle")
+		robots[0].ap.pause()
+		await _wait(0.5)
+		await _shot(dir, "tone_room1")
 	if _want("look"):
 		# materials from close by: each robot where it stands in Blender, and the two guns turned over
 		for i in rooms.size():
@@ -620,6 +641,21 @@ func _capture(dir: String) -> void:
 			player.busy = ""
 			player.switch_weapon()
 			await _wait(1.5)
+	if _only != "" and "wreck" in _only.split(","):
+		# (only on request: a quick look at a destroyed robot, the burst and the smoke that follows)
+		goto(0)
+		var w := robots[0]
+		w.set_ai(true)
+		var hp := w.hit_point()
+		player._yaw = atan2(-(hp.x - player.global_position.x), -(hp.z - player.global_position.z))
+		w.hit(9999.0)
+		Engine.time_scale = 0.05
+		await _wait(0.06)
+		await _shot(dir, "wreck_burst")
+		Engine.time_scale = 1.0
+		V2Fx.hold = 1.0                                   # (the flash of the burst must be gone for the next picture)
+		await _wait(5.0)
+		await _shot(dir, "wreck_smoke")
 	if _want("ai"):
 		# the robots as enemies: on the move, firing (the game slowed down to catch the flash), wrecked and smoking
 		for i in rooms.size():

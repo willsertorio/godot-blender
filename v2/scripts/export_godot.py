@@ -273,15 +273,18 @@ def prep_glove(ob):
     lo = [min(pos[i::3]) for i in range(3)]
     size = [max(max(pos[i::3]) - lo[i], 1e-6) for i in range(3)]
     rn = [(pos[k * 3 + i] - lo[i]) / size[i] for k in range(n) for i in range(3)]      # rest position, 0..1 in its box
+    # the rest normal picks the projection of the box mapping (the posed normal would smear the weave): |x| and |y|
+    nrm = [0.0] * (n * 3)
+    me.vertices.foreach_get("normal", nrm)
     me.color_attributes.new("Masks", "FLOAT_COLOR", "POINT")
-    me.color_attributes["Masks"].data.foreach_set("color", [v for k in range(n) for v in (pv[k], tv[k], 0.0, 1.0)])
+    me.color_attributes["Masks"].data.foreach_set("color", [v for k in range(n) for v in (pv[k], tv[k], abs(nrm[k * 3 + 1]), 1.0)])
     me.color_attributes.active_color = me.color_attributes["Masks"]
     me.color_attributes.render_color_index = me.color_attributes.find("Masks")
     # (the rest position goes into two UV sets: Godot keeps UVs at 16 bits, vertex colours only at 8)
     me.uv_layers.new(name="RestXY")
     me.uv_layers["RestXY"].data.foreach_set("uv", [v for lp in me.loops for v in (rn[lp.vertex_index * 3], rn[lp.vertex_index * 3 + 1])])
     me.uv_layers.new(name="RestZ")
-    me.uv_layers["RestZ"].data.foreach_set("uv", [v for lp in me.loops for v in (rn[lp.vertex_index * 3 + 2], 0.0)])
+    me.uv_layers["RestZ"].data.foreach_set("uv", [v for lp in me.loops for v in (rn[lp.vertex_index * 3 + 2], 1.0 - abs(nrm[lp.vertex_index * 3]))])   # (the exporter flips v)
     gloves[ob.name.replace(".", "_")] = {"min": lo, "size": size}
 
 
@@ -442,6 +445,16 @@ elif WHAT in H.COLL:
     for o in objs:
         if o.name.startswith("Glove."):
             prep_glove(o)
+            # The gloves were subdivided twice in Blender (about 85,000 faces each): one level less is plenty at
+            # game distance. Un-subdivide undoes exactly one level and carries the UVs, colours and skin weights.
+            before = len(o.data.polygons)
+            dm = o.modifiers.new("Lighter", "DECIMATE")
+            dm.decimate_type = "UNSUBDIV"
+            dm.iterations = 2
+            with bpy.context.temp_override(object=o, active_object=o, selected_objects=[o]):
+                bpy.ops.object.modifier_move_to_index(modifier=dm.name, index=0)
+                bpy.ops.object.modifier_apply(modifier=dm.name)
+            print(f"  {o.name}: {before} -> {len(o.data.polygons)} faces", flush=True)
     bake_mask("view_" + WHAT, hard_parts(objs))
     export("view_" + WHAT, objs, write_clips("view_" + WHAT, vc, objs))
 else:                                              # materials.json

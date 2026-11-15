@@ -113,49 +113,78 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
 - **Blender side**: `v2/` (Godot ignores it). `v2/scene.blend` = room + three robots + two weapon views (pistol, machine
   gun) with rigged gloved arms, all animated, plus effects. Commands, method and what was learned: `v2/README.md`.
 - **Godot side**: pressing Play opens the **V2 lab** (`scenes/v2_lab.tscn`, `scripts/v2/`): three copies of the room
-  side by side (11.6 m apart) joined by doorways, one robot in each (spider, drone, ceiling turret) cycling through
-  its clips; the player holds the V2 guns. Walk through the doors, or keys: `1 2 3` / Tab jump to a room, `N` next robot clip, `M` auto-cycle, LMB fire, RMB aim, `R` reload, `T` reload from empty,
-  `F` inspect, `Q` switch gun, Shift sprint, Space jump, Esc frees the mouse. Shooting a robot plays its Death clip.
+  side by side (11.6 m apart) joined by doorways, one robot in each (spider, drone, ceiling turret), each an **enemy**:
+  it moves, aims, shoots the player and can be shot. The player holds the V2 guns. Keys: walk through the doors or
+  `1 2 3` / Tab jump to a room, LMB fire (the machine gun keeps firing while held), RMB aim, `R` reload, `T` reload
+  from empty, `F` inspect, `Q` switch gun, Shift sprint, Space jump, `M` enemy <-> clip preview, `N` next clip
+  (switches to preview), F3 performance, Esc frees the mouse.
 - Export: `v2/scripts/export_godot.sh` (one Blender process per asset; several animated exports in one process crash
-  Blender 4.2) -> `assets/models/v2/*.glb` + `<name>_clips.json` + `materials.json`, textures 1K -> `assets/textures/v2/`.
-  Then `godot --headless --import` (this registers new `class_name`s too; `--editor --quit` did not) and keep
-  `animation/fps=24` in the six `.glb.import` files (the default 30 resamples the 24 fps keys).
+  Blender 4.2) -> `assets/models/v2/*.glb` + `<name>_clips.json` + `<name>_mask.png` + `materials.json`, textures 1K
+  -> `assets/textures/v2/`. Then `godot --headless --import` (this registers new `class_name`s too; `--editor --quit`
+  did not) and keep `animation/fps=24` in the six `.glb.import` files (the default 30 resamples the 24 fps keys).
+  The export also: bakes each asset's wear mask (Smart-UV atlas, Cycles, ~2.5 min: R = ambient occlusion,
+  G = convex edges), adds `CamKick` under `Eye` (the camera's keyed offset in each gun clip), takes one subdivision
+  level off the gloves (32k -> 8k faces each), and writes the gloves' rest position and rest normal into
+  UV / UV2 / vertex colour (`prep_glove`).
 - `scripts/v2/v2_assets.gd` (`V2Assets`): rebuilds every material by name from `materials.json` (StandardMaterial3D with
-  object-space triplanar = Blender's box projection; `v2_glove.gdshader` projects the fabrics from the rest position
-  carried in UV / UV2; `v2_flash.gdshader` draws the muzzle flame from the UVs), cuts the baked "Scene" animation into
-  clips (`AnimUtil.split_clips`; clip frames are **timeline** frames: the export keeps time = frame / fps), and rebuilds
-  the flashes' one-frame scale keys from the `flashes` list (the importer drops them).
+  object-space triplanar = Blender's box projection), cuts the baked "Scene" animation into clips
+  (`AnimUtil.split_clips`; clip frames are **timeline** frames: the export keeps time = frame / fps), rebuilds the
+  flashes' one-frame scale keys from the `flashes` list (the importer drops them) and lists when each flash fires
+  (`flash_events`: shots come from these times, not from watching the flash meshes). `apply(root, asset)`: with an
+  asset name, painted parts (`WEAR` table) get `v2_worn.gdshader` and that asset's mask.
+- Shaders: `v2_worn` (paint worn to metal on edges, dirt in crevices, scratches, from the baked mask), `v2_glove`
+  (knit / leather / tips by vertex-colour masks, projected from the rest pose), `v2_hazard` (the black / yellow
+  stripes), `v2_flash` (muzzle flame from the UVs).
+- **Colour space (measured, it cost a pass)**: the Compatibility renderer takes `ALBEDO` / `EMISSION` as sRGB and
+  converts after the fragment function; the `source_color` hint converts nothing (textures and uniforms arrive as
+  stored). Blender's numbers are linear. So: a `Color` given to a StandardMaterial3D goes through
+  `Color.linear_to_srgb()` (`V2Assets._c`), and a custom shader that multiplies Blender tints must do it in linear
+  itself: `pow(tex, 2.2) * tint`, then `ALBEDO = pow(col, 1 / 2.2)`. Applying linear tints to the stored values
+  made the gloves blue and twice too bright.
 - `v2_player.gd`: Camera3D with `fov 80` + `KEEP_WIDTH` (the Blender camera); each view glb hangs from it through its
-  `Eye` node (= the Blender camera): `scene.transform = Rx(90 deg) * Eye^-1`. `v2_robot.gd`: clip cycle, hit box on a
-  joint, flash lights, tracers. `v2_fx.gd`: tracers, sparks, dust (CPUParticles3D), flash lights. `v2_lab.gd`: rooms
-  (trimesh collision from the room meshes, a grid of omni lights, glow + fog), HUD, `--capture=DIR` tour.
+  `Eye` node: `scene.transform = Rx(90 deg) * Eye^-1`; the camera follows `CamKick` (recoil, bob from the clips).
+  Health 100, regenerates after 4 s without a hit; at 0 the player is "down" for a moment, then revived in place.
+  Damage: pistol 34, machine gun 12 a round.
+- `v2_robot.gd` (`V2Robot`): states ROAM / ENGAGE / AIM / SHOOT / DEAD (+ PREVIEW = clip cycle). Numbers in `SPEC`
+  (health, damage, spread, speeds, arena). The aim point lags the player by 0.3 s, so moving makes them miss. Spider
+  and drone stay inside an obstacle-free rectangle of their room (`arena`); the turret swings its Root joint and
+  an inserted `AimPitch` node. A hit shakes the robot and wakes it; at 0 health: burst, Death clip, a smoking wreck,
+  back after 6 s. `v2_fx.gd` (`V2Fx`): tracers, impact sparks / chips / dust / scorch marks, smoke, flash lights.
+- Light (`v2_lab.gd _environment`, tuned against `v2/renders/stage3_scene.png` zone by zone with
+  `--capture=DIR --only=tone`): half of it is one DirectionalLight3D straight down (the luminous ceiling: bright
+  floor, dimmer walls) and it casts the only shadows (one orthogonal pass; the room shell casts none); six omni
+  lights per room without shadows; ambient 0.16; thin fog (at 0.012 it lifted every dark surface to mid grey); ACES.
+  Each room is on its own render layer and its omni lights only reach that layer (`_layer`; the gun's layer follows
+  the room the player is in): side by side, a room's big meshes would be in range of more than the 8 lights a mesh
+  can take in Compatibility.
 - Doorways: `export_godot.py cut_doorways` cuts an opening (1.3 x 2.25 m at Blender y = 10.2) through both side walls
   of `room.glb` and takes out the left wall's old door at y = 9; `v2_lab.gd` adds the steel lining / frame
-  (`_door_frame`), a threshold, and closed leaves in the two outer doorways. Each room is on its own render layer
-  and its lights only reach that layer (`_layer`; the gun's layer follows the room the player is in): side by side,
-  a room's big meshes would be in range of more than the 8 lights a mesh can take in Compatibility.
+  (`_door_frame`), a threshold, and closed leaves in the two outer doorways.
   The floor's collision is one flat box per room, not the tile mesh. Learned the hard way: a capsule stops dead
   against a 6 mm lip (the bevel left at the foot of a cut skirting plate), so openings are cut below the floor line.
-- Input check: `xvfb-run -a godot --rendering-driver opengl3 --path . -- --input-test` sends real mouse / key events
-  through the viewport and prints PASS / FAIL for look, fire, aim, reload, inspect. Run it after touching the HUD
-  or the player: the capture tour drives the player by code, so it passed while a HUD ColorRect at screen centre
-  (mouse filter STOP by default) was swallowing every mouse event. HUD controls are `MOUSE_FILTER_IGNORE`, and the
-  player reads the mouse in `_input`.
+- Checks (run after touching the player, robots or HUD):
+  `godot --headless --path . -- --enemy-test` (each robot moves / aims, stays in its arena, fires, hurts a standing
+  player, is destroyed by the player's rounds and comes back; the player goes down and is revived; prints PASS / FAIL;
+  headless has no meshes, so walls do not block anything in this test);
+  `xvfb-run -a godot --rendering-driver opengl3 --path . -- --input-test` (real mouse / key events through the
+  viewport: look, fire, aim, reload, inspect, camera kick). The capture tour drives the player by code, so it passed
+  while a HUD ColorRect at screen centre (mouse filter STOP by default) was swallowing every mouse event: HUD
+  controls are `MOUSE_FILTER_IGNORE`, and the player reads the mouse in `_input`.
+- Captures: `tools/capture_v2.sh` -> `captures/v2/` (everything, ~25 min here), or
+  `--capture=DIR --only=tone,rooms,doors,guns,look,ai,wreck` for parts (`tone` = the Blender camera's frame, 15 s;
+  `look` = materials close up; `ai` = each robot moving, firing, wrecked; `wreck` = burst + smoke, on request only).
 - Performance: `F3` in the lab shows fps / frame time / draw calls / triangles / objects / video memory / adapter;
   `-- --perf` prints that line for 12 s and quits; `-- --quality=low` = no shadows, glow or MSAA.
-  Measured here (counts do not depend on the GPU; fps here is llvmpipe, ~8 whatever is drawn): 380 draw calls,
-  905k triangles with shadows; 244 / 689k without. Shadow-casting omni lights were the cost: two per room in three
-  rooms = 1,935 draw calls and 7.8 M triangles. Now one light casts shadows, only in the room the player is in
-  (`_shadows`), and the room shell casts none (`NO_SHADOW`). Dual-paraboloid omni shadows drew nothing in
-  Compatibility here: cube shadows stay. The base 689k is the two view glbs (~200k each: subdivided gloves) plus
-  three rooms and robots; the weapon views are the first place to cut if a real GPU needs it.
-  Real-GPU frame rate: still unmeasured (the user reads it with F3).
-- `tools/capture_v2.sh` -> `captures/v2/` (rooms, robots, the doorways walked through, gun clips; ~20 min here:
-  software GL draws about a frame a second with three rooms in view).
+  Measured here (counts do not depend on the GPU; fps here is llvmpipe, ~8 whatever is drawn): 334 draw calls,
+  706k triangles, 192 MB with shadows; 249 / 629k / 160 MB at low quality. History: shadow-casting omni lights were
+  the cost (two per room = 1,935 draw calls, 7.8 M triangles), and the gloves were 65k of each view's faces.
+  The user's M1 gave 77 fps at 1280x720 before the enemies and the look work; not measured since.
 - Learned: "hidden by scale 0" breaks Godot's glTF import (node comes in at scale 1): export hides at 0.001.
-  The wear / cavity / edge rounding of the Blender materials (Cycles Bevel + AO nodes) does not exist here yet.
-- Not done yet: smoke, camera kick from the clips (the camera's keyed motion is not exported).
-  User decisions: no sound for now; no browser build of V2 for now (`tools/export_web.sh` is untested with the V2 lab).
+  A fine weave seen at arm's length beats against the pixel grid even with mipmaps: the glove fabrics are sampled
+  with a mip bias. A directional light with shadows on came out about half as bright again as without.
+- Not done yet: the turret does not travel (its cables), sound, a browser build.
+  User decisions: no sound for now; no browser build of V2 for now (`tools/export_web.sh` is untested with the V2 lab);
+  the lab rooms may be simplified (the concept room is kept as it is so far).
 
 ## Conventions (fixed on day one; do not drift)
 

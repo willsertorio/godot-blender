@@ -5,8 +5,7 @@ class_name V2Assets
 const DIR := "res://assets/models/v2/"
 const TEX := "res://assets/textures/v2/"
 const SPECIAL := {  # materials that are procedural in Blender
-	"TankLiquid": {"color": Color(0.2, 0.62, 0.68, 0.45), "rough": 0.08, "emit": Color(0.1, 0.5, 0.55), "energy": 0.35},
-	"Hazard": {"color": Color(0.85, 0.62, 0.05), "rough": 0.6},
+	"TankLiquid": {"color": Color(0.2, 0.62, 0.68, 0.45), "rough": 0.08, "emit": Color(0.16, 0.5, 0.55), "energy": 1.3},
 	"DarkGlass": {"color": Color(0.03, 0.05, 0.07, 0.75), "rough": 0.05},
 }
 
@@ -110,6 +109,10 @@ static func material(mat_name: String, mesh_key: String = "", asset: String = ""
 	var m: Material
 	if mat_name.begins_with("Flash"):
 		m = _flash(mat_name == "FlashCore")
+	elif mat_name == "Hazard":
+		var hz := ShaderMaterial.new()
+		hz.shader = load("res://assets/shaders/v2_hazard.gdshader")
+		m = hz
 	else:
 		var s := StandardMaterial3D.new()
 		if SPECIAL.has(mat_name):

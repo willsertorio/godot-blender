@@ -52,14 +52,14 @@ func _ready() -> void:
 	add_child(cam)
 	cam.make_current()
 	var fill := OmniLight3D.new()                  # a little light on the gun and hands, wherever the player stands
-	fill.light_energy = 0.3
+	fill.light_energy = 0.1
 	fill.omni_range = 2.2
 	fill.position = Vector3(0.1, 0.15, 0.1)
 	cam.add_child(fill)
 	for w in WEAPONS:
 		var scene: Node3D = (load(V2Assets.DIR + "view_" + w + ".glb") as PackedScene).instantiate()
 		cam.add_child(scene)
-		V2Assets.apply(scene)
+		V2Assets.apply(scene, "view_" + w)
 		var eye := scene.find_child("Eye", true, false) as Node3D
 		# "Eye" is the Blender camera (converted to Y-up): put it on this camera. A Blender camera looks down its
 		# -Z with +Y up, as Godot's does, but the export turned its frame a quarter turn about X.
@@ -217,6 +217,9 @@ func _process(delta: float) -> void:
 		var t := ap.current_animation_position
 		if Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) and t >= ADS_IN[weapon] and t < a.length - ADS_OUT[weapon] - 0.05:
 			ap.seek(ADS_IN[weapon], true)
+	if busy == "" and weapon == "rifle" and not down and mouse_look and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
+			and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		act("Fire")                                    # the machine gun keeps firing while the button is held
 	if busy == "":
 		var want := "Walk" if Vector2(velocity.x, velocity.z).length() > 0.6 and is_on_floor() else "Idle"
 		if ap.current_animation != want:

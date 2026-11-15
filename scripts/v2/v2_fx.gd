@@ -12,7 +12,7 @@ static var _mark_i := 0
 const YELLOW := Color(1.0, 0.82, 0.45)
 const RED := Color(1.0, 0.3, 0.12)
 const DUST := Color(0.74, 0.73, 0.7)
-const SMOKE := Color(0.2, 0.2, 0.21)
+const SMOKE := Color(0.11, 0.11, 0.12)
 const GUNSMOKE := Color(0.82, 0.82, 0.8)
 const MAX_MARKS := 40
 
@@ -118,8 +118,11 @@ static func puff(pos: Vector3, dir: Vector3, color: Color, size: float, amount: 
 
 ## A standing source of smoke (a wreck): switch it with `emitting`.
 static func smoke_column(parent: Node3D, local_pos: Vector3, size: float = 0.7) -> CPUParticles3D:
-	var s := _smoke_particles(SMOKE, 0.75, size, 2.8, 1.0)
-	s.amount = 26
+	var s := _smoke_particles(SMOKE, 0.9, size, 3.4, 1.5)
+	s.amount = 44
+	s.spread = 12.0                                    # a column: it keeps rising (little drag) and stays narrow
+	s.damping_min = 0.1
+	s.damping_max = 0.25
 	s.emitting = false
 	s.local_coords = false
 	parent.add_child(s)
@@ -231,6 +234,22 @@ static func impact(pos: Vector3, normal: Vector3, metal: bool = false) -> void:
 	root.add_child(l)
 	l.global_position = pos + normal * 0.1
 	_later(0.07 * hold, l)
+
+
+## A robot is destroyed: sparks in every direction, a ball of dark smoke, a flash of light.
+static func burst(pos: Vector3) -> void:
+	if root == null:
+		return
+	for n in [Vector3.UP, Vector3(1, 0.3, 0).normalized(), Vector3(-0.5, 0.3, 0.8).normalized(), Vector3(-0.5, 0.3, -0.8).normalized()]:
+		impact(pos + n * 0.15, n, true)
+	puff(pos, Vector3.UP, SMOKE, 1.1, 9, 1.6, 0.7, 1.2)
+	var l := OmniLight3D.new()
+	l.light_color = Color(1.0, 0.6, 0.25)
+	l.light_energy = 5.0
+	l.omni_range = 6.0
+	root.add_child(l)
+	l.global_position = pos + Vector3(0, 0.2, 0)
+	_later(0.12 * hold, l)
 
 
 ## The flash meshes under `scene` (shown by the animations through their scale), each with a point light beside it.

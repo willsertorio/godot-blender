@@ -7,6 +7,9 @@ render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_burley, specular_sc
 //  - mask (UV; v2/scripts/export_godot.py bake_mask): R = ambient occlusion, G = convex edges;
 //  - paint worn down to `wear_color` on the edges, broken up by an imperfection map; scratches; dirt in the
 //    crevices and in broad stains.
+// Colour space: the Compatibility renderer takes ALBEDO as sRGB (it converts after this function) and its
+// source_color hint converts nothing. The Blender numbers are linear, so the colour is worked out in linear
+// here and handed back as sRGB.
 uniform sampler2D tex_albedo : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D tex_normal : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D tex_rough : hint_default_white, filter_linear_mipmap_anisotropic, repeat_enable;
@@ -53,7 +56,7 @@ vec4 tri(sampler2D s, vec3 w, vec3 p) {
 
 void fragment() {
 	vec3 p = tri_pos / tile;
-	vec3 alb = tri(tex_albedo, tri_w, p).rgb * tint;
+	vec3 alb = pow(tri(tex_albedo, tri_w, p).rgb, vec3(2.2)) * tint;
 	float rough = mix(rough_range.x, rough_range.y, tri(tex_rough, tri_w, p).r);
 	vec3 q = tri_pos / detail;
 	vec3 imp = tri(tex_imperfections, tri_w, q + vec3(0.13)).rgb;               // fine: R scratches, G smudges, B dirt
@@ -73,7 +76,7 @@ void fragment() {
 	alb *= 1.0 - 0.6 * grime;
 	rough = rough + 0.25 * grime + (imp.g - 0.15) * 0.3 - imp.r * 0.15 * scratch;
 
-	ALBEDO = mix(alb, wear_color * (0.75 + 0.5 * imp.b), wm);
+	ALBEDO = pow(mix(alb, wear_color * (0.75 + 0.5 * imp.b), wm), vec3(1.0 / 2.2));
 	METALLIC = mix(metallic, wear_metal, wm);
 	ROUGHNESS = clamp(mix(rough, 0.3 + 0.2 * imp.g, wm), 0.05, 1.0);
 	AO = mix(1.0, ao, 0.7);
