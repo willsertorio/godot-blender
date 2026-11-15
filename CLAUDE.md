@@ -214,6 +214,8 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
   spectrum. A derived sound whose source licence cannot be checked is not CC0 for this project (one "machine
   shutting down" was dropped for that). A generative sound model was asked for and not used: the model hosts
   (huggingface.co) are outside this environment's network, and such a model's output has no clear CC0 status.
+  `python3 -I tools/audition_v2_audio.py` -> `captures/v2/audition.ogg`: 45 s of every sound in a scene, mixed
+  from the table as the game mixes it (for listening without starting the game, and for before / after).
   Timed sounds of the gun clips are `V2Player.CUES` (seconds into each clip, from anim_*.py).
 - Wrecks (`V2Fx.smoke_column`, `sparkle`, `arc`; `V2Robot._shorts`): **user decision: electrical, not fire**. One
   thin grey thread of smoke (mid grey: light grey vanished against the white studio), and short circuits from a

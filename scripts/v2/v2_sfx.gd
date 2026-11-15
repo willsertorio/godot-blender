@@ -35,8 +35,8 @@ const SOUNDS := {
 	"bolt": [["impactMetal_medium_004"], 1.5, -10.0, 0.04, 0.0],                                # machine gun charging handle
 	"handling": [["switch_003"], 0.8, -24.0, 0.1, 0.0],                                        # the gun moved in the hands: draw, aim, inspect
 	# rounds landing
-	"impact_concrete": [["impactPlate_light_002"], 1.7, -5.0, 0.15, 22.0],
-	"impact_metal": [["impactMetal_medium_002", "impactMetal_medium_004"], 1.2, -4.0, 0.12, 24.0],
+	"impact_concrete": [["impactPlate_light_002"], 1.7, -9.0, 0.15, 22.0],
+	"impact_metal": [["impactMetal_medium_002", "impactMetal_medium_004"], 1.2, -8.0, 0.12, 24.0],
 	"flyby": [[], 1.0, -9.0, 0.15, 0.0],                                                       # a robot's round passing the head
 	# the player's body
 	"step": [["impactPlate_light_002"], 0.75, -21.0, 0.1, 0.0],
@@ -48,7 +48,7 @@ const SOUNDS := {
 	# the robots (their guns: Tikka .30-06, Carl Gustav M45 9 mm, AK-47, recorded a few metres off)
 	"spider_shot": [["explosionCrunch_000"], 1.5, 3.0, 0.04, 45.0],
 	"drone_shot": [["explosionCrunch_002"], 1.8, 0.0, 0.05, 45.0],
-	"turret_shot": [["explosionCrunch_000"], 1.3, 2.0, 0.04, 45.0],
+	"turret_shot": [["explosionCrunch_000"], 1.3, 1.0, 0.04, 45.0],
 	"spider_step": [["impactMetal_light_001", "impactMetal_light_004"], 0.8, -11.0, 0.1, 18.0],
 	"servo": [[], 1.0, -19.0, 0.08, 16.0],                                                     # a joint driven round: aiming, turning
 	"drone_rotor": [["spaceEngineSmall_003"], 1.4, -12.0, 0.0, 20.0],                          # loop
