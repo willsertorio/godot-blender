@@ -76,6 +76,11 @@ var auto := true                  # preview: cycle through the clips
 var shots_fired := 0
 var travelled := 0.0
 var kills := 0                    # times it was destroyed
+# the game makes its robots a little sharper than the lab's (v2_game.gd TOUGH): against the lab's numbers a player
+# who keeps moving sideways is seldom hit (measured with the bot)
+var aim_lag := AIM_LAG            # seconds its aim point trails the player
+var damage_scale := 1.0
+var haste := 1.0                  # > 1 = shorter pauses between its bursts
 var respawns := true              # the lab: a wreck is replaced after RESPAWN seconds. The game: it stays a wreck
 var arena := Rect2()              # the part of its room's floor it may be in (room frame): SPEC's, or its own (the game)
 var rail := Vector2.ZERO          # turret: the z it may travel between along its ceiling rail (room frame); equal = fixed
@@ -576,7 +581,7 @@ func _look(delta: float) -> void:
 	if _sees:
 		alerted = true
 		_unseen = 0.0
-		_aim_point = _aim_point.lerp(chest, 1.0 - exp(-delta / AIM_LAG)) if _aim_valid else chest
+		_aim_point = _aim_point.lerp(chest, 1.0 - exp(-delta / aim_lag)) if _aim_valid else chest
 		_aim_valid = true
 	else:
 		_unseen += delta
@@ -620,7 +625,7 @@ func _fire(muzzle: Node3D) -> void:
 	if not res.is_empty():
 		to = res.position
 		if res.collider == player:
-			player.hurt(_spec.damage, from)
+			player.hurt(_spec.damage * damage_scale, from)
 			to -= dir * minf(1.3, from.distance_to(to) * 0.5)      # (a streak that ends at the eye fills the screen)
 		else:
 			V2Fx.impact(to, res.normal)
@@ -821,7 +826,7 @@ func _mobile(delta: float) -> void:
 				_engage()
 		SHOOT:
 			if _t <= 0.0:
-				_cool = randf_range(_spec.cooldown[0], _spec.cooldown[1])
+				_cool = randf_range(_spec.cooldown[0], _spec.cooldown[1]) / haste
 				_engage()
 
 
@@ -939,7 +944,7 @@ func _turret(delta: float) -> void:
 			_t = ap.get_animation("Shoot").length
 		elif state == SHOOT and _t <= 0.0:
 			state = AIM
-			_cool = randf_range(_spec.cooldown[0], _spec.cooldown[1])
+			_cool = randf_range(_spec.cooldown[0], _spec.cooldown[1]) / haste
 			_rest_pose()
 	else:
 		if state != ROAM:

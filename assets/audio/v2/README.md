@@ -58,3 +58,4 @@ the build script; a volume is one number in `SOUNDS`.
 | `exit_hum` | LOOP: the exit gate's field | a machine loop |
 | `exit` | through the exit gate | the motor running up, a rush of air |
 | `ui` | a menu button | a switch |
+| `room_tone` | LOOP, everywhere, very low: the ventilation (game and title) | an ambient loop, low-passed |

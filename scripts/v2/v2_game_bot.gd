@@ -31,6 +31,7 @@ var _strafe_t := 0.0
 var _react := 0.0
 var _err := Vector2.ZERO
 var _err_t := 0.0
+var _burst_t := 0.0
 var log_lines: Array[String] = []
 
 
@@ -38,6 +39,10 @@ func _ready() -> void:
 	player = game.player
 	player.mouse_look = false
 	solid = DisplayServer.get_name() != "headless"
+
+
+func note(text: String) -> void:
+	log_lines.append("%4.0f s  %s" % [game.elapsed, text])
 
 
 func _wait(seconds: float) -> void:
@@ -134,7 +139,11 @@ func _fight(r: V2Robot, delta: float) -> void:
 	if player.weapon != want and player.busy == "":
 		player.switch_weapon()
 	var fire := _react <= 0.0 and off < deg_to_rad(4.0)
-	player.bot_fire = fire and player.weapon == "rifle"
+	# the machine gun in bursts of half a second (held longer, its barrel climbs off the target)
+	_burst_t -= delta
+	if _burst_t <= -0.3:
+		_burst_t = 0.5
+	player.bot_fire = fire and player.weapon == "rifle" and _burst_t > 0.0
 	if fire and player.weapon == "pistol":
 		player.act("Fire")
 	if player.hp < 45.0:
@@ -163,7 +172,10 @@ func walk(node: String, fight: bool = true, limit: float = 40.0) -> bool:
 			var r := _target() if fight else null
 			if r != null:
 				_fight(r, delta)
-				strayed = true
+				var line := goal - _world(sector, _at)
+				var rel := player.global_position - _world(sector, _at)
+				var along := clampf(rel.dot(line.normalized()), 0.0, line.length()) if line.length() > 0.01 else 0.0
+				strayed = (rel - line.normalized() * along).length() > 0.9
 				continue
 			if player.bot_fire:
 				_react = 0.4
@@ -237,6 +249,7 @@ func play_level() -> Dictionary:
 	for sector in game.LEVEL.size():
 		if game.state != game.PLAYING:
 			break
+		note("sector %s entered: health %d, kits %d, rounds %d + %d" % [game.LEVEL[sector].name, player.hp, player.kits, player.mag.rifle, player.reserve])
 		if sector > 0:
 			await walk("hn")                               # from the door through the gap by the stairs into the hall
 			await clear()
@@ -254,8 +267,11 @@ func play_level() -> Dictionary:
 			await walk(node)
 			await clear(30.0)
 		hp_low = minf(hp_low, player.hp)
+		note("sector %s done: %d robots left in it, health %d" % [game.LEVEL[sector].name, game.alive_in(sector), player.hp])
 		if game.LEVEL[sector].has("exit"):
-			await walk("exit")
+			var reached := await walk("exit")
+			await _wait(0.5)                               # (the gate takes the player in on the game's next frame)
+			note("exit: walk %s, state %d, at %s" % [reached, game.state, player.global_position])
 		elif game.state == game.PLAYING:
 			if not await next_sector():
 				break
@@ -455,7 +471,7 @@ func capture(dir: String) -> void:
 	player.invulnerable = true
 	await _wait(1.0)
 	await _shot(dir, "a1_start")
-	_stand(0, 3.9, -7.6, -112.0, -16.0)                    # the crate by the door
+	_stand(0, 3.7, -8.9, -76.0, -14.0)                    # the crate by the door
 	await _wait(0.4)
 	await _shot(dir, "a2_crate")
 	game.open_crate(game.crates[0])
@@ -467,7 +483,7 @@ func capture(dir: String) -> void:
 	game.open_door(0, true)
 	await _wait(1.0)
 	await _shot(dir, "a5_door_open")
-	_stand(1, 3.9, -8.2, 35.0, -6.0)                       # B: the hall from its gate
+	_stand(1, 3.9, -8.2, 147.0, -6.0)                       # B: the hall from its gate
 	await _wait(2.5)
 	await _shot(dir, "b1_hall")
 	_stand(1, 0.4, 2.0, 0.0, -8.0)
@@ -477,14 +493,27 @@ func capture(dir: String) -> void:
 	await _wait(3.5)
 	await _shot(dir, "b3_wreck")
 	game.open_door(1, true)
-	_stand(2, 3.9, -8.2, 35.0, 6.0)                        # C: drones and the turret on its rail
+	_stand(2, 3.9, -8.2, 147.0, 8.0)                        # C: drones and the turret on its rail
 	await _wait(3.0)
 	await _shot(dir, "c1_drones_turret")
 	_stand(2, 1.5, 1.6, 40.0, 24.0)
 	await _wait(1.5)
 	await _shot(dir, "c2_rail")
+	# a drone of C comes after the player into B: through the doorway on edge
+	var drone: V2Robot = null
+	for r in game.robots:
+		if r.kind == "drone" and r.room == 2 and drone == null:
+			drone = r
+	_stand(1, 3.4, -8.6, -70.0, -2.0)
+	drone.alerted = true
+	var t := 0.0
+	while t < 40.0 and not (drone.state == V2Robot.TRAVEL and drone.room == 2 and drone.position.x < -3.2):
+		t += await _frame()
+	for k in 5:
+		await _shot(dir, "t%d_drone_through_door" % (k + 1))
+		await _wait(0.45)
 	game.open_door(2, true)
-	_stand(3, 3.9, -8.2, 20.0, -2.0)                       # D: the exit at the far end
+	_stand(3, 3.9, -8.2, 160.0, -2.0)                       # D: the exit at the far end
 	await _wait(2.0)
 	await _shot(dir, "d1_exit_far")
 	_stand(3, 1.0, -1.6, 180.0, 0.0)

@@ -319,14 +319,17 @@ User decisions: the real game has PLAY and LAB; **one level only**.
   R reloads (the magazine is filled at the clip's "magazine in" sound), an empty gun clicks and reloads by itself;
   no health regeneration; med kits (H, +40, max 3); E = `interact` (nearest door or crate within 2.3 m);
   1 / 2 or Q switch gun; going down ends the run. In the lab none of this applies.
-- Robots in the game (`respawns = false`): a wreck stays (its smoke stops after 40 s, its sparks become rare).
+- Robots in the game (`respawns = false`): a wreck stays (its smoke stops after 40 s, its sparks become rare) and
+  **does not block the player** (`V2Robot._solid`: a wreck's hit boxes go to physics layer 2, which rounds still
+  strike; a wreck in a doorway or in the gap by the stairs would have shut the level). They are a little sharper
+  than the lab's (`TOUGH` in v2_game.gd: aim lag 0.24 s instead of 0.3, damage x1.15, pauses between bursts /1.2).
   Spiders hold their hall, each in its own `arena`: **a spider cannot pass a doorway** (it is about 1.9 m across
   its legs, the doorway 1.3 m). Drones that have seen the player and lost them follow into the next sector if the
   door is open (`V2Robot.travel`, state TRAVEL): a drone is 1.7 m wide, so it goes through **on edge** (rolled 83
   degrees, 1.2 m up, nose first) along `WAY`, and is re-parented to the next room's node as it crosses (robots live
   in their room's frame). The turret runs along a rail under the ceiling (`set_rail`; the concept room's cable
   `Loop3` is hidden for it) to where the player is abreast of it; in the lab's studio too.
-  35 % of destroyed robots leave a pickup. Score: turret 100, drone 150, spider 200, + (300 - seconds) on a win.
+  A door opening alerts the robots beyond it. 35 % of destroyed robots leave a pickup. Score: turret 100, drone 150, spider 200, + (300 - seconds) on a win.
 - Props: `v2/scripts/build_props.py` -> `v2/props.blend` + `assets/models/v2/props.glb` (crate with `Crate_Lid`,
   `AmmoBox`, `HealthCell`, `MedKit`, `ExitGate`; the robots' materials by name; the gate's field is
   `v2_field.gdshader`). The game duplicates each by name. Their collision is boxes added in code.
@@ -341,6 +344,9 @@ User decisions: the real game has PLAY and LAB; **one level only**.
   `tools/v2_bot.sh [N]` = the balance bot plays the level N times (one process per run; slow under software GL);
   `... -- --game-capture=DIR` = pictures of every sector, the crate, a door, the exit, the menu, the end screen;
   `... -- --title-capture=FILE.png`.
+- Sound of the game: `door`, `crate`, `pickup`, `dry` (an empty gun, a locked door), `heal`, `exit_hum` (loop on
+  the gate), `exit`, `ui`, `room_tone` (a very low ventilation loop, `V2Sfx.ambience`; title too), `ricochet`
+  (one round in five or six that hits a wall, lab too).
 - Static state survives a scene change (`V2Fx._marks`, `V2Sfx.root`): every scene's `_ready` sets the roots and
   calls `V2Fx.reset()`.
 

@@ -48,6 +48,7 @@ func _ready() -> void:
 	add_child(_cam)
 	_cam.make_current()
 	_menu()
+	V2Sfx.ambience("room_tone")
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	for a in args:
 		if a.begins_with("--title-capture="):

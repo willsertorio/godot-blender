@@ -508,6 +508,7 @@ def recipes():
     r["dry"] = [fade(whole(o(sx + "switch_01.ogg"))[:int(0.14 * SR)], 0.001, 0.05)]      # an empty gun
     r["ui"] = [whole(o(sx + "switch_02.ogg"))]
     r["heal"] = [layer((level(whole(o(sx + "air_03.ogg")), -3.0), 1.0, 0.0), (level(fade(whole(o(sx + "air_02.ogg")), 0.05, 0.6), -12.0), 1.0, 0.2))]
+    r["room_tone"] = [loop(eq(load(o(sx + "loop_ambient_04.ogg")), hp(70), lp(1800)), 1.0)]   # loop: the ventilation of the place, very low
     r["exit_hum"] = [loop(load(o(sx + "loop_machine_04.ogg")), 0.5)]                      # loop: the gate's field
     r["exit"] = [layer((level(fade(glide(fan, (0.5, 2.4), 1.6), 0.2, 0.5), -6.0), 1.0, 0.0),
                        (level(fade(whole(o(sx + "air_01.ogg")), 0.3, 1.2), -6.0), 1.0, 0.1))]   # through the gate

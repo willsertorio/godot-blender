@@ -66,11 +66,12 @@ const SOUNDS := {
 	"dry": [[], 1.0, -13.0, 0.05, 0.0],                                                        # the click of an empty gun
 	"heal": [[], 1.0, -13.0, 0.03, 0.0],                                                       # a med kit
 	"ui": [[], 1.0, -17.0, 0.03, 0.0],
+	"room_tone": [[], 1.0, -31.0, 0.0, 0.0],                                                   # loop, everywhere: the ventilation
 	"exit_hum": [[], 1.0, -18.0, 0.0, 16.0],                                                   # loop: the exit gate's field
 	"exit": [[], 1.0, -7.0, 0.0, 0.0],                                                         # through the gate
 	"zap": [["glitch_002"], 1.6, -9.0, 0.2, 18.0],                                            # sparks
 }
-const LOOPS := ["drone_rotor", "exit_hum"]
+const LOOPS := ["drone_rotor", "exit_hum", "room_tone"]
 const MAX_VOICES := 12                # per key: the oldest is cut off
 const GAIN := 3.0                     # dB on everything, into the limiter (the files sit at -20 dB loudness: a pistol shot peaks near full scale)
 
@@ -216,6 +217,23 @@ static func loop(key: String, parent: Node3D) -> AudioStreamPlayer3D:
 	p.bus = bus()
 	p.set_meta("pitch", p.pitch_scale)
 	parent.add_child(p)
+	return p
+
+
+## A loop heard everywhere at the same level (the room's tone). Starts at once; null if the key has no sound.
+static func ambience(key: String) -> AudioStreamPlayer:
+	if not enabled or root == null or not SOUNDS.has(key):
+		return null
+	var list := _load(key)
+	if list.is_empty():
+		return null
+	var p := AudioStreamPlayer.new()
+	p.stream = list[0]
+	p.volume_db = float(SOUNDS[key][2])
+	p.bus = bus()
+	root.add_child(p)
+	p.play()
+	heard[key] = true
 	return p
 
 

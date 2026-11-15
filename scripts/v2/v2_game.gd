@@ -33,10 +33,13 @@ const LEVEL := [
 		["turret", 0.0, 0.0, 0.0, null]],
 		"crates": [[-4.02, 1.0, 90.0, "ammo"]], "exit": [1.0, 2.5]},
 ]
+# The robots of the game against the lab's: [aim lag in seconds (the lab: 0.3), damage x, pauses between bursts /].
+# Tuned with the bot (tools/v2_bot.sh; CLAUDE.md, "V2 game", has the runs). The spider most of all: with the lab's
+# numbers, and with the drone's here, the two spiders of sector B never once hit a bot that keeps moving sideways.
+const TOUGH := {"spider": [0.14, 1.3, 1.3], "drone": [0.24, 1.15, 1.2], "turret": [0.24, 1.15, 1.2]}
 const DROP := 0.35                  # chance that a destroyed robot leaves something
 const DROPS := ["ammo", "ammo", "ammo", "health", "health", "kit"]
 const REACH := 2.3                  # how near a door or a crate must be for E
-const SPIDER_AREA := "the hall"
 
 enum { PLAYING, WON, LOST }
 
@@ -109,6 +112,7 @@ func _ready() -> void:
 		r.player = player
 	_hud()
 	_rooms_shown()
+	V2Sfx.ambience("room_tone")
 	var capture := ""
 	var bot := 0
 	for a in args:
@@ -141,6 +145,9 @@ func _sector(i: int) -> void:
 		room.add_child(robot)
 		robot.setup(rs[0])
 		robot.respawns = false
+		robot.aim_lag = TOUGH[rs[0]][0]
+		robot.damage_scale = TOUGH[rs[0]][1]
+		robot.haste = TOUGH[rs[0]][2]
 		robot.show_label = false
 		robot.world = self
 		robot.room = i
@@ -239,7 +246,7 @@ func _exit(room: Node3D, at: Vector3) -> void:
 		sign.text = "EXIT"
 		sign.font_size = 96
 		sign.pixel_size = 0.0022
-		sign.modulate = Color(0.86, 0.76, 1.0)
+		sign.modulate = Color(0.1, 0.04, 0.22)                 # (dark on the lit strip behind it)
 		sign.outline_size = 0
 		sign.position = Vector3(0, 2.61, side * 0.33)
 		sign.rotation_degrees.y = 0.0 if side > 0.0 else 180.0
@@ -258,7 +265,9 @@ func _door(i: int) -> void:
 		leaf.position = Vector3(x, 0.0, DOOR_Z + side * DOOR_W / 4.0)
 		rooms[i].add_child(leaf)
 		var layer := _layer(i) | _layer(i + 1)
-		_box(leaf, Vector3(-0.035, 0.01, -DOOR_W / 4.0), Vector3(0.035, DOOR_H - 0.02, DOOR_W / 4.0), "Steel", layer)
+		# (painted white like the robots' armour: bare steel under the mezzanine came out as a black hole)
+		_box(leaf, Vector3(-0.035, 0.01, -DOOR_W / 4.0), Vector3(0.035, DOOR_H - 0.02, DOOR_W / 4.0), "RArmor", layer)
+		_box(leaf, Vector3(-0.04, 1.5, -DOOR_W / 4.0 + 0.12), Vector3(0.04, 1.86, DOOR_W / 4.0 - 0.12), "DarkGlass", layer)
 		_box(leaf, Vector3(-0.045, 0.9, -DOOR_W / 4.0 + 0.04), Vector3(0.045, 1.02, DOOR_W / 4.0 - 0.04), "Hazard", layer)
 		_box(leaf, Vector3(-0.042, 0.01, side * DOOR_W / 4.0 - side * 0.05), Vector3(0.042, DOOR_H - 0.02, side * DOOR_W / 4.0), "DarkSteel", layer)
 		leaves.append(leaf)
@@ -344,6 +353,9 @@ func open_door(i: int, force: bool = false) -> void:
 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	for lamp in d.lights:
 		(lamp as MeshInstance3D).material_override = _lamp(V2Ui.GREEN)
+	for r in robots:                                       # the robots beyond it hear it open
+		if r.room == i + 1 and r.state != V2Robot.DEAD:
+			r.alerted = true
 	_rooms_shown()
 
 
