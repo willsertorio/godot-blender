@@ -220,7 +220,7 @@ def inspect(t):
 
 CLIPS = [("Idle", 3.0, idle, True), ("Walk", 1.0, walk, True), ("Sprint", SPRINT_IN + SPRINT_RUN + SPRINT_OUT, sprint, False),
          ("Fire", 0.5, fire, False), ("ADS", ADS_IN + ADS_HOLD + ADS_OUT, ads, False), ("Draw", DRAW_T, draw, False),
-         ("Reload", RELOAD_T, reload, False), ("Inspect", INSPECT_T, inspect, False), ("ADSFire", 0.5, ads_fire, False)]
+         ("Reload", RELOAD_T, reload, False), ("Inspect", INSPECT_T, inspect, False), ("ADSFire", 0.5, ads_fire, False, ("ADS", round(ADS_IN * FPS)))]
 FF_BASE = dict(yaw=12.0, pitch=-15.0, right=-0.01, up=-0.01)   # the gun turned toward the spider, low on the left
 
 

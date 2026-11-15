@@ -117,6 +117,7 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
   it moves, aims, shoots the player and can be shot. The player holds the V2 guns. Keys: walk through the doors or
   `1 2 3` / Tab jump to a room, LMB fire (the machine gun fires for as long as it is held), RMB aim (held; LMB fires
   from the aim), `R` reload, `T` reload from empty, `F` inspect, `Q` switch gun, Shift sprint, Space jump,
+  `C` aim as well (the user plays on a trackpad: no right button), `X` crouch (toggle; eye 1.0 m, capsule 1.15 m),
   `M` enemy <-> clip preview, `N` next clip (switches to preview), F3 performance, Esc frees the mouse.
 - Rooms: the studio is `v2/scripts/build_studio.py` -> `v2/studio.blend` + `assets/models/v2/studio.glb` (the size of
   the concept room, same doorways, a metre grid on the floor = `v2_grid.gdshader`, three blocks for cover outside the
@@ -157,6 +158,12 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
   4 above the line of sight), so tracers to the screen's middle looked bent: the whole view is turned about the eye
   until the barrel is parallel to the line of sight (`fix`, found from the Idle clip; faded out while aiming).
   The pistol still shoots at the middle of the screen.
+  The gun and arms are drawn by **their own camera** (`view_cam`, `GUN_LAYER`) into a transparent SubViewport laid
+  over the world, under the HUD: a wall cannot cut into the gun, and the world camera zooms while aiming
+  (`AIM_ZOOM` 0.78, mouse slowed to match) without the gun growing. Same world: the lab lets the lights of the
+  room the player is in reach `GUN_LAYER` (`_gun_lights`). No glow or fog on that picture (halos on transparency).
+  The aim is held on a still clip (`AimHold`, cut from ADS by `V2Assets.sub_clip`) and lowered by `AimOut`: never
+  park a running clip by seeking it every frame.
   Health 100, regenerates after 4 s without a hit; at 0 the player is "down" for a moment, then revived in place.
   Damage: pistol 34, machine gun 12 a round.
 - `v2_robot.gd` (`V2Robot`): states ROAM / ENGAGE / AIM / SHOOT / DEAD (+ PREVIEW = clip cycle). Numbers in `SPEC`
@@ -170,8 +177,21 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
   The spider turns by stepping (`_step_round`, the Turn clip at the speed of the turn), not by sliding. A hit
   pushes: body knocked back and tipped on springs (`_springs`, `PUSH`), spider / drone shoved, the turret's arm
   swung aside; at 0 health: burst, Death clip, a smoking wreck (lowered onto the floor by the gap measured at
-  setup: `_measure_wreck`), back after 6 s. `v2_fx.gd` (`V2Fx`): tracers, impact sparks / chips / dust / scorch
+  setup: `_measure_wreck`), back after 6 s.
+  Every joint that carries meshes has its own hit box (`_part_boxes`): a round strikes a part, alive or wrecked,
+  and that joint and the ones it hangs from swing on springs (`_knock_joint`, `_flop`, `FLOP_LIVE` / `FLOP_DEAD`:
+  a live joint twitches, a wreck's flops, the dead turret's arm swings like a pendulum). Not rigid-body physics:
+  angular springs on the clip's pose. The robots' clips are advanced by the robot (`ap.advance` in `_process`,
+  manual mode) so that aim and knocks go on top of the same frame's pose.
+  The drone, shot down, flies on out of control for 2-3 s (`_spin_out`: faster and faster, turning at random,
+  bouncing off the walls, spinning, shedding sparks), then falls (Death clip) and **explodes** where it lands
+  (`V2Fx.explosion`; `BLAST`: up to 40 damage within 3.5 m). `v2_fx.gd` (`V2Fx`): tracers, impact sparks / chips / dust / scorch
   marks, smoke, flash lights.
+- Sound: `scripts/v2/v2_sfx.gd` (`V2Sfx`): one table, a key per interaction (`assets/audio/v2/README.md` lists
+  them), `play(key[, place])`, `loop` / `drive` for the drone's rotors and a wreck's fire, `V2Sfx.log` for the
+  checks, `-- --no-sound`. Files go in `assets/audio/v2/<key>_*.ogg`. **State: no realistic library yet** (see
+  "Not done"): every key plays a stand-in from V1's Kenney set, pitched; they prove the timing, not the tone.
+  Timed sounds of the gun clips are `V2Player.CUES` (seconds into each clip, from anim_*.py).
 - Light (`v2_lab.gd _environment`, tuned against `v2/renders/stage3_scene.png` zone by zone with
   `--capture=DIR --only=tone`): half of it is one DirectionalLight3D straight down (the luminous ceiling: bright
   floor, dimmer walls) and it casts the only shadows (one orthogonal pass; the room shell casts none); six omni
@@ -192,7 +212,8 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
   headless has no meshes, so walls do not block anything in this test);
   `xvfb-run -a godot --rendering-driver opengl3 --path . -- --gun-test` (real events: machine gun held 2.5 s = no gap
   between rounds, stops on release; rounds leave along the barrel, cursor in the middle at rest and climbing in
-  fire; fire while aiming; a sprint ends when the player stops);
+  fire; C aims and the view zooms, fire while aiming; the gun on its own camera; X crouches; a sprint ends when
+  the player stops; the gun's and the player's sound keys were played);
   `xvfb-run -a godot --rendering-driver opengl3 --path . -- --input-test` (real mouse / key events through the
   viewport: look, fire, aim, reload, inspect, camera kick). The capture tour drives the player by code, so it passed
   while a HUD ColorRect at screen centre (mouse filter STOP by default) was swallowing every mouse event: HUD
@@ -201,7 +222,9 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
   `--capture=DIR --only=tone,rooms,doors,guns,look,ai,wreck,fx,panel` for parts (`tone` = the Blender camera's frame;
   `look` = materials close up; `ai` = each robot moving, firing, wrecked (prints how far the wreck's lowest point is
   above the floor and where its barrels point); on request only: `wreck` = burst + smoke, `fx` = hits on a wall,
-  `panel` = 12 consecutive frames of the machine gun, to look for flicker).
+  `panel` = 12 consecutive frames of the machine gun, to look for flicker, `adsfire` = 215 frames at 1/60 s of
+  aiming and firing with real input (it caught the one-frame hand), `wall` = each gun nose against a wall and the
+  view crouched behind cover, `spin` = the drone shot down, flying, crashing, burning).
   Scratch tools worth rewriting when needed: a "pops" script (step every clip in half frames and print the largest
   bone move / turn: it found the hand flips) and a clip strip (frames of one clip side by side).
 - Performance: `F3` in the lab shows fps / frame time / draw calls / triangles / objects / video memory / adapter;
@@ -222,11 +245,19 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
   two faces in one plane, or 0.25 mm apart on a gun 0.5 m from the eye, flicker (the machine gun's screen):
   keep 0.6 mm or more between layers;
   explicit springs (the hit push) are stepped at 8 ms whatever the frame time.
+  Two clips the game blends between must describe a shared pose with the same bone turns: aimed fire starts from
+  the aim, and its forearm twist was a full turn from the aim clip's, so the blend swung the hand through half a
+  turn for single frames (`Baker.clip(seed=...)` starts a clip from another clip's twist).
+  `Object.get_meta(name, null)` still errors when the meta is missing: test `has_meta`.
 - Learned: "hidden by scale 0" breaks Godot's glTF import (node comes in at scale 1): export hides at 0.001.
   A fine weave seen at arm's length beats against the pixel grid even with mipmaps: the glove fabrics are sampled
   with a mip bias. A directional light with shadows on came out about half as bright again as without.
-- Not done yet: the turret does not travel (its cables), sound, a browser build; the pistol has no cursor recoil
-  (it shoots at the middle of the screen: the user called its firing good).
+- Not done yet: **the realistic CC0 sound library** (wanted: guns and robots in one consistent, recorded line; the
+  Free Firearm Sound Library on opengameart.org was the lead; `opengameart.org` was added to the environment's
+  hosts with the user's approval, but this session's safety check refused shell fetches from it and the fetch
+  tool could not resolve it: ask the user to drop the archive into `incoming/`, or to allow the fetch); the
+  turret does not travel (its cables); a browser build; the pistol has no cursor recoil (it shoots at the middle
+  of the screen: the user called its firing good).
   User decisions: no sound for now; no browser build of V2 for now (`tools/export_web.sh` is untested with the V2 lab);
   studio rooms in the lab, the concept room for the real game.
 

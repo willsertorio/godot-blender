@@ -138,6 +138,8 @@ blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100 view=rifle  
 - Game clips: a clip the game repeats must repeat exactly: `burst(..., loop=(first round, rounds))` in anim_rifle.py
   (climb at its top, scatter and cases periodic), the spider's Turn (feet turn about the body's axis in stance).
   `anim_rifle.py` stores the loop frames in the scene (`v2_fire_loop_rifle`); the export writes them to the clip table.
+- A clip that starts from a moment of another clip (ADSFire from the aim) is baked with `seed=(clip, frame)` in its
+  CLIPS row: its forearm twists start from that clip's, so the game can blend between the two.
 - Robots' flashes: +Y of the flash object is the barrel (in the game: -Z of its node). The game aims by that
   direction, so it must be right in the .blend: check a new robot's flash with the gun's own axis.
 - The picture is graded with AgX (High Contrast); Godot's renderer has no AgX, and it takes shader colours as sRGB

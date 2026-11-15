@@ -4,7 +4,7 @@ extends Node3D
 ## The robots are enemies (v2_robot.gd): they move, shoot at the player and can be destroyed; they come back.
 ##   walk through the doors, or 1 2 3 (Tab) = jump to a room
 ##   M = that room's robot: enemy <-> clip preview (cycles its clips where it stands in Blender) · N = next clip
-##   LMB fire · RMB aim · R reload · T reload from empty · F inspect · Q switch gun · Shift sprint · Space jump
+##   LMB fire · C / RMB aim · R reload · T reload from empty · F inspect · Q switch gun · Shift sprint  ·  X crouch · Space jump
 ##   godot --path . -- --v1          the V1 game / lab (scenes/main.tscn)
 ##   godot --path . -- --capture=DIR  save a tour of screenshots and quit
 ##   godot --path . -- --quality=low   no shadows, glow or MSAA (for a weak graphics card)
@@ -55,6 +55,10 @@ var _perf_worst := 0.0
 var _perf_line := ""
 var _quick := false
 var _door_only := false
+var _room_lights: Array = []        # per room: its omni and spot lights
+var _gun_room := -1
+var _listen := false              # tests: remember every sound key played (V2Sfx.log is a short tail)
+var _heard: Dictionary = {}
 var _concept := false             # --concept: the detailed room of the Blender scene instead of the studio
 
 
@@ -64,6 +68,8 @@ func _ready() -> void:
 		get_tree().change_scene_to_file.call_deferred("res://scenes/main.tscn")
 		return
 	V2Fx.root = self
+	V2Sfx.root = self
+	V2Sfx.enabled = not ("--no-sound" in args)
 	_low = "--quality=low" in args                 # (before the environment is built: it reads this)
 	_concept = "--concept" in args
 	_environment()
@@ -134,6 +140,7 @@ func _environment() -> void:
 	env.fog_enabled = true                          # its haze
 	env.fog_light_color = Color(0.82, 0.86, 0.92)
 	env.fog_density = 0.0035                        # (thin: at 0.012 it lifted every dark surface across the room to mid grey)
+	V2Player.world_env = env
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
@@ -187,6 +194,8 @@ func _room(i: int) -> void:
 	floor_body.add_child(floor_shape)
 	room.add_child(floor_body)
 	# the room is lit by its ceiling panels in Blender; here by a grid of lights under them (x -4.6..6.4, z 3..-14)
+	var lights: Array = []
+	_room_lights.append(lights)
 	for z in [0.0, -5.5, -11.0]:
 		for x in [-2.0, 3.8]:
 			var l := OmniLight3D.new()
@@ -197,6 +206,7 @@ func _room(i: int) -> void:
 			l.omni_attenuation = 0.8
 			l.light_cull_mask = _layer(i)
 			room.add_child(l)
+			lights.append(l)
 	# under the mezzanine the ceiling's light does not reach: its own strip lights there are two spot lights
 	# (spots, not omnis: a mesh takes 8 of each kind, and the six above, the gun's and a muzzle flash make 8 omnis)
 	for x in ([-2.4, 4.0] if _concept else []):
@@ -211,6 +221,7 @@ func _room(i: int) -> void:
 		sp.light_energy = 0.7
 		sp.light_cull_mask = _layer(i)
 		room.add_child(sp)
+		lights.append(sp)
 	if not _concept:                                   # the room's number and tenant on the far wall
 		var plate := Label3D.new()
 		plate.text = "%02d  %s" % [i + 1, KINDS[i].to_upper()]
@@ -226,6 +237,17 @@ func _room(i: int) -> void:
 	_set_layer(room, _layer(i))
 	rooms.append(room)
 	robots.append(robot)
+
+
+## The gun and arms are on a layer of their own (V2Player.GUN_LAYER); the lights of the room the player stands in
+## reach it, the other rooms' do not.
+func _gun_lights(room: int) -> void:
+	if room == _gun_room:
+		return
+	_gun_room = room
+	for i in _room_lights.size():
+		for l in _room_lights[i]:
+			(l as Light3D).light_cull_mask = _layer(i) | (V2Player.GUN_LAYER if i == room else 0)
 
 
 ## Each room is on its own render layer and its lights only reach that layer: with the rooms side by side, a room's
@@ -298,6 +320,7 @@ func goto(i: int) -> void:
 
 func _hud_setup() -> void:
 	var layer := CanvasLayer.new()
+	layer.layer = 5                                    # over the gun's picture (the player's overlay is layer 1)
 	add_child(layer)
 	_hud = Label.new()
 	_hud.position = Vector2(16, 12)
@@ -372,7 +395,7 @@ func _on_player_died() -> void:
 func _hud_update(delta: float) -> void:
 	var r := robots[current]
 	var preview := r.state == V2Robot.PREVIEW
-	_hud.text = "V2 LAB   room %d / %d: %s (%s)   gun: %s   destroyed: %d   downs: %d\nwalk through the doors or 1 2 3  ·  M enemy / clip preview  ·  N next clip  ·  F3 performance\nLMB fire  ·  RMB aim  ·  R reload  ·  T reload (empty)  ·  F inspect  ·  Q switch gun  ·  Shift sprint  ·  Space jump" % [
+	_hud.text = "V2 LAB   room %d / %d: %s (%s)   gun: %s   destroyed: %d   downs: %d\nwalk through the doors or 1 2 3  ·  M enemy / clip preview  ·  N next clip  ·  F3 performance\nLMB fire  ·  C / RMB aim  ·  R reload  ·  T reload (empty)  ·  F inspect  ·  Q switch gun  ·  Shift sprint  ·  X crouch  ·  Space jump" % [
 		current + 1, rooms.size(), r.kind.to_upper(), ("preview: " + r.clip + ("" if r.auto else ", held")) if preview else "enemy",
 		player.weapon, robots.reduce(func(n: int, x: V2Robot) -> int: return n + x.kills, 0), downs]
 	var h := player.hp / V2Player.MAX_HP
@@ -427,8 +450,12 @@ func _process(delta: float) -> void:
 		return
 	if _perf.visible:
 		_perf_update(delta)
+	if _listen:
+		for key in V2Sfx.log:
+			_heard[key] = true
+		V2Sfx.log.clear()
 	current = _room_at(player.global_position.x)
-	player.set_layer(_layer(current))                # the gun is lit by the lights of the room it is in
+	_gun_lights(current)                             # the gun is lit by the lights of the room it is in
 	for k in robots.size():
 		robots[k].active = k == current
 	_hud_update(delta)
@@ -482,6 +509,7 @@ func _key(code: int, pressed: bool) -> void:
 ## is held and stop when it is let go; its rounds must leave along the barrel and the cursor must ride on it (in
 ## the middle at rest, climbing in fire); fire while aiming; a sprint must end when the player stops.
 func _gun_test() -> void:
+	_listen = true
 	for r in robots:
 		r.set_ai(false)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -532,20 +560,47 @@ func _gun_test() -> void:
 		" (path bends %.1f degrees at most, cursor up to %.0f px above the middle)" % [player.worst_bend, centre.y - highest])
 	# aimed fire
 	player.shot_times.clear()
-	_press(MOUSE_BUTTON_RIGHT, true)
+	var fov0 := player.cam.fov
+	_key(KEY_C, true)                                  # C aims (as the right mouse button does)
 	await _wait(0.8)
+	var zoom := player.cam.fov / fov0
 	var aimed_off := player.aim_dot.distance_to(centre)
 	_press(MOUSE_BUTTON_LEFT, true)
 	await _wait(1.0)
 	_press(MOUSE_BUTTON_LEFT, false)
 	await _wait(0.5)
 	var still_aiming := player.busy == "ADS"
-	_press(MOUSE_BUTTON_RIGHT, false)
+	_key(KEY_C, false)
 	await _until(func() -> bool: return player.busy == "", 3.0)
-	a = player.shot_times.size() >= 8 and still_aiming and player.busy == "" and aimed_off < 14.0
+	a = player.shot_times.size() >= 8 and still_aiming and player.busy == "" and aimed_off < 14.0 and zoom < 0.85 and player.cam.fov > fov0 * 0.97
 	ok = ok and a
-	print("[gun] fire while aiming: ", "PASS" if a else "FAIL", " (%d rounds, back at the aim: %s, lowered: %s, cursor %.1f px off)" % [
-		player.shot_times.size(), still_aiming, player.busy == "", aimed_off])
+	print("[gun] C aims, the view zooms, fire while aiming: ", "PASS" if a else "FAIL", " (%d rounds, back at the aim: %s, lowered: %s, cursor %.1f px off, field of view x%.2f while aiming)" % [
+		player.shot_times.size(), still_aiming, player.busy == "", aimed_off, zoom])
+	# the gun is drawn by its own camera over the world: a wall cannot cut into it
+	a = (player.cam.cull_mask & V2Player.GUN_LAYER) == 0 and player.view_cam.cull_mask == V2Player.GUN_LAYER
+	for n in (player._views[player.weapon].scene as Node).find_children("*", "MeshInstance3D", true, false):
+		a = a and (n as MeshInstance3D).layers == V2Player.GUN_LAYER
+	ok = ok and a
+	print("[gun] the gun is drawn over the world by its own camera: ", "PASS" if a else "FAIL")
+	# crouch: X
+	var eye0 := player.cam.position.y
+	_key(KEY_X, true)
+	_key(KEY_X, false)
+	await _wait(0.6)
+	var eye1 := player.cam.position.y
+	var chest1 := player.chest().y - player.global_position.y
+	_key(KEY_X, true)
+	_key(KEY_X, false)
+	await _wait(0.6)
+	a = eye1 < eye0 - 0.5 and chest1 < 0.7 and absf(player.cam.position.y - eye0) < 0.02
+	ok = ok and a
+	print("[gun] X crouches and stands: ", "PASS" if a else "FAIL", " (eye %.2f -> %.2f -> %.2f m, crouched chest at %.2f m)" % [eye0, eye1, player.cam.position.y, chest1])
+	# reload: its sounds come at the clip's moments
+	_listen = true
+	_key(KEY_T, true)
+	_key(KEY_T, false)
+	await _until(func() -> bool: return player.busy == "ReloadEmpty", 1.0)
+	await _until(func() -> bool: return player.busy == "", 5.0)
 	# sprint, then stop
 	player._yaw = PI                                   # (down the room, away from the wall behind)
 	player.global_position = rooms[0].position + Vector3(0.2, 0.02, -10.0)
@@ -562,6 +617,13 @@ func _gun_test() -> void:
 	a = was_sprinting and t_run < 0.35
 	ok = ok and a
 	print("[gun] sprint ends when the player stops: ", "PASS" if a else "FAIL", " (sprinting: %s, the clip let go after %.2f s)" % [was_sprinting, t_run])
+	await get_tree().process_frame
+	var unheard: Array = []
+	for key in ["rifle_shot", "casing", "handling", "mag_out", "mag_in", "bolt", "step", "crouch"]:
+		if not (key in _heard) and not (key in V2Sfx.log):
+			unheard.append(key)
+	ok = ok and unheard.is_empty()
+	print("[gun] sounds of the gun and the player: ", "PASS" if unheard.is_empty() else "FAIL", "" if unheard.is_empty() else "  never played: " + ", ".join(unheard))
 	print("[gun] RESULT: ", "PASS" if ok else "FAIL")
 	get_tree().quit()
 
@@ -830,6 +892,70 @@ func _capture(dir: String) -> void:
 			await get_tree().process_frame
 			await _shot(dir, "panel_%02d" % k)
 		Engine.time_scale = 1.0
+	if _only != "" and "adsfire" in _only.split(","):
+		# (only on request: every frame, at a 60th of a second, of aiming and firing the machine gun with real input:
+		# aim, hold the trigger, let go, two taps, lower. For hunting one-frame glitches.)
+		goto(0)
+		robots[0].set_ai(false)
+		player.mouse_look = true
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		if player.weapon != "rifle":
+			player.switch_weapon()
+		await _wait(1.6)
+		Engine.max_fps = 0
+		Engine.time_scale = 1.0 / 60.0 / maxf(get_process_delta_time(), 0.02)     # a frame here = 1/60 s of the game
+		var script_keys := {20: [KEY_C, true], 50: [MOUSE_BUTTON_LEFT, true], 110: [MOUSE_BUTTON_LEFT, false], 125: [MOUSE_BUTTON_LEFT, true],
+			131: [MOUSE_BUTTON_LEFT, false], 145: [MOUSE_BUTTON_LEFT, true], 150: [MOUSE_BUTTON_LEFT, false], 175: [KEY_C, false]}
+		for k in 215:
+			if script_keys.has(k):
+				var ev: Array = script_keys[k]
+				if ev[0] == KEY_C:
+					_key(KEY_C, ev[1])
+				else:
+					_press(ev[0], ev[1])
+			await get_tree().process_frame
+			await RenderingServer.frame_post_draw
+			get_viewport().get_texture().get_image().save_png(dir.path_join("adsfire_%03d_%s.png" % [k, player.busy if player.busy != "" else "none"]))
+			if OS.has_environment("V2_DEBUG_GUN"):
+				print("[af] %03d busy=%s anim=%s pos=%.3f playing=%s aimed=%.2f" % [k, player.busy, player._ap().current_animation, player._ap().current_animation_position, player._ap().is_playing(), player._aimed])
+		Engine.time_scale = 1.0
+		player.mouse_look = false
+	if _only != "" and "wall" in _only.split(","):
+		# (only on request: nose against a wall with each gun: the gun must stay whole; then crouched behind cover)
+		goto(0)
+		robots[0].set_ai(false)
+		for w in 2:
+			player.global_position = rooms[0].position + Vector3(XL + 0.36, 0.02, -3.0)
+			player._yaw = PI / 2.0
+			player._pitch = 0.0
+			await _wait(1.2)
+			await _shot(dir, "wall_" + player.weapon)
+			player.switch_weapon()
+			await _wait(1.3)
+		player.global_position = rooms[0].position + Vector3(3.7, 0.02, -0.5)      # behind the low wall
+		player._yaw = 0.3
+		await _wait(0.5)
+		await _shot(dir, "cover_standing")
+		player.set_crouch(true)
+		await _wait(0.8)
+		await _shot(dir, "cover_crouched")
+		player.set_crouch(false)
+	if _only != "" and "spin" in _only.split(","):
+		# (only on request: the drone shot down: its flight out of control, the crash, the wreck burning)
+		goto(1)
+		var dr := robots[1]
+		dr.set_ai(true)
+		V2Fx.hold = 1.0
+		await _wait(1.0)
+		dr.hit(9999.0, Vector3(0.3, 0, -1).normalized())
+		for k in 12:
+			await _wait(0.5)
+			var dp := dr.hit_point() - player.cam.global_position
+			player._yaw = atan2(-dp.x, -dp.z)
+			player._pitch = atan2(dp.y, Vector2(dp.x, dp.z).length())
+			await get_tree().process_frame
+			await _shot(dir, "spin_%02d_%s" % [k, "flying" if dr._spin > 0.0 else ("falling" if not dr._exploded else "wreck")])
+		V2Fx.hold = 40.0
 	if _want("ai"):
 		# the robots as enemies: on the move, firing (the game slowed down to catch the flash), wrecked and smoking
 		for i in rooms.size():
@@ -852,10 +978,13 @@ func _capture(dir: String) -> void:
 			var across := (to_p - from_p).cross(Vector3.UP).normalized()
 			side_cam.fov = 55.0
 			side_cam.look_at_from_position(from_p.lerp(to_p, 0.3) + across * 4.2 + Vector3(0, 0.6, 0), from_p.lerp(to_p, 0.3), Vector3.UP)
+			side_cam.cull_mask &= ~V2Player.GUN_LAYER
 			side_cam.make_current()
+			player.overlay.visible = false
 			_hud.get_parent().visible = false
 			await _shot(dir, "ai%d_%s_fire_side" % [i + 1, KINDS[i]])
 			_hud.get_parent().visible = true
+			player.overlay.visible = true
 			player.cam.make_current()
 			side_cam.queue_free()
 			Engine.time_scale = 1.0
@@ -877,6 +1006,7 @@ func _capture(dir: String) -> void:
 ## real clips) must destroy it, and it must come back. Then the player is left to be shot down and must be revived.
 func _enemy_test() -> void:
 	Engine.time_scale = 4.0
+	_listen = true
 	player.mouse_look = false
 	var ok := true
 	for i in rooms.size():
@@ -948,6 +1078,7 @@ func _enemy_test() -> void:
 				var dt := get_process_delta_time()
 				t += dt
 				r._step_round(face, dt)
+				r.ap.advance(dt)                               # (the robot advances its own clips; it is switched off here)
 				t_turn += dt
 				turned += absf(angle_difference(yaw_prev, r.rotation.y))
 				yaw_prev = r.rotation.y
@@ -985,6 +1116,38 @@ func _enemy_test() -> void:
 				player.act("Fire")
 		var killed := r.state == V2Robot.DEAD
 		var t_kill := t
+		# shot down, the drone flies on out of control before it falls and blows up; the others drop where they are
+		var flew := 0.0
+		if r.kind == "drone":
+			var last := r.position
+			var t_fly := 0.0
+			while r._spin > 0.0 and t_fly < 6.0:
+				await get_tree().process_frame
+				t_fly += get_process_delta_time()
+				flew += r.position.distance_to(last)
+				last = r.position
+			var t_boom := 0.0
+			while not r._exploded and t_boom < 4.0:
+				await get_tree().process_frame
+				t_boom += get_process_delta_time()
+			a = flew > 5.0 and t_fly > 1.5 and r._exploded and (_heard.has("explosion") or "explosion" in V2Sfx.log)
+			ok = ok and a
+			print("[enemy] drone, shot down, flies out of control, then crashes and explodes: %s  (%.1f m in %.1f s, exploded %.1f s later: %s)" % [
+				"PASS" if a else "FAIL", flew, t_fly, t_boom, r._exploded])
+		# the wreck still answers a round: the joint that is struck swings and comes to rest again
+		await _wait(0.6)
+		var joint := r._hit_joint
+		var rest := joint.transform
+		r.hit(12.0, (r.hit_point() - player.cam.global_position).normalized(), r.hit_point() + Vector3(0.2, 0.1, 0.0), joint)
+		var swing := 0.0
+		t = 0.0
+		while t < 0.5:
+			await get_tree().process_frame
+			t += get_process_delta_time()
+			swing = maxf(swing, joint.transform.basis.get_rotation_quaternion().angle_to(rest.basis.get_rotation_quaternion()))
+		a = r.state == V2Robot.DEAD and swing > deg_to_rad(2.0)
+		ok = ok and a
+		print("[enemy] %s wreck struck by a round: %s  (the struck joint swings %.0f degrees)" % [r.kind, "PASS" if a else "FAIL", rad_to_deg(swing)])
 		t = 0.0
 		while r.state == V2Robot.DEAD and t < 20.0:
 			await get_tree().process_frame
@@ -1012,5 +1175,15 @@ func _enemy_test() -> void:
 	var revived := went_down and not player.down and player.hp == V2Player.MAX_HP
 	ok = ok and revived
 	print("[enemy] player shot down and revived: %s" % ("PASS" if revived else "FAIL"))
+	# every interaction of the fight was heard (the keys played; this machine has no sound device)
+	var want := ["pistol_shot", "casing", "impact_metal", "robot_hit", "robot_break", "spider_shot", "drone_shot", "turret_shot",
+		"spider_step", "explosion", "power_down", "crash", "hurt", "down", "zap"]
+	var unheard: Array = []
+	for key in want:
+		if not (key in V2Sfx.log) and not (key in _heard):
+			unheard.append(key)
+	ok = ok and unheard.is_empty()
+	print("[enemy] sounds of the fight: %s  (%d keys%s)" % ["PASS" if unheard.is_empty() else "FAIL", want.size(),
+		"" if unheard.is_empty() else "; never played: " + ", ".join(unheard)])
 	print("[enemy] RESULT: %s" % ("PASS" if ok else "FAIL"))
 	get_tree().quit()

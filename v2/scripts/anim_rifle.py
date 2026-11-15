@@ -247,7 +247,7 @@ def inspect(t):
 
 
 CLIPS = [("Idle", 4.0, idle, True), ("Walk", 1.0, walk, True), ("Sprint", SPRINT_IN + SPRINT_RUN + SPRINT_OUT, sprint, False),
-         ("Fire", FIRE_T, fire, False), ("ADS", ADS_T, ads, False), ("ADSFire", FIRE_T, ads_fire, False), ("Draw", DRAW_T, draw, False),
+         ("Fire", FIRE_T, fire, False), ("ADS", ADS_T, ads, False), ("ADSFire", FIRE_T, ads_fire, False, ("ADS", round(ADS_IN * FPS))), ("Draw", DRAW_T, draw, False),
          ("ReloadTactical", RELOAD_T, reload, False), ("ReloadEmpty", RELOAD_EMPTY_T, reload_empty, False),
          ("Inspect", INSPECT_T, inspect, False)]
 def firefight(t):

@@ -169,6 +169,42 @@ static func material(mat_name: String, mesh_key: String = "", asset: String = ""
 	return m
 
 
+## A new clip cut out of another: the part from t0 to t1 (seconds). t0 == t1 gives a still pose that loops (a pose
+## to hold, e.g. the aim). Every track gets its value at t0 as the first key, so the cut starts exactly there.
+static func sub_clip(ap: AnimationPlayer, src_name: String, t0: float, t1: float, new_name: String) -> void:
+	var lib := ap.get_animation_library("")
+	if lib.has_animation(new_name) or not ap.has_animation(src_name):
+		return
+	var src := ap.get_animation(src_name)
+	var a := Animation.new()
+	a.length = maxf(t1 - t0, 0.1)
+	if t1 <= t0:
+		a.loop_mode = Animation.LOOP_LINEAR
+	for i in src.get_track_count():
+		var kind := src.track_get_type(i)
+		var first: Variant
+		match kind:
+			Animation.TYPE_POSITION_3D:
+				first = src.position_track_interpolate(i, t0)
+			Animation.TYPE_ROTATION_3D:
+				first = src.rotation_track_interpolate(i, t0)
+			Animation.TYPE_SCALE_3D:
+				first = src.scale_track_interpolate(i, t0)
+			Animation.TYPE_VALUE:
+				first = src.value_track_interpolate(i, t0)
+			_:
+				continue
+		var j := a.add_track(kind)
+		a.track_set_path(j, src.track_get_path(i))
+		a.track_set_interpolation_type(j, src.track_get_interpolation_type(i))
+		a.track_insert_key(j, 0.0, first)
+		for k in src.track_get_key_count(i):
+			var t := src.track_get_key_time(i, k)
+			if t > t0 + 0.001 and t <= t1 + 0.001:
+				a.track_insert_key(j, t - t0, src.track_get_key_value(i, k))
+	lib.add_animation(new_name, a)
+
+
 ## Swap every surface of every mesh under `root` for its rebuilt material. asset = the glb's name (for its mask).
 static func apply(root: Node, asset: String = "") -> void:
 	for n in root.find_children("*", "MeshInstance3D", true, false):

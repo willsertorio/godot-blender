@@ -235,6 +235,7 @@ class Baker(Recorder):
         self.clips = {}
         self.worst = {}
         self.twist0 = {}
+        self.twist_log = {}                        # clip name -> per frame {side: forearm twist}
         for ob in list(self.objs.values()) + list(self.rigs.values()):
             ob.animation_data_clear()
         for idb, _ in self.props:
@@ -286,8 +287,12 @@ class Baker(Recorder):
                 self._trs(rig, f'pose.bones["{b.name}"].', (side, b.name), f, b.location.copy(),
                           b.rotation_quaternion.copy(), b.scale.copy(), b.name)
 
-    def clip(self, name, start, n, fn, loop=False):
-        """Bake n frames of fn(t seconds) -> state from frame `start`, with the rest pose keyed just outside."""
+    def clip(self, name, start, n, fn, loop=False, seed=None):
+        """Bake n frames of fn(t seconds) -> state from frame `start`, with the rest pose keyed just outside.
+        seed = (clip name, frame index): this clip does not start from the hold pose but from that moment of another
+        clip (aimed fire starts from the aim), and the game blends between the two. Its forearm twists start from the
+        ones that clip has there, so that both describe the same pose with the same bone turns: with the twist a full
+        turn apart the blend swung the hand through a half turn (a hand flashing beside the gun for a frame)."""
         self.worst = {}
         # forearm twist: every clip starts from the hold pose's own turn and stays continuous from there (hands.pose)
         for side, rig in self.rigs.items():
@@ -298,13 +303,19 @@ class Baker(Recorder):
         self.frame(start - 1)
         for side, rig in self.rigs.items():
             self.twist0.setdefault(side, H.TWIST_REF[rig.name])
+            if seed:
+                H.TWIST_REF[rig.name] = self.twist_log[seed[0]][seed[1]][side]
+        log = self.twist_log.setdefault(name, [])
+        del log[:]
         for i in range(n):
             self.frame(start + i, fn(i / FPS))
-        self.frame(start + n)
+            log.append({side: H.TWIST_REF[rig.name] for side, rig in self.rigs.items()})
         for side, rig in self.rigs.items():
-            turns = (H.TWIST_REF[rig.name] - self.twist0[side]) / math.tau
+            turns = (H.TWIST_REF[rig.name] - (log[0][side] if seed else self.twist0[side])) / math.tau
             if abs(turns) > 0.5:
                 print(f"  !! {name}: the {side} forearm ends {turns:+.1f} turns from where it started")
+            H.TWIST_REF[rig.name] = self.twist0[side]
+        self.frame(start + n)
         self.clips[name] = dict(start=start, end=start + n - 1, loop=loop)
         print(f"clip {name}: frames {start}-{start + n - 1}" + (" (loop)" if loop else "")
               + "  max wrist bend " + ", ".join(f"{s} {v:.0f}" for s, v in self.worst.items()))
@@ -332,18 +343,19 @@ class Baker(Recorder):
         return self.clips
 
     def run(self, clips, argv=(), extra=()):
-        """Bake [(name, seconds, fn, loop), ...] one after another (8 frames apart) and write the actions.
+        """Bake [(name, seconds, fn, loop[, seed]), ...] one after another (8 frames apart) and write the actions.
         argv may hold only=Name,Name to bake some of them (the others keep their slot, without keys).
         extra = [(name, first frame, frames, fn)]: clips at fixed frames outside the view's window (Firefight)."""
         only = [a.split("=")[1].split(",") for a in argv if a.startswith("only=")]
         start = self.first_frame
-        for name, dur, fn, loop in clips:
+        for name, dur, fn, loop, *more in clips:
+            seed = more[0] if more else None
             n = round(dur * FPS)
             if only and name not in only[0]:
                 self.clips[name] = dict(start=start, end=start + n - 1, loop=loop)
                 start += n + 8
                 continue
-            start = self.clip(name, start, n, fn, loop) + 8
+            start = self.clip(name, start, n, fn, loop, seed) + 8
         assert start - self.first_frame <= WINDOW, "clips do not fit the view's frame window"
         for name, first, n, fn in extra:
             self.clip(name, first, n, fn)

@@ -40,6 +40,13 @@ const AIM_LAG := 0.3              # seconds the aim point trails the player
 const TURN_RATE := 60.0           # degrees a second the spider's Turn clip turns at speed 1 (anim_robots.py)
 # how hard a round from the player pushes: [body knock m/s, tilt rad/s, shove along the floor / through the air m/s]
 const PUSH := {"spider": [1.5, 3.2, 0.7], "drone": [1.2, 5.0, 2.2], "turret": [0.0, 4.5, 0.0]}
+# a joint knocked by a round swings on a spring: [natural frequency rad/s, damping 1/s] of a live robot's joint (a
+# quick twitch: the motors hold it) and of a wreck's (limp: the spider's legs and the drone's ducts flop and
+# settle; the turret's arm hangs from the ceiling and swings a long time)
+const FLOP_LIVE := [30.0, 16.0]
+const FLOP_DEAD := {"spider": [15.0, 3.2], "drone": [15.0, 3.2], "turret": [3.4, 0.35]}
+const ROOM := Rect2(-3.6, -13.0, 9.0, 15.0)     # where a wreck may be shoved to and the falling drone may fly (room frame)
+const BLAST := [3.5, 40.0]                      # the drone's explosion: reach (m), damage at its centre
 const RESPAWN := 6.0             # seconds a wreck lies before the robot is back
 
 var kind := ""
@@ -56,7 +63,19 @@ var travelled := 0.0
 var kills := 0                    # times it was destroyed
 var _spec: Dictionary
 var _root: Node3D                 # the glb's <Kind>_Root joint, re-seated on this node
-var _body: StaticBody3D
+var _bodies: Array[RID] = []        # the hit boxes, one per part (on its joint)
+var _flop: Dictionary = {}          # joint -> {off, vel (axis * angle, the joint's frame), base, mine}
+var _spin := 0.0                    # drone, shot down: seconds of flight out of control still to go
+var _spin_total := 1.0
+var _vel := Vector3.ZERO            # its velocity then (room frame)
+var _wob := 0.0
+var _spark_t := 0.0
+var _seat_y := 0.0
+var _exploded := true
+var _rotor: AudioStreamPlayer3D     # drone: the loop of its rotors
+var _step_i := -1                   # spider: which footfall of its gait was last heard
+var _servo_t := 0.0
+var _crashed := true
 var _hit_joint: Node3D
 var _flashes: Array = []
 var _events: Dictionary = {}
@@ -121,15 +140,13 @@ func setup(robot: String) -> void:
 		_aims.append({"pivot": guns_joint.position, "axis": (guns_joint.basis * Vector3.RIGHT).normalized(),
 			"node": _insert_aim(guns_joint, "AimPitch")})
 	_hit_joint = scene.find_child(HIT[kind][0], true, false) as Node3D
-	_body = StaticBody3D.new()
-	var shape := CollisionShape3D.new()
-	var box := BoxShape3D.new()
-	box.size = HIT[kind][1]
-	shape.shape = box
-	shape.position = HIT[kind][2]
-	_body.add_child(shape)
-	_body.set_meta("robot", self)
-	_hit_joint.add_child(_body)
+	_part_boxes(scene)
+	_seat_y = _seat.y
+	if kind == "drone":
+		_rotor = V2Sfx.loop("drone_rotor", _hit_joint)
+	# the clips are advanced from _process (not by the player on its own), so that what this script adds to a
+	# joint (aim, a knock from a round) goes on top of the clip's pose of the same frame
+	ap.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
 	_label = Label3D.new()
 	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_label.no_depth_test = true
@@ -142,6 +159,36 @@ func setup(robot: String) -> void:
 	_target = position
 	_measure_wreck()
 	_play("Idle", 1.0, true)
+
+
+## A hit box on every joint that carries meshes (body, each leg segment, turret, guns, arm segments, ducts): a
+## round hits the part it is aimed at, alive or wrecked, and the robot knows which joint to knock.
+func _part_boxes(scene: Node) -> void:
+	for n in scene.find_children("*", "Node3D", true, false):
+		if n is MeshInstance3D or n is Light3D:
+			continue
+		var box := AABB()
+		var any := false
+		for c in n.get_children():
+			var mi := c as MeshInstance3D
+			if mi == null or mi.mesh == null or String(mi.name).contains("Flash") or mi.scale.x < 0.01:
+				continue
+			var bb := mi.transform * mi.mesh.get_aabb()
+			box = box.merge(bb) if any else bb
+			any = true
+		if not any or box.get_longest_axis_size() < 0.08:
+			continue
+		var body := StaticBody3D.new()
+		var shape := CollisionShape3D.new()
+		var bs := BoxShape3D.new()
+		bs.size = box.size.max(Vector3(0.06, 0.06, 0.06))
+		shape.shape = bs
+		shape.position = box.get_center()
+		body.add_child(shape)
+		body.set_meta("robot", self)
+		body.set_meta("joint", n)
+		n.add_child(body)
+		_bodies.append(body.get_rid())
 
 
 ## A node between `joint` and its parent, for turning the joint about its own pivot on top of what the clips do to
@@ -237,7 +284,7 @@ func set_ai(on: bool) -> void:
 		respawn()
 	else:
 		state = PREVIEW
-		_smoke.emitting = false
+		V2Fx.set_smoke(_smoke, false)
 		_settle()
 		_go_home()
 		auto = true
@@ -265,13 +312,22 @@ func _settle() -> void:
 	_shove = Vector3.ZERO
 	_sink = 0.0
 	_flinch = 0.0
+	_spin = 0.0
+	_exploded = true
+	_crashed = true
+	_seat.y = _seat_y
+	for j in _flop:
+		(j as Node3D).transform = _flop[j].base
+	_flop.clear()
 	_pose()
 
 
 func respawn() -> void:
+	if state == DEAD:
+		V2Sfx.play("power_up", hit_point())
 	hp = max_hp
 	state = ROAM
-	_smoke.emitting = false
+	V2Fx.set_smoke(_smoke, false)
 	_settle()
 	_go_home()
 	_target = position
@@ -282,7 +338,7 @@ func respawn() -> void:
 
 
 func hit_point() -> Vector3:
-	return _body.global_position
+	return _hit_joint.global_position
 
 
 func flash_on() -> bool:
@@ -292,24 +348,47 @@ func flash_on() -> bool:
 	return false
 
 
-## A round from the player, flying along `dir`.
-func hit(damage: float = 34.0, dir: Vector3 = Vector3.ZERO) -> void:
+## A round from the player, flying along `dir`, that struck at `point` the part on `joint`.
+func hit(damage: float = 34.0, dir: Vector3 = Vector3.ZERO, point: Vector3 = Vector3.INF, joint: Node3D = null) -> void:
 	if state == PREVIEW:
 		if clip != "Death":
 			play("Death")
 		return
+	if dir == Vector3.ZERO:
+		dir = (global_position - player.global_position).normalized() if player != null else Vector3.FORWARD
+	if point == Vector3.INF:
+		point = hit_point()
 	if state == DEAD:
+		# the wreck is still a thing in the room: the part that is struck swings, the whole of it is jarred
+		_knock_joint(joint if joint != null else _hit_joint, point, dir, 1.0)
+		_push(dir, 0.45)
 		return
+	_knock_joint(joint if joint != null else _hit_joint, point, dir, 0.5)
 	_push(dir, 1.6 if hp - damage <= 0.0 else 1.0)
+	V2Sfx.play("robot_hit", point)
 	hp -= damage
 	if hp <= 0.0:
 		hp = 0.0
 		kills += 1
 		state = DEAD
-		_play("Death", 1.0, true)
-		_t = ap.get_animation("Death").length + RESPAWN
-		_smoke.emitting = true
+		V2Fx.set_smoke(_smoke, true)
 		V2Fx.burst(hit_point())
+		if kind == "drone":
+			# shot down, it does not drop at once: it careers round the room out of control, spinning and shedding
+			# sparks, then falls, and blows up where it lands
+			_spin_total = randf_range(2.2, 3.2)
+			_spin = _spin_total
+			_exploded = false
+			var flat := Vector3(dir.x, 0.0, dir.z).normalized()
+			_vel = (flat * 3.0 + Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)) * 2.0)
+			_shove = Vector3.ZERO
+			_play("Fly", 2.4, true)
+			_t = _spin_total + ap.get_animation("Death").length + RESPAWN
+		else:
+			_play("Death", 1.0, true)
+			_t = ap.get_animation("Death").length + RESPAWN
+			_crashed = kind != "spider"                    # (the spider's body hits the floor later in the clip)
+			V2Sfx.play("power_down", hit_point())
 	else:
 		_flinch = 1.0
 		_cool = maxf(_cool, 0.3)                       # it loses its aim for a moment
@@ -317,11 +396,26 @@ func hit(damage: float = 34.0, dir: Vector3 = Vector3.ZERO) -> void:
 			_engage()                                  # it knows where that came from
 
 
+## The joint that was struck, and the joints it hangs from (less and less), are set swinging about their own
+## pivots by the round's push on them: torque = (where it struck - the pivot) x (the way it flew).
+func _knock_joint(joint: Node3D, point: Vector3, dir: Vector3, k: float) -> void:
+	var n: Node = joint
+	var i := 0
+	while n != null and n != _root and n != self and i < 4:
+		var j := n as Node3D
+		if j != null and not (String(j.name) in ["AimYaw", "AimPitch"]):
+			var torque := (point - j.global_position).cross(dir)
+			var local := j.global_basis.orthonormalized().inverse() * torque
+			if not _flop.has(j):
+				_flop[j] = {"off": Vector3.ZERO, "vel": Vector3.ZERO, "base": j.transform, "mine": j.transform}
+			_flop[j].vel += (local * 16.0 + local.normalized() * 1.5) * k / (1.0 + i * 1.5)
+			i += 1
+		n = n.get_parent()
+
+
 ## Knocked by a round: the body jumps back on its seat and tips away from the shot (both on springs), and the
 ## spider is shoved a little over the floor, the drone a good way through the air; the turret's arm is swung aside.
 func _push(dir: Vector3, k: float) -> void:
-	if dir == Vector3.ZERO:
-		dir = (global_position - player.global_position) if player != null else Vector3.FORWARD
 	var flat := Vector3(dir.x, 0.0, dir.z).normalized()
 	var p: Array = PUSH[kind]
 	if kind == "turret":
@@ -368,11 +462,11 @@ func _eye() -> Vector3:
 
 
 func _look(delta: float) -> void:
-	var chest := player.global_position + Vector3(0, 1.15, 0)
+	var chest := player.chest()
 	_sees = false
 	if active and not player.down:
 		var q := PhysicsRayQueryParameters3D.create(_eye(), chest)
-		q.exclude = [_body.get_rid()]
+		q.exclude = _bodies
 		var res := get_world_3d().direct_space_state.intersect_ray(q)
 		_sees = not res.is_empty() and res.collider == player
 	if _sees:
@@ -413,9 +507,10 @@ func _fire(muzzle: Node3D) -> void:
 	if side.length() > 0.01:
 		var sp := deg_to_rad(_spec.spread)
 		dir = dir.rotated(side.normalized(), randf_range(-sp, sp)).rotated(Vector3.UP, randf_range(-sp, sp))
+	V2Sfx.play(kind + "_shot", from)
 	var to := from + dir * 40.0
 	var q := PhysicsRayQueryParameters3D.create(from + dir * 0.15, to)
-	q.exclude = [_body.get_rid()]
+	q.exclude = _bodies
 	var res := get_world_3d().direct_space_state.intersect_ray(q)
 	if not res.is_empty():
 		to = res.position
@@ -424,6 +519,11 @@ func _fire(muzzle: Node3D) -> void:
 			to -= dir * minf(1.3, from.distance_to(to) * 0.5)      # (a streak that ends at the eye fills the screen)
 		else:
 			V2Fx.impact(to, res.normal)
+			# a miss that passes the player's head is heard going by
+			var head := player.cam.global_position
+			var along := clampf((head - from).dot(dir), 0.0, from.distance_to(to))
+			if (from + dir * along).distance_to(head) < 1.3:
+				V2Sfx.play("flyby")
 	V2Fx.tracer(from, to, V2Fx.RED)
 	V2Fx.puff(from, dir, V2Fx.GUNSMOKE, 0.22, 2, 0.7, 0.22, 0.5)
 
@@ -668,8 +768,25 @@ func _springs(delta: float) -> void:
 		_knock += _knock_v * h
 		_tilt_v += (-_tilt * 200.0 - _tilt_v * 13.0) * h
 		_tilt += _tilt_v * h
+		for j in _flop:
+			var f: Dictionary = _flop[j]
+			var spec: Array = FLOP_DEAD[kind] if state == DEAD else FLOP_LIVE
+			f.vel += (-f.off * spec[0] * spec[0] - f.vel * 2.0 * spec[1]) * h
+			f.off = (f.off + f.vel * h).limit_length(1.0)
+	for j in _flop.keys():
+		var f2: Dictionary = _flop[j]
+		var node := j as Node3D
+		if node.transform != f2.mine:
+			f2.base = node.transform                   # (the clip has moved the joint since: that is its pose now)
+		if (f2.off as Vector3).length() < 0.003 and (f2.vel as Vector3).length() < 0.03:
+			node.transform = f2.base
+			_flop.erase(j)
+		else:
+			f2.mine = (f2.base as Transform3D) * Transform3D(Basis((f2.off as Vector3).normalized(), (f2.off as Vector3).length()), Vector3.ZERO)
+			node.transform = f2.mine
 	if kind != "turret" and _shove.length() > 0.01:
-		position = _clamp_arena(position + _shove * delta) if state != DEAD else position + _shove * delta
+		var p := position + _shove * delta
+		position = _clamp_arena(p) if state != DEAD else Vector3(clampf(p.x, ROOM.position.x, ROOM.end.x), 0.0, clampf(p.z, ROOM.position.y, ROOM.end.y))
 		_shove *= exp(-delta * (5.0 if kind == "drone" else 9.0))
 	_flinch = maxf(_flinch - delta * 6.0, 0.0)         # and a short shake
 	_pose()
@@ -696,7 +813,65 @@ func _pose() -> void:
 
 
 # ---------------------------------------------------------------- every frame
+## The drone, shot down and still flying: it careers about the room faster and faster, turning at random and
+## bouncing off the walls, spinning about its own axis, rolling and pitching, shedding sparks.
+func _spin_out(delta: float) -> void:
+	var k := 1.0 - _spin / _spin_total                # 0 -> 1 over the flight
+	_wob += delta
+	rotation.y += deg_to_rad(lerpf(220.0, 640.0, k)) * delta
+	_vel = _vel.rotated(Vector3.UP, (sin(_wob * 3.1) * 2.2 + randf_range(-1.6, 1.6)) * delta)
+	_vel = Vector3(_vel.x, 0.0, _vel.z).normalized() * lerpf(3.2, 5.6, k)
+	var p := position + _vel * delta
+	for axis in 2:
+		var lo: float = ROOM.position.x if axis == 0 else ROOM.position.y
+		var hi: float = ROOM.end.x if axis == 0 else ROOM.end.y
+		var v: float = p.x if axis == 0 else p.z
+		if v < lo or v > hi:                               # off a wall: it glances away in a shower of sparks
+			if axis == 0:
+				_vel.x = -_vel.x
+				p.x = clampf(p.x, lo, hi)
+			else:
+				_vel.z = -_vel.z
+				p.z = clampf(p.z, lo, hi)
+			V2Fx.sparks(hit_point(), Vector3(_vel.x, 0.3, _vel.z).normalized(), 26)
+			_wob += 1.7
+	position = p
+	var wild := (0.45 + 0.55 * k) * (1.0 - smoothstep(0.88, 1.0, k))      # (level again as the fall begins: the clip takes over)
+	_tilt = Vector3(sin(_wob * 11.0) * 0.5, 0.0, cos(_wob * 8.3) * 0.6) * wild
+	_tilt_v = Vector3.ZERO
+	_seat.y = _seat_y + sin(_wob * 5.0) * 0.28 * wild
+	_apitch = move_toward(_apitch, 0.0, 3.0 * delta)
+	_spark_t -= delta
+	if _spark_t <= 0.0:
+		_spark_t = randf_range(0.2, 0.45)
+		V2Fx.sparks(hit_point(), Vector3.DOWN, 12)
+	V2Sfx.drive(_rotor, true, 1.25 + 0.55 * k + 0.2 * sin(_wob * 9.0))      # the rotors scream and stutter
+	if _spin <= 0.0:
+		_seat.y = _seat_y
+		_shove = _vel * 0.35                               # (it carries on a little as it falls)
+		_play("Death", 1.0, true)
+
+
+## What is heard of a live robot: the spider's feet coming down (twice per cycle of its gait), a servo when a robot
+## swings onto its target or steps round, the drone's rotors rising and falling with its speed.
+func _sounds(delta: float) -> void:
+	_servo_t -= delta
+	if kind == "spider" and clip in ["Walk", "Run", "Turn"] and ap.is_playing():
+		var i := int(floor(ap.current_animation_position / (ap.current_animation_length / 2.0)))
+		if i != _step_i:
+			_step_i = i
+			V2Sfx.play("spider_step", global_position, 3.0 if clip == "Run" else 0.0)
+	if kind == "drone":
+		V2Sfx.drive(_rotor, true, 1.0 + 0.12 * clampf(_shove.length() + (2.0 if state == ENGAGE else 0.0), 0.0, 4.0))
+	var turning := clip == "Turn" or (state == AIM and _aim_err < 8.0 and _aim_err > deg_to_rad(6.0))
+	if turning and _servo_t <= 0.0:
+		_servo_t = 0.7
+		V2Sfx.play("servo", hit_point())
+
+
 func _process(delta: float) -> void:
+	if ap.is_playing():
+		ap.advance(delta)
 	var fired := V2Fx.fired(ap, _events, _ev, _flashes)
 	if state == PREVIEW:
 		_label.text = "%s  ·  %s" % [kind.to_upper(), clip]
@@ -706,6 +881,7 @@ func _process(delta: float) -> void:
 			var dir := -n.global_basis.z.normalized()
 			var to := from + dir * 30.0
 			var q := PhysicsRayQueryParameters3D.create(from + dir * 0.3, to)
+			q.exclude = _bodies
 			var res := get_world_3d().direct_space_state.intersect_ray(q)
 			if not res.is_empty():
 				to = res.position
@@ -727,13 +903,28 @@ func _process(delta: float) -> void:
 		_ayaw = move_toward(_ayaw, 0.0, 4.0 * delta)
 		_apitch = move_toward(_apitch, 0.0, 3.0 * delta)
 		_tpitch = move_toward(_tpitch, 0.0, 2.5 * delta)
+		if _spin > 0.0:
+			_spin -= delta
+			_spin_out(delta)
 		_sink = _gap * smoothstep(0.25, 1.05, ap.current_animation_position) if clip == "Death" else _sink
+		if not _crashed and clip == "Death" and ap.current_animation_position >= 1.4:
+			_crashed = true                            # the spider's body slams down
+			V2Sfx.play("crash", hit_point())
+		if not _exploded and clip == "Death" and ap.current_animation_position >= 1.02:
+			_exploded = true                           # the drone hits the floor
+			V2Sfx.drive(_rotor, false)
+			V2Fx.explosion(hit_point())
+			if player != null:
+				var d := player.global_position.distance_to(hit_point())
+				if d < BLAST[0]:
+					player.hurt(BLAST[1] * (1.0 - d / BLAST[0]), hit_point())
 		_springs(delta)
 		if _t <= 0.0:
 			respawn()
 		return
 	if player == null:
 		return
+	_sounds(delta)
 	_look(delta)
 	if state == SHOOT:
 		for node in fired:
