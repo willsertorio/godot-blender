@@ -1185,7 +1185,7 @@ func _enemy_test() -> void:
 	print("[enemy] player shot down and revived: %s" % ("PASS" if revived else "FAIL"))
 	# every interaction of the fight was heard (the keys played; this machine has no sound device)
 	var want := ["pistol_shot", "casing", "impact_metal", "robot_hit", "robot_break", "spider_shot", "drone_shot", "turret_shot",
-		"spider_step", "explosion", "power_down", "crash", "hurt", "down", "zap"]
+		"spider_step", "explosion", "power_down", "power_up", "crash", "hurt", "down", "zap", "servo"]
 	var unheard: Array = []
 	for key in want:
 		if not V2Sfx.heard.has(key):

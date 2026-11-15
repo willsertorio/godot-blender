@@ -327,11 +327,14 @@ func _settle() -> void:
 
 
 func respawn() -> void:
+	var was_wreck := state == DEAD
 	hp = max_hp
 	state = ROAM
 	V2Fx.set_smoke(_smoke, false)
 	_settle()
 	_go_home()
+	if was_wreck:
+		V2Sfx.play("power_up", hit_point())                # back in service
 	_target = position
 	_pause = -1.0
 	_cool = 1.5

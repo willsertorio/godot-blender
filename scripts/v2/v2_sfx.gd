@@ -7,8 +7,9 @@ class_name V2Sfx
 ## Files: `assets/audio/v2/<key>_*.ogg`, any number per key: real recordings, CC0, cut and levelled by
 ## `tools/build_v2_audio.py` (guns: The Free Firearm Sound Library; the rest: foley from opengameart.org).
 ## A key without files there falls back to its stand-in from V1's Kenney set (arcade sounds; none is in use now).
-## Everything goes through one bus with a little room reverb: the guns were recorded outdoors, the lab is a room,
-## and one shared space is what makes sounds from different recordings sit together.
+## Everything goes through one bus: a little room reverb (one shared space is what makes sounds from different
+## recordings sit together; the guns carry their own room as well, built in), then a limiter (the machine gun's
+## rounds pile up, an explosion beside the player is loud: the sum is held under full scale instead of clipping).
 ## `V2Sfx.log` lists the keys played, newest last (the container has no audio device: checks read this).
 ## `-- --no-sound` switches everything off.
 
@@ -16,47 +17,52 @@ const DIR := "res://assets/audio/v2/"
 const OLD := "res://assets/audio/%s.ogg"
 
 ## key: [stand-in files, stand-in pitch, volume dB, pitch scatter, reach in metres (3D only)]
-## (the volumes are the mix: every file is cut to the same peak level by tools/build_v2_audio.py)
+## The volume column IS the mix: tools/build_v2_audio.py brings every file to the same loudness, so a number here
+## is how loud that sound is against the player's pistol (0). A sound at a place in the room loses 6 dB more for
+## each doubling of its distance past 4 m. (The first mix was set on peak levels: measured as loudness, the
+## pistol's slide was 7 dB louder than its shot, and a robot's servo only 5 dB under it.)
 const SOUNDS := {
-	# the player's guns (The Free Firearm Sound Library: Walther PPQ 9 mm, AR-15 5.56)
-	"pistol_shot": [["explosionCrunch_002"], 2.0, -4.0, 0.04, 0.0],
-	"rifle_shot": [["explosionCrunch_000"], 2.5, -7.0, 0.05, 0.0],
-	"rifle_tail": [[], 1.0, -10.0, 0.03, 0.0],                                                 # the last round dying away when the trigger is let go
-	"casing": [["impactMetal_light_001", "impactMetal_light_004"], 2.6, -22.0, 0.2, 0.0],      # brass on the floor
-	"pistol_mag_out": [["impactPlate_light_002"], 1.3, -10.0, 0.04, 0.0],
-	"pistol_mag_in": [["impactMetal_medium_001"], 1.4, -8.0, 0.04, 0.0],
-	"slide": [["impactMetal_light_004"], 1.6, -7.0, 0.04, 0.0],                                # pistol slide runs forward
-	"rifle_mag_out": [["impactPlate_light_002"], 1.2, -9.0, 0.04, 0.0],
-	"rifle_mag_in": [["impactMetal_medium_001"], 1.3, -7.0, 0.04, 0.0],
-	"bolt": [["impactMetal_medium_004"], 1.5, -6.0, 0.04, 0.0],                                # machine gun charging handle
-	"handling": [["switch_003"], 0.8, -20.0, 0.1, 0.0],                                        # the gun moved in the hands: draw, aim, inspect
+	# the player's guns (designed from The Free Firearm Sound Library: Walther PPQ 9 mm, AR-15 5.56)
+	"pistol_shot": [["explosionCrunch_002"], 2.0, 0.0, 0.04, 0.0],
+	"rifle_shot": [["explosionCrunch_000"], 2.5, -3.0, 0.05, 0.0],
+	"rifle_tail": [[], 1.0, -11.0, 0.03, 0.0],                                                 # the last round dying away when the trigger is let go
+	"casing": [["impactMetal_light_001", "impactMetal_light_004"], 2.6, -24.0, 0.2, 0.0],      # brass on the floor
+	"pistol_mag_out": [["impactPlate_light_002"], 1.3, -15.0, 0.04, 0.0],
+	"pistol_mag_in": [["impactMetal_medium_001"], 1.4, -13.0, 0.04, 0.0],
+	"slide": [["impactMetal_light_004"], 1.6, -11.0, 0.04, 0.0],                                # pistol slide runs forward
+	"rifle_mag_out": [["impactPlate_light_002"], 1.2, -15.0, 0.04, 0.0],
+	"rifle_mag_in": [["impactMetal_medium_001"], 1.3, -12.0, 0.04, 0.0],
+	"bolt": [["impactMetal_medium_004"], 1.5, -10.0, 0.04, 0.0],                                # machine gun charging handle
+	"handling": [["switch_003"], 0.8, -24.0, 0.1, 0.0],                                        # the gun moved in the hands: draw, aim, inspect
 	# rounds landing
-	"impact_concrete": [["impactPlate_light_002"], 1.7, -8.0, 0.15, 22.0],
-	"impact_metal": [["impactMetal_medium_002", "impactMetal_medium_004"], 1.2, -7.0, 0.12, 24.0],
-	"flyby": [[], 1.0, -8.0, 0.15, 0.0],                                                       # a robot's round passing the head
+	"impact_concrete": [["impactPlate_light_002"], 1.7, -5.0, 0.15, 22.0],
+	"impact_metal": [["impactMetal_medium_002", "impactMetal_medium_004"], 1.2, -4.0, 0.12, 24.0],
+	"flyby": [[], 1.0, -9.0, 0.15, 0.0],                                                       # a robot's round passing the head
 	# the player's body
-	"step": [["impactPlate_light_002"], 0.75, -16.0, 0.1, 0.0],
-	"jump": [["impactPlate_light_002"], 0.6, -16.0, 0.05, 0.0],
-	"land": [["impactPunch_heavy_002"], 0.8, -12.0, 0.05, 0.0],
-	"crouch": [["switch_003"], 0.6, -20.0, 0.05, 0.0],
+	"step": [["impactPlate_light_002"], 0.75, -21.0, 0.1, 0.0],
+	"jump": [["impactPlate_light_002"], 0.6, -21.0, 0.05, 0.0],
+	"land": [["impactPunch_heavy_002"], 0.8, -15.0, 0.05, 0.0],
+	"crouch": [["switch_003"], 0.6, -25.0, 0.05, 0.0],
 	"hurt": [["impactPlate_heavy_001"], 1.0, -7.0, 0.06, 0.0],
-	"down": [["lowFrequency_explosion_000"], 1.2, -6.0, 0.0, 0.0],
+	"down": [["lowFrequency_explosion_000"], 1.2, -5.0, 0.0, 0.0],
 	# the robots (their guns: Tikka .30-06, Carl Gustav M45 9 mm, AK-47, recorded a few metres off)
-	"spider_shot": [["explosionCrunch_000"], 1.5, -2.0, 0.04, 45.0],
-	"drone_shot": [["explosionCrunch_002"], 1.8, -4.0, 0.05, 45.0],
-	"turret_shot": [["explosionCrunch_000"], 1.3, -2.0, 0.04, 45.0],
-	"spider_step": [["impactMetal_light_001", "impactMetal_light_004"], 0.8, -8.0, 0.1, 18.0],
-	"servo": [[], 1.0, -14.0, 0.08, 16.0],                                                     # a joint driven round: aiming, turning
+	"spider_shot": [["explosionCrunch_000"], 1.5, 3.0, 0.04, 45.0],
+	"drone_shot": [["explosionCrunch_002"], 1.8, 0.0, 0.05, 45.0],
+	"turret_shot": [["explosionCrunch_000"], 1.3, 2.0, 0.04, 45.0],
+	"spider_step": [["impactMetal_light_001", "impactMetal_light_004"], 0.8, -11.0, 0.1, 18.0],
+	"servo": [[], 1.0, -19.0, 0.08, 16.0],                                                     # a joint driven round: aiming, turning
 	"drone_rotor": [["spaceEngineSmall_003"], 1.4, -12.0, 0.0, 20.0],                          # loop
 	"robot_hit": [["impactMetal_heavy_000"], 1.2, -5.0, 0.1, 26.0],                            # a round that hurt it
-	"robot_break": [["explosionCrunch_000", "explosionCrunch_002"], 1.0, -2.0, 0.06, 45.0],    # destroyed
-	"power_down": [["glitch_002"], 0.6, -6.0, 0.05, 22.0],
-	"crash": [["impactMetal_heavy_000"], 0.7, -3.0, 0.06, 32.0],                               # a wreck hits the floor
-	"explosion": [["lowFrequency_explosion_000"], 1.0, 0.0, 0.04, 60.0],
-	"zap": [["glitch_002"], 1.6, -10.0, 0.2, 18.0],                                            # sparks
+	"robot_break": [["explosionCrunch_000", "explosionCrunch_002"], 1.0, 2.0, 0.06, 45.0],    # destroyed
+	"power_down": [["glitch_002"], 0.6, -7.0, 0.05, 22.0],
+	"power_up": [[], 1.0, -9.0, 0.04, 22.0],                                                   # a robot back in service
+	"crash": [["impactMetal_heavy_000"], 0.7, 0.0, 0.06, 32.0],                               # a wreck hits the floor
+	"explosion": [["lowFrequency_explosion_000"], 1.0, 6.0, 0.04, 60.0],
+	"zap": [["glitch_002"], 1.6, -9.0, 0.2, 18.0],                                            # sparks
 }
 const LOOPS := ["drone_rotor"]
 const MAX_VOICES := 12                # per key: the oldest is cut off
+const GAIN := 3.0                     # dB on everything, into the limiter (the files sit at -20 dB loudness: a pistol shot peaks near full scale)
 
 static var root: Node                # where one-shot players are parented (the lab)
 static var enabled := true
@@ -84,8 +90,13 @@ static func bus() -> String:
 			rv.hipass = 0.15
 			rv.predelay_msec = 14.0
 			rv.dry = 1.0
-			rv.wet = 0.13
+			rv.wet = 0.11
 			AudioServer.add_bus_effect(i, rv)
+			var lim := AudioEffectHardLimiter.new()
+			lim.pre_gain_db = GAIN
+			lim.ceiling_db = -0.5
+			lim.release = 0.12
+			AudioServer.add_bus_effect(i, lim)
 	return _bus
 
 
@@ -166,6 +177,7 @@ static func play(key: String, at: Vector3 = Vector3.INF, db: float = 0.0, pitch:
 		p3.max_distance = maxf(float(sp[4]), 10.0)
 		p3.unit_size = 4.0
 		p3.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
+		p3.attenuation_filter_db = -6.0                    # (the engine's default takes 24 dB off the treble with distance: across a room that is a blanket over a gun)
 		p3.bus = bus()
 		player = p3
 	root.add_child(player)

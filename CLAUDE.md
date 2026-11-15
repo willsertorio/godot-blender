@@ -190,19 +190,36 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
   (`V2Fx.explosion`; `BLAST`: up to 40 damage within 3.5 m). `v2_fx.gd` (`V2Fx`): tracers, impact sparks / chips / dust / scorch
   marks, smoke, flash lights.
 - Sound: `scripts/v2/v2_sfx.gd` (`V2Sfx`): one table, a key per interaction (33; `assets/audio/v2/README.md`),
-  `play(key[, place])`, `loop` / `drive` for the drone's rotors and a wreck's fire, `V2Sfx.log` for the checks,
-  `-- --no-sound`. Everything goes through one bus with a short room reverb (`V2Sfx.bus`): the guns were recorded
-  outdoors, and one shared space is what makes different recordings sit together.
-  Files: `assets/audio/v2/<key>_NN.ogg` (86, 1 MB), **real recordings, all CC0, from opengameart.org**: the guns from
-  The Free Firearm Sound Library (pistol = Walther PPQ, machine gun = AR-15, spider = Tikka .30-06, drone = Carl
-  Gustav M45, turret = AK-47), the rest from foley packs (rubberduck, Thimras, Fantozzi, BMacZero and others).
+  `play(key[, place])`, `loop` / `drive` for the drone's rotors, `V2Sfx.heard` / `log` for the checks,
+  `-- --no-sound`. Everything goes through one bus (`V2Sfx.bus`): a short room reverb, then +3 dB into a hard
+  limiter (the machine gun's rounds pile up).
+  Files: `assets/audio/v2/<key>_NN.ogg` (103, 1.7 MB), **all CC0, from opengameart.org**: the guns from The Free
+  Firearm Sound Library (pistol = Walther PPQ, machine gun = AR-15, spider = Tikka .30-06, drone = Carl Gustav M45,
+  turret = AK-47), the rest from foley packs (rubberduck, Thimras, Fantozzi, BMacZero, qubodup and others).
   `tools/fetch_v2_audio.sh` downloads the raw files to `assets_src/audio_v2/` (git-ignored; needs `py7zr`),
-  `python3 -I tools/build_v2_audio.py` cuts / levels / names them (recipes per key), then `godot --headless --import`
-  and set `loop=true` in `fire_01.ogg.import` and `drone_rotor_01.ogg.import`.
-  The guns were picked by what they are; **everything else was picked by name, length and spectrum, not by ear**
-  (no sound here): expect to swap a few recipes after the user listens. A derived sound whose source licence cannot
-  be checked is not CC0 for this project (one "machine shutting down" was dropped for that).
+  `python3 -I tools/build_v2_audio.py` builds every file (`--report` prints loudness / peak / decay / energy per
+  band of what is there), then `godot --headless --import` and keep `loop=true` in `drone_rotor_01.ogg.import`.
+  **The guns are designed from the recordings (`gun()` in the build script), second pass**: a raw shot of the
+  library is a dry 15-25 ms crack with nothing under 200 Hz (measured), which played as a thin pop. A game shot =
+  the first 0.1 s of a real shot (after that come the field's echoes, which compression turns into a second bang)
+  + the same shot one and two octaves down + a small 50 Hz thump (synthetic) + the slide / bolt from a reload
+  recording, the crack squeezed by a look-ahead compressor (not soft clipping: tanh on the crack filled 4-20 kHz
+  with fizz), then a synthetic room (`room_ir`), then eq. Robots' guns: mono, more room; use single mid-distance
+  shots and rounds cut from the NEAR bursts (the mid bursts are a tangle of shots and echoes).
+  **Levels are by loudness, not peak**: every file is brought to -20 dB (K-weighted, loudest 200 ms; `finish()`),
+  so the dB column of `V2Sfx.SOUNDS` is the mix against the pistol (0). The peak-based first mix was upside
+  down (slide 7 dB over the shot, servo 5 dB under it). Mind laptop speakers (the user's): nothing may depend on
+  energy under 80 Hz (the first explosion redesign was all sub), and a servo at 8 kHz is piercing.
+  **Nothing was judged by ear** (no sound here): designed against the numbers, foley picked by name, length and
+  spectrum. A derived sound whose source licence cannot be checked is not CC0 for this project (one "machine
+  shutting down" was dropped for that). A generative sound model was asked for and not used: the model hosts
+  (huggingface.co) are outside this environment's network, and such a model's output has no clear CC0 status.
   Timed sounds of the gun clips are `V2Player.CUES` (seconds into each clip, from anim_*.py).
+- Wrecks (`V2Fx.smoke_column`, `sparkle`, `arc`; `V2Robot._shorts`): **user decision: electrical, not fire**. One
+  thin grey thread of smoke (mid grey: light grey vanished against the white studio), and short circuits from a
+  random part: blue streaks (blue, not white, for the same reason), a jagged arc, a blue-white glare, a zap;
+  often just after death, then every 1-3 s; a wreck that is shot may spark. No flames, embers, fire light or
+  fire loop. The drone's explosion keeps its fireball but leaves a small grey cloud.
 - Light (`v2_lab.gd _environment`, tuned against `v2/renders/stage3_scene.png` zone by zone with
   `--capture=DIR --only=tone`): half of it is one DirectionalLight3D straight down (the luminous ceiling: bright
   floor, dimmer walls) and it casts the only shadows (one orthogonal pass; the room shell casts none); six omni
@@ -232,7 +249,7 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
 - Captures: `tools/capture_v2.sh` -> `captures/v2/` (everything), or
   `--capture=DIR --only=tone,rooms,doors,guns,look,ai,wreck,fx,panel` for parts (`tone` = the Blender camera's frame;
   `look` = materials close up; `ai` = each robot moving, firing, wrecked (prints how far the wreck's lowest point is
-  above the floor and where its barrels point); on request only: `wreck` = burst + smoke, `fx` = hits on a wall,
+  above the floor and where its barrels point); on request only: `wreck` = burst, smoke, a short circuit, `fx` = hits on a wall,
   `panel` = 12 consecutive frames of the machine gun, to look for flicker, `adsfire` = 215 frames at 1/60 s of
   aiming and firing with real input (it caught the one-frame hand), `wall` = each gun nose against a wall and the
   view crouched behind cover, `spin` = the drone shot down, flying, crashing, burning).
@@ -267,8 +284,8 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
   A fine weave seen at arm's length beats against the pixel grid even with mipmaps: the glove fabrics are sampled
   with a mip bias. A directional light with shadows on came out about half as bright again as without.
 - Not done yet: the turret does not travel (its cables); a browser build; the pistol has no cursor recoil (it
-  shoots at the middle of the screen: the user called its firing good); no ricochet sound and no "robot is back"
-  sound (nothing CC0 that fits was found); music (the user: not now).
+  shoots at the middle of the screen: the user called its firing good); no ricochet sound (nothing CC0 that fits
+  was found); music (the user: not now).
   User decisions: realistic recorded sound, CC0, one consistent line, no music for now; no browser build of V2 for now (`tools/export_web.sh` is untested with the V2 lab);
   studio rooms in the lab, the concept room for the real game.
 
