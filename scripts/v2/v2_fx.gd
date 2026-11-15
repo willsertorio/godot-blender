@@ -1,13 +1,20 @@
 class_name V2Fx
-## V2 effects rebuilt for Godot (the Blender ones are Cycles-only): tracers, impact sparks, dust puffs, and the
-## point lights that go with the muzzle-flash meshes of the glbs.
+## V2 effects rebuilt for Godot (the Blender ones are Cycles-only): tracers, impact sparks, chips and dust, scorch
+## marks, smoke, and the point lights that go with the muzzle-flash meshes of the glbs.
+## Everything is unshaded (the rooms' lights only reach their own render layer) and alpha-blended, never additive.
 
 static var root: Node3D            # where spawned effects are parented (the lab)
-static var _cache: Dictionary = {}
 static var hold := 1.0             # > 1 keeps tracers and impact lights longer (screenshots)
+static var _cache: Dictionary = {}
+static var _marks: Array[MeshInstance3D] = []
+static var _mark_i := 0
 
 const YELLOW := Color(1.0, 0.82, 0.45)
 const RED := Color(1.0, 0.3, 0.12)
+const DUST := Color(0.74, 0.73, 0.7)
+const SMOKE := Color(0.2, 0.2, 0.21)
+const GUNSMOKE := Color(0.82, 0.82, 0.8)
+const MAX_MARKS := 40
 
 
 static func _unshaded(key: String, color: Color, energy: float, alpha: float = 1.0) -> StandardMaterial3D:
@@ -22,8 +29,102 @@ static func _unshaded(key: String, color: Color, energy: float, alpha: float = 1
 	return _cache[key]
 
 
+## A soft round blob: opaque in the middle, gone at the rim.
+static func _soft() -> Texture2D:
+	if not _cache.has("soft"):
+		var g := Gradient.new()
+		g.set_color(0, Color(1, 1, 1, 1))
+		g.set_color(1, Color(1, 1, 1, 0))
+		g.add_point(0.5, Color(1, 1, 1, 0.5))
+		var t := GradientTexture2D.new()
+		t.gradient = g
+		t.fill = GradientTexture2D.FILL_RADIAL
+		t.fill_from = Vector2(0.5, 0.5)
+		t.fill_to = Vector2(1.0, 0.5)
+		t.width = 64
+		t.height = 64
+		_cache["soft"] = t
+	return _cache["soft"]
+
+
+## Material of smoke / dust particles: soft blobs facing the camera, coloured and faded per particle.
+static func _puff_material() -> StandardMaterial3D:
+	if not _cache.has("puff"):
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.albedo_texture = _soft()
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.vertex_color_use_as_albedo = true
+		m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		m.billboard_keep_scale = true
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		m.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+		_cache["puff"] = m
+	return _cache["puff"]
+
+
 static func _later(seconds: float, node: Node) -> void:
 	root.get_tree().create_timer(seconds).timeout.connect(node.queue_free)
+
+
+static func _smoke_particles(color: Color, alpha: float, size: float, life: float, rise: float) -> CPUParticles3D:
+	var s := CPUParticles3D.new()
+	var quad := QuadMesh.new()
+	quad.size = Vector2(1, 1)
+	s.mesh = quad
+	s.material_override = _puff_material()
+	s.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	s.lifetime = life
+	s.direction = Vector3.UP
+	s.spread = 25.0
+	s.initial_velocity_min = rise * 0.6
+	s.initial_velocity_max = rise
+	s.gravity = Vector3(0, rise * 0.25, 0)
+	s.damping_min = 0.4
+	s.damping_max = 0.8
+	s.angle_min = 0.0
+	s.angle_max = 360.0
+	s.scale_amount_min = size * 0.7
+	s.scale_amount_max = size * 1.2
+	var grow := Curve.new()
+	grow.add_point(Vector2(0, 0.3))
+	grow.add_point(Vector2(0.4, 0.8))
+	grow.add_point(Vector2(1, 1.0))
+	s.scale_amount_curve = grow
+	var fade := Gradient.new()
+	fade.set_color(0, Color(color.r, color.g, color.b, 0.0))
+	fade.add_point(0.15, Color(color.r, color.g, color.b, alpha))
+	fade.set_color(2, Color(color.r, color.g, color.b, 0.0))
+	s.color_ramp = fade
+	return s
+
+
+## A puff of smoke or dust that swells, drifts along `dir` and fades.
+static func puff(pos: Vector3, dir: Vector3, color: Color, size: float, amount: int = 5, life: float = 0.9,
+		alpha: float = 0.35, speed: float = 0.6) -> void:
+	if root == null:
+		return
+	var s := _smoke_particles(color, alpha, size, life, speed)
+	s.amount = amount
+	s.one_shot = true
+	s.explosiveness = 0.85
+	s.direction = dir
+	s.spread = 40.0
+	root.add_child(s)
+	s.global_position = pos
+	s.emitting = true
+	_later(life + 0.6, s)
+
+
+## A standing source of smoke (a wreck): switch it with `emitting`.
+static func smoke_column(parent: Node3D, local_pos: Vector3, size: float = 0.7) -> CPUParticles3D:
+	var s := _smoke_particles(SMOKE, 0.75, size, 2.8, 1.0)
+	s.amount = 26
+	s.emitting = false
+	s.local_coords = false
+	parent.add_child(s)
+	s.position = local_pos
+	return s
 
 
 ## A bright streak along a bullet's path, gone after two frames.
@@ -34,7 +135,7 @@ static func tracer(from: Vector3, to: Vector3, color: Color) -> void:
 		return
 	var mi := MeshInstance3D.new()
 	var box := BoxMesh.new()
-	box.size = Vector3(0.012, 0.012, 1.0)
+	box.size = Vector3(0.008, 0.008, 1.0)
 	mi.mesh = box
 	mi.material_override = _unshaded("tracer" + color.to_html(), color, 5.0)
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -44,7 +145,36 @@ static func tracer(from: Vector3, to: Vector3, color: Color) -> void:
 	_later(0.08 * hold, mi)
 
 
-## Where a round lands: a shower of sparks, a puff of dust, a short flash of light.
+## A dark mark where a round hit a wall or the floor (a ring of them: the oldest is reused).
+static func scorch(pos: Vector3, normal: Vector3) -> void:
+	var mi: MeshInstance3D
+	if _marks.size() < MAX_MARKS:
+		mi = MeshInstance3D.new()
+		var quad := QuadMesh.new()
+		quad.size = Vector2(1, 1)
+		mi.mesh = quad
+		if not _cache.has("scorch"):
+			var m := StandardMaterial3D.new()
+			m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			m.albedo_texture = _soft()
+			m.albedo_color = Color(0.02, 0.02, 0.022, 0.8)
+			m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			m.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+			_cache["scorch"] = m
+		mi.material_override = _cache["scorch"]
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(mi)
+		_marks.append(mi)
+	else:
+		mi = _marks[_mark_i]
+		_mark_i = (_mark_i + 1) % MAX_MARKS
+	var up := Vector3.RIGHT if absf(normal.y) > 0.9 else Vector3.UP
+	var size := randf_range(0.09, 0.16)
+	mi.global_transform = Transform3D(Basis.looking_at(-normal, up).rotated(normal, randf() * TAU) * Basis.from_scale(Vector3.ONE * size),
+		pos + normal * 0.004)
+
+
+## Where a round lands: a shower of sparks, chips, a puff of dust, a short flash of light; a scorch mark on the room.
 static func impact(pos: Vector3, normal: Vector3, metal: bool = false) -> void:
 	if root == null:
 		return
@@ -53,8 +183,9 @@ static func impact(pos: Vector3, normal: Vector3, metal: bool = false) -> void:
 	streak.size = Vector3(0.005, 0.07, 0.005)
 	p.mesh = streak
 	p.material_override = _unshaded("spark", Color(1.0, 0.62, 0.22), 6.0)
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	p.particle_flag_align_y = true
-	p.amount = 34 if metal else 22
+	p.amount = 34 if metal else 20
 	p.lifetime = 0.35
 	p.one_shot = true
 	p.explosiveness = 1.0
@@ -69,37 +200,30 @@ static func impact(pos: Vector3, normal: Vector3, metal: bool = false) -> void:
 	p.global_position = pos + normal * 0.02
 	p.emitting = true
 	_later(1.0, p)
-	var s := CPUParticles3D.new()
-	var ball := SphereMesh.new()
-	ball.radius = 0.5
-	ball.height = 1.0
-	ball.radial_segments = 10
-	ball.rings = 5
-	s.mesh = ball
-	s.material_override = _unshaded("dust_metal" if metal else "dust", Color(0.25, 0.25, 0.26) if metal else Color(0.72, 0.71, 0.68), 1.0, 0.16)
-	s.amount = 5
-	s.lifetime = 0.9
-	s.one_shot = true
-	s.explosiveness = 0.9
-	s.direction = normal
-	s.spread = 50.0
-	s.initial_velocity_min = 0.2
-	s.initial_velocity_max = 0.8
-	s.gravity = Vector3(0, 0.5, 0)
-	s.scale_amount_min = 0.15
-	s.scale_amount_max = 0.3
-	var grow := Curve.new()
-	grow.add_point(Vector2(0, 0.35))
-	grow.add_point(Vector2(1, 1.0))
-	s.scale_amount_curve = grow
-	var fade := Gradient.new()
-	fade.set_color(0, Color(1, 1, 1, 1))
-	fade.set_color(1, Color(1, 1, 1, 0))
-	s.color_ramp = fade
-	root.add_child(s)
-	s.global_position = pos + normal * 0.06
-	s.emitting = true
-	_later(1.6, s)
+	var c := CPUParticles3D.new()                      # chips knocked off
+	var chip := BoxMesh.new()
+	chip.size = Vector3(0.016, 0.008, 0.012)
+	c.mesh = chip
+	c.material_override = _unshaded("chip_metal" if metal else "chip", Color(0.12, 0.12, 0.13) if metal else Color(0.55, 0.55, 0.54), 1.0)
+	c.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	c.amount = 5
+	c.lifetime = 0.75
+	c.one_shot = true
+	c.explosiveness = 1.0
+	c.direction = normal
+	c.spread = 55.0
+	c.initial_velocity_min = 1.2
+	c.initial_velocity_max = 3.2
+	c.gravity = Vector3(0, -9.8, 0)
+	c.scale_amount_min = 0.6
+	c.scale_amount_max = 1.6
+	root.add_child(c)
+	c.global_position = pos + normal * 0.02
+	c.emitting = true
+	_later(1.4, c)
+	puff(pos + normal * 0.06, normal, SMOKE if metal else DUST, 0.3 if metal else 0.42, 5, 0.9, 0.3 if metal else 0.38)
+	if not metal:
+		scorch(pos, normal)
 	var l := OmniLight3D.new()
 	l.light_color = Color(1.0, 0.65, 0.3)
 	l.light_energy = 2.0
@@ -122,6 +246,27 @@ static func flashes(scene: Node) -> Array:
 		n.get_parent().add_child(l)
 		l.position = (n as Node3D).position
 		out.append({"node": n, "light": l, "on": false})
+	return out
+
+
+## The flash nodes whose shot time the animation passed since the last call. events = V2Assets.flash_events(asset),
+## st = a dictionary this function keeps the clip and position in, list = flashes(scene). Also switches the lights.
+static func fired(ap: AnimationPlayer, events: Dictionary, st: Dictionary, list: Array) -> Array:
+	poll(list)
+	var out: Array = []
+	var cur_clip := String(ap.current_animation)
+	if not ap.is_playing() or cur_clip == "":
+		return out
+	var cur := ap.current_animation_position
+	if cur_clip != st.get("clip", "") or cur < st.get("pos", 0.0):
+		st["clip"] = cur_clip
+		st["pos"] = -0.001
+	for e in events.get(cur_clip, []):
+		if e[0] > st["pos"] and e[0] <= cur:
+			for f in list:
+				if String((f.node as Node).name) == e[1]:
+					out.append(f.node)
+	st["pos"] = cur
 	return out
 
 

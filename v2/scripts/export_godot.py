@@ -9,8 +9,11 @@
   room.glb                                the room (static), in Blender's world placement (glTF Y-up), with a doorway
                                           cut through each side wall for the lab (cut_doorways)
   spider.glb / drone.glb / turret.glb     each robot where it stands in the room, joints + one baked "Scene" animation
-  view_pistol.glb / view_rifle.glb        gun + rigged gloved arms under an empty "Eye" that stands for the camera
+  view_pistol.glb / view_rifle.glb        gun + rigged gloved arms under an empty "Eye" that stands for the camera;
+                                          "CamKick" under it carries the camera's own keyed motion (camera_kick)
   <name>_clips.json                       {"fps", "clips": {name: [first, last]}} in timeline frames (time = frame / fps)
+  <name>_mask.png                         baked wear mask of the guns and robots (bake_mask): R = AO, G = convex edges,
+                                          through an atlas UV added to their hard parts
   materials.json                          material name -> what Godot needs to rebuild it (read off the node trees)
 No images are exported: Godot rebuilds the materials from materials.json + assets/textures/v2 (scripts/v2/v2_assets.gd).
 Gloves: UV0 = rest position x, y and UV1.x = rest z (normalised to the mesh's box, in materials.json), vertex colour
@@ -33,6 +36,7 @@ sc = bpy.context.scene
 FPS = sc.render.fps
 for c in bpy.data.collections:
     c.hide_viewport = False
+    c.hide_render = False                          # (a hidden weapon view cannot be baked)
 sc.frame_set(0)                                    # everything at rest
 bpy.context.view_layer.update()
 used, gloves = set(), {}
@@ -76,6 +80,145 @@ def export(name, objs, frames=None):
     faces = sum(len(o.data.polygons) for o in objs if o.type == "MESH")
     print(f"exporting {name}.glb: {len(objs)} objects, {faces} faces", flush=True)
     bpy.ops.export_scene.gltf(**kw)
+
+
+MASK = {  # per asset: AO reach and edge radius (m) for the baked mask
+    "view_pistol": (0.03, 0.004), "view_rifle": (0.04, 0.005), "spider": (0.2, 0.02), "drone": (0.14, 0.014), "turret": (0.2, 0.02)}
+
+
+def bake_mask(name, meshes):
+    """One UV atlas over all the hard parts of an asset (Smart UV) and a mask baked into it with Cycles:
+    R = ambient occlusion (dirt collects where it is dark), G = convex edges (where paint wears off).
+    -> assets/models/v2/<name>_mask.png, read through UV by assets/shaders/v2_worn.gdshader. (Method of V1's
+    blender/scripts/export_new_assets.py.) Everything else in the scene is hidden from the bake."""
+    import math
+    import time
+    t0 = time.time()
+    vl = bpy.context.view_layer
+    ao_dist, edge_dist = MASK[name]
+    shared = {}                                    # objects that reuse a target's mesh (the spare magazine)
+    for o in meshes:
+        if o.data.users > 1:
+            old = o.data
+            o.data = old.copy()
+            shared[o] = [x for x in bpy.data.objects if x.data is old]
+        vl.objects.active = o
+        for m in list(o.modifiers):
+            try:
+                with bpy.context.temp_override(object=o, active_object=o, selected_objects=[o]):
+                    bpy.ops.object.modifier_apply(modifier=m.name)
+            except RuntimeError as e:
+                print("  could not apply", o.name, m.name, e)
+                o.modifiers.remove(m)
+    meshes = [o for o in meshes if len(o.data.polygons) > 0]
+    keep = set(meshes)
+    for o in sc.objects:
+        o.hide_render = o not in keep
+    bpy.ops.object.select_all(action="DESELECT")
+    for o in meshes:
+        o.hide_set(False)
+        o.select_set(True)
+        while o.data.uv_layers:
+            o.data.uv_layers.remove(o.data.uv_layers[0])
+        o.data.uv_layers.new(name="UVMap")
+    vl.objects.active = meshes[0]
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.uv.smart_project(angle_limit=math.radians(66), island_margin=0.003, area_weight=0.0, scale_to_bounds=False)
+    bpy.ops.object.mode_set(mode="OBJECT")
+    size = int(os.environ.get("MASK_SIZE", 2048))
+    img = bpy.data.images.new(f"{name}_mask", size, size, alpha=False)
+    img.colorspace_settings.name = "Non-Color"
+    bm = bpy.data.materials.new("BakeMask")
+    bm.use_nodes = True
+    nt = bm.node_tree
+    nt.nodes.clear()
+    ao = nt.nodes.new("ShaderNodeAmbientOcclusion")
+    ao.samples = 16
+    ao.inputs["Distance"].default_value = ao_dist
+    edge = nt.nodes.new("ShaderNodeAmbientOcclusion")
+    edge.samples = 16
+    edge.inside = True
+    edge.inputs["Distance"].default_value = edge_dist
+    inv = nt.nodes.new("ShaderNodeMath")
+    inv.operation = "SUBTRACT"
+    inv.inputs[0].default_value = 1.0
+    nt.links.new(edge.outputs["AO"], inv.inputs[1])
+    comb = nt.nodes.new("ShaderNodeCombineColor")
+    nt.links.new(ao.outputs["AO"], comb.inputs[0])
+    nt.links.new(inv.outputs[0], comb.inputs[1])
+    em = nt.nodes.new("ShaderNodeEmission")
+    nt.links.new(comb.outputs[0], em.inputs["Color"])
+    nt.links.new(em.outputs[0], nt.nodes.new("ShaderNodeOutputMaterial").inputs["Surface"])
+    tex = nt.nodes.new("ShaderNodeTexImage")
+    tex.image = img
+    nt.nodes.active = tex
+    saved = {}
+    for o in meshes:
+        saved[o] = [sl.material for sl in o.material_slots]
+        for sl in o.material_slots:
+            sl.material = bm
+        if not o.material_slots:
+            o.data.materials.append(bm)
+    sc.render.engine = "CYCLES"
+    sc.cycles.device = "CPU"
+    sc.cycles.samples = int(os.environ.get("BAKE_SAMPLES", 12))
+    sc.cycles.use_denoising = False
+    sc.render.use_motion_blur = False
+    sc.render.bake.margin = 6
+    sc.render.bake.use_clear = True
+    bpy.ops.object.bake(type="EMIT")
+    img.filepath_raw = os.path.join(OUT, f"{name}_mask.png")
+    img.file_format = "PNG"
+    img.save()
+    for o in meshes:
+        for sl, m in zip(o.material_slots, saved[o]):
+            sl.material = m
+    for o, others in shared.items():                # the copies get the unwrapped mesh too
+        for x in others:
+            x.modifiers.clear()
+            x.data = o.data
+    for o in sc.objects:
+        o.hide_render = False
+    print(f"baked {name}_mask.png: {len(meshes)} parts, {size}px, {time.time() - t0:.0f}s", flush=True)
+
+
+def camera_kick(eye, first, last):
+    """The camera's own keyed motion (view punch, walk bob, burst shake) as an empty "CamKick" under Eye: its
+    transform is the camera's offset from rest, in the camera's frame. Godot applies it to its camera."""
+    from mathutils import Quaternion
+    act = cam.animation_data.action if cam.animation_data else None
+    kick = bpy.data.objects.new("CamKick", None)
+    eye.users_collection[0].objects.link(kick)
+    kick.parent = eye
+    kick.rotation_mode = "QUATERNION"
+    if act is None:
+        return kick
+    fl = [act.fcurves.find("location", index=i) for i in range(3)]
+    fq = [act.fcurves.find("rotation_quaternion", index=i) for i in range(4)]
+    prev = None
+    for f in range(first - 1, last + 2):
+        m = Matrix.Translation([c.evaluate(f) for c in fl]) @ Quaternion([c.evaluate(f) for c in fq]).normalized().to_matrix().to_4x4()
+        d = cam_rest.inverted() @ m
+        q = d.to_quaternion()
+        if prev is not None and prev.dot(q) < 0:
+            q.negate()
+        prev = q.copy()
+        kick.location, kick.rotation_quaternion = d.to_translation(), q
+        kick.keyframe_insert("location", frame=f)
+        kick.keyframe_insert("rotation_quaternion", frame=f)
+    for fc in kick.animation_data.action.fcurves:
+        for kp in fc.keyframe_points:
+            kp.interpolation = "LINEAR"
+    return kick
+
+
+def hard_parts(objs):
+    """The meshes that get the wear mask: the modelled hard parts; not gloves, pads, flashes, cases or copies."""
+    skip = ("Glove", "Pad", "Guard", "Cuff", "Fx")
+    return [o for o in objs if o.type == "MESH" and "Flash" not in o.name and "Casing" not in o.name
+            and not o.name.startswith(skip) and o.name not in ("P_Magazine2", "P_MagBase2", "P_MagRound2")
+            and max(abs(v) for v in o.scale) > 0.01 and "." not in o.name.replace(".001", "").replace(".002", "")]
 
 
 def flash_frames(objs, first, last):
@@ -280,6 +423,7 @@ elif WHAT == "clips":                              # only the clip tables
 elif WHAT.capitalize() in ROBOTS:
     robot = WHAT.capitalize()
     objs = robot_objects(robot)
+    bake_mask(WHAT, hard_parts(objs))
     write_clips(WHAT, robot_clips(robot), objs)
     first = min(c["start"] for c in rclips.values())      # (all three robots share one range)
     last = max(c["end"] for k, c in rclips.items() if "Firefight" not in k)
@@ -292,11 +436,14 @@ elif WHAT in H.COLL:
     eye.matrix_world = cam_rest
     root.parent = eye
     root.matrix_parent_inverse = Matrix.Identity(4)
+    vc = view_clips(WHAT)
+    camera_kick(eye, min(c["start"] for c in vc.values()), max(c["end"] for c in vc.values()))
     objs = view_objects(WHAT)
     for o in objs:
         if o.name.startswith("Glove."):
             prep_glove(o)
-    export("view_" + WHAT, objs, write_clips("view_" + WHAT, view_clips(WHAT), objs))
+    bake_mask("view_" + WHAT, hard_parts(objs))
+    export("view_" + WHAT, objs, write_clips("view_" + WHAT, vc, objs))
 else:                                              # materials.json
     objs = room_objects() + [o for r in ROBOTS for o in robot_objects(r)] + [o for w in H.COLL for o in view_objects(w)]
     for o in objs:

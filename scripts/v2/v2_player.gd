@@ -8,6 +8,12 @@ const FLASH := {"pistol": "P_Flash", "rifle": "R_Flash"}
 const ADS_IN := {"pistol": 0.3, "rifle": 99.0}     # pistol: the aim is held while the button is down
 const ADS_OUT := {"pistol": 0.25, "rifle": 0.3}
 const EYE := 1.62
+const DAMAGE := {"pistol": 34.0, "rifle": 12.0}
+const MAX_HP := 100.0
+const REGEN_AFTER := 4.0            # seconds without a hit before health comes back
+const REGEN := 15.0                 # health per second
+
+signal died
 
 var cam: Camera3D
 var weapon := "pistol"
@@ -19,6 +25,14 @@ var _yaw := 0.0
 var _pitch := 0.0
 var _kick := 0.0
 var _layer := 1
+var hp := MAX_HP
+var down := false                   # health ran out: the lab puts the player back at the room's start
+var invulnerable := false           # (capture tour, tests)
+var hurt_flash := 0.0               # 1 when hit, fades: the HUD's red flash
+var hit_confirm := 0.0              # > 0 just after one of the player's rounds hit a robot
+var shots_hit := 0
+var _since_hurt := 99.0
+var _grace := 0.0
 
 
 func _ready() -> void:
@@ -54,7 +68,8 @@ func _ready() -> void:
 		ap.animation_finished.connect(_on_finished)
 		for mi in scene.find_children("*", "MeshInstance3D", true, false):
 			(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		_views[w] = {"scene": scene, "ap": ap, "flashes": V2Fx.flashes(scene)}
+		_views[w] = {"scene": scene, "ap": ap, "flashes": V2Fx.flashes(scene), "events": V2Assets.flash_events("view_" + w), "ev": {},
+			"kick": scene.find_child("CamKick", true, false)}
 		scene.visible = w == weapon
 	_ap().play("Idle")
 
@@ -67,6 +82,26 @@ func set_layer(layer: int) -> void:
 	for w in _views:
 		for n in (_views[w].scene as Node).find_children("*", "VisualInstance3D", true, false):
 			(n as VisualInstance3D).layers = layer
+
+
+## A round from a robot.
+func hurt(damage: float, _from: Vector3) -> void:
+	if down or invulnerable or _grace > 0.0:
+		return
+	hp -= damage
+	hurt_flash = 1.0
+	_since_hurt = 0.0
+	if hp <= 0.0:
+		hp = 0.0
+		down = true
+		died.emit()
+
+
+func revive() -> void:
+	hp = MAX_HP
+	down = false
+	_grace = 2.0
+	busy = ""
 
 
 func _ap() -> AnimationPlayer:
@@ -83,7 +118,7 @@ func flash_on() -> bool:
 ## Play a one-shot clip of the current weapon (Fire, ADS, Reload, Draw, Inspect, Sprint ...).
 func act(clip: String) -> void:
 	var ap := _ap()
-	if not ap.has_animation(clip):
+	if not ap.has_animation(clip) or down:
 		return
 	if busy != "" and not (busy == "Fire" and clip == "Fire" and weapon == "pistol" and ap.current_animation_position > 0.2):
 		return
@@ -106,6 +141,8 @@ func _on_finished(_anim: StringName) -> void:
 
 ## (_input, not _unhandled_input: looking and shooting must not depend on what the HUD does with the mouse)
 func _input(event: InputEvent) -> void:
+	if down:
+		return
 	if event is InputEventMouseMotion and mouse_look and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		_yaw -= event.relative.x * 0.0022
 		_pitch = clampf(_pitch - event.relative.y * 0.0022, -1.45, 1.45)
@@ -142,6 +179,8 @@ func _physics_process(delta: float) -> void:
 		dir.x += 1.0
 	if auto_move != Vector3.ZERO:
 		dir = auto_move
+	if down:
+		dir = Vector3.ZERO
 	var sprint := Input.is_key_pressed(KEY_SHIFT) and dir.z < 0.0
 	dir = (Basis(Vector3.UP, _yaw) * dir).normalized()
 	var speed := 6.2 if sprint else 3.4
@@ -157,8 +196,21 @@ func _physics_process(delta: float) -> void:
 
 func _process(delta: float) -> void:
 	_kick = move_toward(_kick, 0.0, delta * 0.18)
+	_since_hurt += delta
+	_grace = maxf(_grace - delta, 0.0)
+	hurt_flash = maxf(hurt_flash - delta * 2.5, 0.0)
+	hit_confirm = maxf(hit_confirm - delta, 0.0)
+	if not down and _since_hurt > REGEN_AFTER:
+		hp = minf(hp + REGEN * delta, MAX_HP)
 	rotation.y = _yaw
-	cam.rotation.x = _pitch + _kick
+	# The camera: the player's pitch, then the camera motion of the gun's clip (view punch, walk bob, burst
+	# shake: the CamKick node of the view, which is in the Blender camera's frame = this camera's turned 90 degrees).
+	var ct := Transform3D(Basis(Vector3.RIGHT, _pitch + _kick), Vector3(0, EYE, 0))
+	var kick: Node3D = _views[weapon].kick
+	if kick != null:
+		var rx := Transform3D(Basis(Vector3.RIGHT, PI / 2.0), Vector3.ZERO)
+		ct = ct * (rx * kick.transform * rx.affine_inverse())
+	cam.transform = ct
 	var ap := _ap()
 	if busy == "ADS" and ap.is_playing():          # hold the aim while the button is down
 		var a := ap.get_animation("ADS")
@@ -169,7 +221,7 @@ func _process(delta: float) -> void:
 		var want := "Walk" if Vector2(velocity.x, velocity.z).length() > 0.6 and is_on_floor() else "Idle"
 		if ap.current_animation != want:
 			ap.play(want, 0.15)
-	for node in V2Fx.poll(_views[weapon].flashes):   # a round leaves the muzzle
+	for node in V2Fx.fired(ap, _views[weapon].events, _views[weapon].ev, _views[weapon].flashes):   # a round leaves the muzzle
 		var from := (node as Node3D).global_position
 		var aim := -cam.global_basis.z
 		var to := cam.global_position + aim * 60.0
@@ -181,6 +233,9 @@ func _process(delta: float) -> void:
 			var robot: V2Robot = res.collider.get_meta("robot") if res.collider.has_meta("robot") else null
 			V2Fx.impact(to, res.normal, robot != null)
 			if robot != null:
-				robot.hit()
+				robot.hit(DAMAGE[weapon])
+				hit_confirm = 0.15
+				shots_hit += 1
 		V2Fx.tracer(from, to, V2Fx.YELLOW)
+		V2Fx.puff(from, aim, V2Fx.GUNSMOKE, 0.1, 2, 0.6, 0.2, 0.4)
 		_kick += 0.012 if weapon == "pistol" else 0.006

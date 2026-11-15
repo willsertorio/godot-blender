@@ -10,6 +10,18 @@ const SPECIAL := {  # materials that are procedural in Blender
 	"DarkGlass": {"color": Color(0.03, 0.05, 0.07, 0.75), "rough": 0.05},
 }
 
+# Wear of the guns' and robots' paint (the numbers of the Blender materials: v2/scripts/build_*.py), drawn by
+# v2_worn.gdshader from the asset's baked mask. [wear, wear colour (linear), wear metallic, cavity, grunge]
+const WEAR := {
+	"PSlide": [0.8, Vector3(0.7, 0.69, 0.66), 1.0, 0.5, 0.14], "PFrame": [0.35, Vector3(0.2, 0.21, 0.23), 1.0, 0.5, 0.0],
+	"PBlack": [0.9, Vector3(0.6, 0.6, 0.6), 1.0, 0.3, 0.0],
+	"RfWhite": [0.55, Vector3(0.22, 0.23, 0.25), 0.6, 0.7, 0.16], "RfShell2": [0.5, Vector3(0.2, 0.21, 0.23), 0.6, 0.7, 0.16],
+	"RfGrey": [0.5, Vector3(0.6, 0.6, 0.6), 1.0, 0.6, 0.0], "RfDark": [0.35, Vector3(0.3, 0.31, 0.33), 1.0, 0.5, 0.0],
+	"RfBlack": [0.3, Vector3(0.45, 0.45, 0.45), 1.0, 0.3, 0.0], "RfTan": [0.3, Vector3(0.7, 0.66, 0.58), 1.0, 0.5, 0.0],
+	"RfPod": [0.0, Vector3(0.5, 0.5, 0.5), 1.0, 0.5, 0.0],
+	"RArmor": [0.7, Vector3(0.16, 0.17, 0.18), 0.8, 0.7, 0.18], "RFrame": [0.6, Vector3(0.55, 0.55, 0.55), 1.0, 0.4, 0.0],
+}
+
 static var _data: Dictionary = {}
 static var _mats: Dictionary = {}
 
@@ -23,6 +35,36 @@ static func data() -> Dictionary:
 static func _tex(set_name: String, kind: String) -> Texture2D:
 	var path := "%s%s_%s.jpg" % [TEX, set_name, kind]
 	return load(path) if ResourceLoader.exists(path) else null
+
+
+## Blender's colour numbers are linear; a Godot Color is sRGB.
+static func _c(v: Array, a: float = 1.0) -> Color:
+	var c := Color(v[0], v[1], v[2]).linear_to_srgb()
+	c.a = a
+	return c
+
+
+static func _worn(mat_name: String, d: Dictionary, asset: String) -> ShaderMaterial:
+	var w: Array = WEAR[mat_name]
+	var m := ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/v2_worn.gdshader")
+	m.set_shader_parameter("tex_albedo", _tex(d.set, "color"))
+	m.set_shader_parameter("tex_normal", _tex(d.set, "normal"))
+	m.set_shader_parameter("tex_rough", _tex(d.set, "rough"))
+	m.set_shader_parameter("tex_imperfections", load("res://assets/textures/military/_detail/imperfections.png"))
+	m.set_shader_parameter("tex_mask", load(DIR + asset + "_mask.png"))
+	m.set_shader_parameter("tint", Vector3(d.tint[0], d.tint[1], d.tint[2]))
+	m.set_shader_parameter("tile", float(d.scale))
+	m.set_shader_parameter("detail", 0.12 if asset.begins_with("view_") else 0.7)
+	m.set_shader_parameter("rough_range", Vector2(d.rough[0], d.rough[1]))
+	m.set_shader_parameter("metallic", float(d.metallic))
+	m.set_shader_parameter("normal_strength", minf(d.normal, 2.0))
+	m.set_shader_parameter("wear", w[0])
+	m.set_shader_parameter("wear_color", w[1])
+	m.set_shader_parameter("wear_metal", w[2])
+	m.set_shader_parameter("cavity", w[3])
+	m.set_shader_parameter("grunge", w[4])
+	return m
 
 
 static func _flash(core: bool) -> ShaderMaterial:
@@ -48,8 +90,15 @@ static func _glove(mesh_key: String, sleeve: bool) -> ShaderMaterial:
 	return m
 
 
-## The Godot material for a Blender material name (cached; gloves are per mesh: they carry their box).
-static func material(mat_name: String, mesh_key: String = "") -> Material:
+## The Godot material for a Blender material name (cached; gloves are per mesh: they carry their box; worn paint
+## is per asset: it reads that asset's mask).
+static func material(mat_name: String, mesh_key: String = "", asset: String = "") -> Material:
+	if WEAR.has(mat_name) and asset != "" and ResourceLoader.exists(DIR + asset + "_mask.png"):
+		var wkey := mat_name + "@" + asset
+		if not _mats.has(wkey):
+			_mats[wkey] = _worn(mat_name, data().materials[mat_name], asset)
+			_mats[wkey].resource_name = mat_name
+		return _mats[wkey]
 	if mat_name == "Glove" or mat_name == "JacketSleeve":
 		var key := mat_name + "/" + mesh_key
 		if not _mats.has(key):
@@ -75,7 +124,7 @@ static func material(mat_name: String, mesh_key: String = "") -> Material:
 				s.emission_energy_multiplier = sp.energy
 		elif d.get("type", "") == "pbr":
 			s.albedo_texture = _tex(d.set, "color")
-			s.albedo_color = Color(d.tint[0], d.tint[1], d.tint[2])
+			s.albedo_color = _c(d.tint)
 			s.roughness_texture = _tex(d.set, "rough")
 			s.roughness = d.rough[1]
 			s.metallic = d.metallic
@@ -89,12 +138,12 @@ static func material(mat_name: String, mesh_key: String = "") -> Material:
 			s.uv1_triplanar_sharpness = 4.0
 			s.vertex_color_use_as_albedo = d.get("vcol", false)
 		elif d.get("type", "") == "plain":
-			s.albedo_color = Color(d.color[0], d.color[1], d.color[2], d.alpha)
+			s.albedo_color = _c(d.color, d.alpha)
 			s.roughness = d.rough
 			s.metallic = d.metallic
 			if d.emit_strength > 0.0 and (d.emit[0] + d.emit[1] + d.emit[2]) > 0.0:
 				s.emission_enabled = true
-				s.emission = Color(d.emit[0], d.emit[1], d.emit[2])
+				s.emission = _c(d.emit)
 				s.emission_energy_multiplier = clampf(d.emit_strength * 0.3, 1.0, 6.0)
 			if d.transmission > 0.0:
 				s.albedo_color.a = 0.22
@@ -107,8 +156,8 @@ static func material(mat_name: String, mesh_key: String = "") -> Material:
 	return m
 
 
-## Swap every surface of every mesh under `root` for its rebuilt material.
-static func apply(root: Node) -> void:
+## Swap every surface of every mesh under `root` for its rebuilt material. asset = the glb's name (for its mask).
+static func apply(root: Node, asset: String = "") -> void:
 	for n in root.find_children("*", "MeshInstance3D", true, false):
 		var mi := n as MeshInstance3D
 		if mi.mesh == null:
@@ -116,7 +165,29 @@ static func apply(root: Node) -> void:
 		for s in mi.mesh.get_surface_count():
 			var src := mi.mesh.surface_get_material(s)
 			if src != null and src.resource_name != "":
-				mi.set_surface_override_material(s, material(src.resource_name, String(mi.name)))
+				# (only meshes that carry the mask's UVs get the worn paint)
+				var am := mi.mesh as ArrayMesh
+				var has_uv: bool = am != null and (am.surface_get_format(s) & Mesh.ARRAY_FORMAT_TEX_UV) != 0
+				mi.set_surface_override_material(s, material(src.resource_name, String(mi.name), asset if has_uv else ""))
+
+
+## When the muzzle flashes of an asset's clips go off: {clip: [[seconds into the clip, flash node name], ...]}.
+## Shots are fired from this list, not from watching the flash meshes: a flash lasts one frame of a 24 fps clip, and a
+## slow frame steps over it.
+static func flash_events(asset: String) -> Dictionary:
+	var spec: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(DIR + asset + "_clips.json"))
+	var out := {}
+	for clip_name in spec.clips:
+		var first: float = spec.clips[clip_name][0]
+		var last: float = spec.clips[clip_name][1]
+		var list: Array = []
+		for flash in spec.get("flashes", {}):
+			for f in spec.flashes[flash]:
+				if f >= first and f <= last:
+					list.append([(f - first) / float(spec.fps), flash])
+		if not list.is_empty():
+			out[clip_name] = list
+	return out
 
 
 ## Cut the one baked "Scene" animation into the clips of <asset>_clips.json. Returns the AnimationPlayer.

@@ -1,12 +1,16 @@
 extends Node3D
-## V2 lab: three copies of the V2 room side by side, joined by doorways, one robot in each, to preview what was built
-## in Blender (v2/): the room, the robots' clips, the two weapon views with their clips, the effects.
-##   walk through the doors, or 1 2 3 (Tab) = jump to a room · N = next clip of that room's robot · M = auto-cycle on / off
+## V2 lab: three copies of the V2 room side by side, joined by doorways, one robot in each, built from what was made
+## in Blender (v2/): the room, the robots and their clips, the two weapon views with their clips.
+## The robots are enemies (v2_robot.gd): they move, shoot at the player and can be destroyed; they come back.
+##   walk through the doors, or 1 2 3 (Tab) = jump to a room
+##   M = that room's robot: enemy <-> clip preview (cycles its clips where it stands in Blender) · N = next clip
 ##   LMB fire · RMB aim · R reload · T reload from empty · F inspect · Q switch gun · Shift sprint · Space jump
 ##   godot --path . -- --v1          the V1 game / lab (scenes/main.tscn)
 ##   godot --path . -- --capture=DIR  save a tour of screenshots and quit
 ##   godot --path . -- --quality=low   no shadows, glow or MSAA (for a weak graphics card)
 ##   godot --path . -- --perf          print the performance line every second for 12 s and quit (F3 shows it in play)
+##   godot --path . -- --preview       start with the robots in clip preview
+##   godot --headless --path . -- --enemy-test   plays each room by code and prints PASS / FAIL (moves, shoots, dies, returns)
 ##   godot --path . -- --input-test   send real mouse / key events and report what the player did (PASS / FAIL)
 const KINDS := ["spider", "drone", "turret"]
 const ROOM_DX := 11.6             # room width 11 + the two 0.3 m walls: neighbours share the doorway at Blender y = 10.2
@@ -31,6 +35,16 @@ var robots: Array[V2Robot] = []
 var player: V2Player
 var current := 0
 var _hud: Label
+var _health_fill: ColorRect
+var _health_text: Label
+var _enemy_fill: ColorRect
+var _enemy_text: Label
+var _flash: ColorRect
+var _dot: ColorRect
+var _down_text: Label
+var _down_t := 0.0
+var downs := 0
+var _only := ""
 var _shadow_lights: Array[OmniLight3D] = []
 var _shadow_room := -1
 var _low := false                 # --quality=low: no shadows, no glow, no MSAA
@@ -61,6 +75,11 @@ func _ready() -> void:
 	_door_plug(KINDS.size() - 1, XR - 0.1)
 	player = V2Player.new()
 	add_child(player)
+	player.died.connect(_on_player_died)
+	for r in robots:
+		r.player = player
+		if "--preview" in args:
+			r.set_ai(false)
 	_hud_setup()
 	goto(0)
 	var capture := ""
@@ -73,10 +92,14 @@ func _ready() -> void:
 	for a in args:
 		if a.begins_with("--capture="):
 			capture = a.trim_prefix("--capture=")
+		if a.begins_with("--only="):
+			_only = a.trim_prefix("--only=")
 	if _perf_log:
 		_perf.visible = true
 		player.mouse_look = false
 		get_tree().create_timer(12.0).timeout.connect(get_tree().quit)
+	elif "--enemy-test" in args:
+		_enemy_test()
 	elif "--input-test" in args:
 		_input_test()
 	elif capture != "":
@@ -90,7 +113,7 @@ func _environment() -> void:
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color(0.02, 0.025, 0.03)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.78, 0.83, 0.92)
+	env.ambient_light_color = Color(0.86, 0.89, 0.94)
 	env.ambient_light_energy = 0.32
 	var sky := Sky.new()                            # only for reflections on the metal (CC0 HDRI, as in V1)
 	var pano := PanoramaSkyMaterial.new()
@@ -259,14 +282,83 @@ func _hud_setup() -> void:
 	_perf.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_perf.visible = false
 	layer.add_child(_perf)
-	var dot := ColorRect.new()
-	dot.color = Color(1, 1, 1, 0.8)
-	dot.size = Vector2(4, 4)
-	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE   # (a ColorRect stops the mouse by default, and the captured cursor
-	_hud.mouse_filter = Control.MOUSE_FILTER_IGNORE  # sits right on it: it swallowed every look and click)
-	dot.set_anchors_preset(Control.PRESET_CENTER)
-	dot.position -= Vector2(2, 2)
-	layer.add_child(dot)
+	# (every control ignores the mouse: a ColorRect stops it by default, and the captured cursor sits on the dot)
+	_hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_flash = _rect(layer, Color(0.75, 0.04, 0.02, 0.0))          # red wash when hit
+	_flash.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_dot = _rect(layer, Color(1, 1, 1, 0.8))
+	_dot.set_anchors_preset(Control.PRESET_CENTER)
+	_bar_place(_dot, 0.5, 0.5, -2, -2, 4, 4)
+	_bar_place(_rect(layer, Color(0, 0, 0, 0.55)), 0.0, 1.0, 14, -38, 224, 18)      # health, bottom left
+	_health_fill = _rect(layer, Color(0.3, 0.9, 0.5))
+	_health_text = _text(layer, 0.0, 1.0, 16, -62)
+	_bar_place(_rect(layer, Color(0, 0, 0, 0.55)), 0.5, 1.0, -162, -38, 324, 18)    # the room's robot, bottom centre
+	_enemy_fill = _rect(layer, Color(1.0, 0.35, 0.2))
+	_enemy_text = _text(layer, 0.5, 1.0, -160, -62)
+	_down_text = _text(layer, 0.5, 0.5, -150, 30)
+	_down_text.text = "DOWN  -  back to the start of the room"
+	_down_text.visible = false
+
+
+func _rect(layer: CanvasLayer, color: Color) -> ColorRect:
+	var c := ColorRect.new()
+	c.color = color
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(c)
+	return c
+
+
+func _bar_place(c: Control, ax: float, ay: float, x: float, y: float, w: float, h: float) -> void:
+	c.anchor_left = ax
+	c.anchor_right = ax
+	c.anchor_top = ay
+	c.anchor_bottom = ay
+	c.offset_left = x
+	c.offset_top = y
+	c.offset_right = x + w
+	c.offset_bottom = y + h
+
+
+func _text(layer: CanvasLayer, ax: float, ay: float, x: float, y: float) -> Label:
+	var l := Label.new()
+	l.add_theme_font_size_override("font_size", 15)
+	l.add_theme_color_override("font_color", Color(0.9, 0.97, 1.0))
+	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+	l.add_theme_constant_override("outline_size", 5)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(l)
+	_bar_place(l, ax, ay, x, y, 320, 20)
+	return l
+
+
+func _on_player_died() -> void:
+	downs += 1
+	_down_t = 1.4
+
+
+func _hud_update(delta: float) -> void:
+	var r := robots[current]
+	var preview := r.state == V2Robot.PREVIEW
+	_hud.text = "V2 LAB   room %d / %d: %s (%s)   gun: %s   destroyed: %d   downs: %d\nwalk through the doors or 1 2 3  ·  M enemy / clip preview  ·  N next clip  ·  F3 performance\nLMB fire  ·  RMB aim  ·  R reload  ·  T reload (empty)  ·  F inspect  ·  Q switch gun  ·  Shift sprint  ·  Space jump" % [
+		current + 1, rooms.size(), r.kind.to_upper(), ("preview: " + r.clip + ("" if r.auto else ", held")) if preview else "enemy",
+		player.weapon, robots.reduce(func(n: int, x: V2Robot) -> int: return n + x.kills, 0), downs]
+	var h := player.hp / V2Player.MAX_HP
+	_bar_place(_health_fill, 0.0, 1.0, 16, -36, 220.0 * h, 14)
+	_health_fill.color = Color(0.3, 0.9, 0.5).lerp(Color(1.0, 0.25, 0.15), 1.0 - h)
+	_health_text.text = "HEALTH  %d" % ceili(player.hp)
+	_bar_place(_enemy_fill, 0.5, 1.0, -160, -36, 320.0 * r.hp / r.max_hp, 14)
+	_enemy_fill.visible = not preview
+	_enemy_text.text = r.kind.to_upper() + ("" if preview else ("   destroyed, back soon" if r.state == V2Robot.DEAD else ""))
+	_flash.color.a = clampf(player.hurt_flash * 0.3 + (0.25 if player.down else 0.0) + maxf(0.3 - h, 0.0) * 0.4, 0.0, 0.6)
+	var hit := player.hit_confirm > 0.0
+	_dot.color = Color(1.0, 0.3, 0.2, 1.0) if hit else Color(1, 1, 1, 0.8)
+	_bar_place(_dot, 0.5, 0.5, -4 if hit else -2, -4 if hit else -2, 8 if hit else 4, 8 if hit else 4)
+	_down_text.visible = player.down
+	if player.down:
+		_down_t -= delta
+		if _down_t <= 0.0:
+			goto(current)
+			player.revive()
 
 
 ## Once a second: average frame rate, the slowest frame of that second, and the renderer's counts for the last frame
@@ -301,9 +393,9 @@ func _process(delta: float) -> void:
 	current = _room_at(player.global_position.x)
 	player.set_layer(_layer(current))                # the gun is lit by the lights of the room it is in
 	_shadows(current)
-	var r := robots[current]
-	_hud.text = "V2 LAB   room %d / %d: %s   clip: %s%s   gun: %s\nwalk through the doors or 1 2 3  ·  N next clip  ·  M auto-cycle  ·  F3 performance\nLMB fire  ·  RMB aim  ·  R reload  ·  T reload (empty)  ·  F inspect  ·  Q switch gun  ·  Shift sprint  ·  Space jump" % [
-		current + 1, rooms.size(), r.kind.to_upper(), r.clip, "" if r.auto else " (held)", player.weapon]
+	for k in robots.size():
+		robots[k].active = k == current
+	_hud_update(delta)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -320,7 +412,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_N:
 				robots[current].next()
 			KEY_M:
-				robots[current].auto = not robots[current].auto
+				robots[current].set_ai(robots[current].state == V2Robot.PREVIEW)
 			KEY_F3:
 				_perf.visible = not _perf.visible
 				_perf_t = 0.0
@@ -334,6 +426,8 @@ func _unhandled_input(event: InputEvent) -> void:
 ## with them: PASS / FAIL lines, then quits. The capture tour drives the player by code and cannot catch a control
 ## that swallows the mouse.
 func _input_test() -> void:
+	for r in robots:
+		r.set_ai(false)                               # (nothing shooting back while the controls are checked)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	await _wait(0.5)
 	var centre := Vector2(get_viewport().get_visible_rect().size / 2.0)
@@ -365,6 +459,17 @@ func _input_test() -> void:
 		up.pressed = false
 		Input.parse_input_event(up)
 		await _wait(0.3)
+	# the camera must follow the clip's own camera motion (view punch of a shot)
+	player.busy = ""
+	player.act("Fire")
+	var punch := 0.0
+	var tk := 0.0
+	while tk < 0.35:
+		await get_tree().process_frame
+		tk += get_process_delta_time()
+		punch = maxf(punch, rad_to_deg((Basis(Vector3.RIGHT, player._pitch + player._kick).inverse() * player.cam.basis).get_euler().length()))
+	print("[input] camera kick from the clip: ", "PASS" if punch > 0.2 else "FAIL", " (%.2f degrees)" % punch)
+	await _wait(0.4)
 	for spec in [[KEY_R, "Reload"], [KEY_F, "Inspect"]]:
 		player.busy = ""
 		var ke := InputEventKey.new()
@@ -396,95 +501,223 @@ func _until(cond: Callable, timeout: float = 4.0) -> void:
 		t += get_process_delta_time()
 
 
+func _want(section: String) -> bool:
+	return _only == "" or section in _only.split(",")
+
+
+## Screenshot tour. --only=rooms,doors,guns,ai limits it to those parts.
 func _capture(dir: String) -> void:
 	DirAccess.make_dir_recursive_absolute(dir)
 	player.mouse_look = false
+	player.invulnerable = true
 	V2Fx.hold = 40.0
 	for r in robots:
+		r.set_ai(false)
 		r.auto = false
-	for i in rooms.size():
-		if _door_only:
-			break
-		goto(i)
-		await _wait(0.6)
-		await _shot(dir, "room%d_%s" % [i + 1, KINDS[i]])
-		robots[i].play("Shoot")
-		robots[i].ap.speed_scale = 0.08               # (a flash lasts two frames: slow down to catch it, then hold it)
-		robots[i]._left = 999.0                       # (and keep the preview loop from restarting the clip meanwhile)
-		await _until(robots[i].flash_on, 12.0)
-		robots[i].ap.pause()
-		await _shot(dir, "room%d_%s_shoot" % [i + 1, KINDS[i]])
-		robots[i].ap.speed_scale = 1.0
-		if _quick:
-			continue
-		robots[i].play(V2Robot.ORDER[KINDS[i]][2])
-		await _wait(1.0)
-		await _shot(dir, "room%d_%s_move" % [i + 1, KINDS[i]])
-		robots[i].hit()
-		for k in 3:
+	if _want("rooms"):
+		for i in rooms.size():
+			goto(i)
+			robots[i].play("Idle")
+			await _wait(0.6)
+			await _shot(dir, "room%d_%s" % [i + 1, KINDS[i]])
+			robots[i].play("Shoot")
+			robots[i].ap.speed_scale = 0.08               # (a flash lasts two frames: slow down to catch it, then hold it)
+			robots[i]._left = 999.0                       # (and keep the preview loop from restarting the clip meanwhile)
+			await _until(robots[i].flash_on, 12.0)
+			robots[i].ap.pause()
+			await _shot(dir, "room%d_%s_shoot" % [i + 1, KINDS[i]])
+			robots[i].ap.speed_scale = 1.0
+			if _quick:
+				continue
+			robots[i].play(V2Robot.ORDER[KINDS[i]][2])
 			await _wait(1.0)
-			await _shot(dir, "room%d_%s_death%d" % [i + 1, KINDS[i], k + 1])
-	goto(0)
-	robots[0].play("Walk")
-	await _wait(0.5)
-	# the doorways: look at the first, walk through each (0.25 m off centre: clear of the stair post beyond), look back
-	player.global_position = rooms[0].position + Vector3(3.4, 0.02, DOOR_Z + 1.3)
-	player._yaw = deg_to_rad(-65.0)
-	await _wait(0.4)
-	await _shot(dir, "door_from_room1")
-	for i in rooms.size() - 1:
-		player.global_position = rooms[i].position + Vector3(4.6, 0.02, DOOR_Z - 0.25)
-		player._yaw = deg_to_rad(-90.0)
-		player.auto_move = Vector3(0, 0, -1)
-		var goal := rooms[i + 1].position.x - 1.6     # past the wall, the frame and the post, under the landing
-		await _until(func() -> bool: return player.global_position.x > goal, 60.0)
-		player.auto_move = Vector3.ZERO
-		print("[walk] door %d -> %d: x=%.2f, goal %.2f, now in room %d" % [i + 1, i + 2, player.global_position.x, goal,
-			_room_at(player.global_position.x) + 1])
-		player._yaw = deg_to_rad(-35.0)
+			await _shot(dir, "room%d_%s_move" % [i + 1, KINDS[i]])
+			robots[i].hit()
+			for k in 3:
+				await _wait(1.0)
+				await _shot(dir, "room%d_%s_death%d" % [i + 1, KINDS[i], k + 1])
+			robots[i].play("Idle")
+	if _want("doors"):
+		# the doorways: look at the first, walk through each (0.25 m off centre: clear of the stair post beyond), look back
+		goto(0)
+		player.global_position = rooms[0].position + Vector3(3.4, 0.02, DOOR_Z + 1.3)
+		player._yaw = deg_to_rad(-65.0)
+		await _wait(0.4)
+		await _shot(dir, "door_from_room1")
+		for i in rooms.size() - 1:
+			player.global_position = rooms[i].position + Vector3(4.6, 0.02, DOOR_Z - 0.25)
+			player._yaw = deg_to_rad(-90.0)
+			player.auto_move = Vector3(0, 0, -1)
+			var goal := rooms[i + 1].position.x - 1.6     # past the wall, the frame and the post, under the landing
+			await _until(func() -> bool: return player.global_position.x > goal, 60.0)
+			player.auto_move = Vector3.ZERO
+			print("[walk] door %d -> %d: x=%.2f, goal %.2f, now in room %d" % [i + 1, i + 2, player.global_position.x, goal,
+				_room_at(player.global_position.x) + 1])
+			player._yaw = deg_to_rad(-35.0)
+			await _wait(0.3)
+			await _shot(dir, "door_into_room%d" % (i + 2))
+		player._yaw = deg_to_rad(90.0)
 		await _wait(0.3)
-		await _shot(dir, "door_into_room%d" % (i + 2))
-	player._yaw = deg_to_rad(90.0)
-	await _wait(0.3)
-	await _shot(dir, "door_back_to_room2")
-	goto(0)
-	player._yaw = deg_to_rad(75.0)
-	player.global_position = rooms[0].position + Vector3(-2.2, 0.02, DOOR_Z + 0.5)
-	await _wait(0.3)
-	await _shot(dir, "room1_closed_end_door")
-	if _door_only:
-		get_tree().quit()
-		return
-	goto(0)
-	await _wait(0.3)
-	for w in 2:
-		player.busy = ""
-		player.act("Fire")
-		player._ap().speed_scale = 0.08
-		await _until(player.flash_on, 12.0)
-		player._ap().pause()
-		await _shot(dir, player.weapon + "_fire")
-		player._ap().speed_scale = 1.0
-		player._ap().play()
-		if _quick:
-			break
-		await _wait(1.3)
-		player.busy = ""
-		player.act("Reload" if player.weapon == "pistol" else "ReloadEmpty")
-		await _wait(0.75)
-		await _shot(dir, player.weapon + "_reload")
-		await _wait(1.6)
-		player.busy = ""
-		player.act("Inspect")
-		await _wait(1.0)
-		await _shot(dir, player.weapon + "_inspect")
-		player.busy = ""
-		player.act("ADS")
-		await _wait(0.6)
-		await _shot(dir, player.weapon + "_ads")
-		player.busy = ""
-		if w == 0:
-			player.switch_weapon()
+		await _shot(dir, "door_back_to_room2")
+	if _want("guns"):
+		goto(0)
+		robots[0].play("Walk")
+		await _wait(0.5)
+		for w in 2:
+			player.busy = ""
+			player.act("Fire")
+			player._ap().speed_scale = 0.08
+			await _until(player.flash_on, 12.0)
+			player._ap().pause()
+			await _shot(dir, player.weapon + "_fire")
+			player._ap().speed_scale = 1.0
+			player._ap().play()
+			await _wait(1.3)
+			player.busy = ""
+			player.act("Reload" if player.weapon == "pistol" else "ReloadEmpty")
+			await _wait(0.75)
+			await _shot(dir, player.weapon + "_reload")
 			await _wait(1.6)
-			await _shot(dir, "rifle_hold")
+			player.busy = ""
+			player.act("Inspect")
+			await _wait(1.0)
+			await _shot(dir, player.weapon + "_inspect")
+			player.busy = ""
+			player.act("ADS")
+			await _wait(0.6)
+			await _shot(dir, player.weapon + "_ads")
+			player.busy = ""
+			if w == 0:
+				player.switch_weapon()
+				await _wait(1.6)
+				await _shot(dir, "rifle_hold")
+		player.switch_weapon()
+	if _want("look"):
+		# materials from close by: each robot where it stands in Blender, and the two guns turned over
+		for i in rooms.size():
+			goto(i)
+			robots[i].play("Idle")
+			robots[i].ap.pause()
+			var hp := robots[i].hit_point()
+			var off := Vector3(1.0, 0.0, 1.9) if KINDS[i] != "turret" else Vector3(1.2, 0.0, 2.6)
+			player.global_position = Vector3(hp.x + off.x, 0.02 if KINDS[i] == "spider" else (1.1 if KINDS[i] == "drone" else 0.6), hp.z + off.z)
+			var d := hp - (player.global_position + Vector3(0, V2Player.EYE, 0))
+			player._yaw = atan2(-d.x, -d.z)
+			player._pitch = atan2(d.y, Vector2(d.x, d.z).length())
+			player.velocity = Vector3.ZERO
+			player.set_physics_process(false)
+			await _wait(0.5)
+			await _shot(dir, "look_" + KINDS[i])
+			player.set_physics_process(true)
+		goto(0)
+		for w in 2:
+			player.busy = ""
+			player.act("Inspect")
+			await _wait(1.0)
+			player._ap().pause()
+			await _shot(dir, "look_" + player.weapon)
+			player._ap().play()
+			player.busy = ""
+			player.switch_weapon()
+			await _wait(1.5)
+	if _want("ai"):
+		# the robots as enemies: on the move, firing (the game slowed down to catch the flash), wrecked and smoking
+		for i in rooms.size():
+			goto(i)
+			var r := robots[i]
+			r.set_ai(true)
+			r._cool = 0.5
+			await _wait(2.5)
+			await _shot(dir, "ai%d_%s_move" % [i + 1, KINDS[i]])
+			await _until(func() -> bool: return r.state == V2Robot.SHOOT, 25.0)
+			Engine.time_scale = 0.12
+			await _until(r.flash_on, 4.0)
+			Engine.time_scale = 0.02
+			await _shot(dir, "ai%d_%s_fire" % [i + 1, KINDS[i]])
+			Engine.time_scale = 1.0
+			player._yaw = atan2(-(r.hit_point().x - player.global_position.x), -(r.hit_point().z - player.global_position.z))
+			r.hit(9999.0)
+			await _wait(4.0)
+			await _shot(dir, "ai%d_%s_wreck" % [i + 1, KINDS[i]])
+			r.set_ai(false)
+	get_tree().quit()
+
+
+# ---------------------------------------------------------------- enemy check (--enemy-test; runs headless)
+## Plays each room by code, at four times speed: the robot must move (the turret: swing onto the player), stay in
+## its arena, fire, and hurt a player who stands still; the player's own rounds (aimed by code, fired through the
+## real clips) must destroy it, and it must come back. Then the player is left to be shot down and must be revived.
+func _enemy_test() -> void:
+	Engine.time_scale = 4.0
+	player.mouse_look = false
+	var ok := true
+	for i in rooms.size():
+		goto(i)
+		var r := robots[i]
+		r.respawn()
+		r._cool = 0.5
+		player.revive()
+		player._grace = 0.0
+		var shots0 := r.shots_fired
+		var trav0 := r.travelled
+		var hp_min := V2Player.MAX_HP
+		var outside := false
+		var best_aim := 9.0
+		var t := 0.0
+		while t < 24.0:
+			await get_tree().process_frame
+			t += get_process_delta_time()
+			hp_min = minf(hp_min, player.hp)
+			outside = outside or not r.in_arena()
+			if r.kind == "turret" and r._aim_valid:
+				best_aim = minf(best_aim, r.aim_error())
+			if player.down:
+				player.revive()
+				player._grace = 0.0
+		var moved := (best_aim < 0.12) if r.kind == "turret" else (r.travelled - trav0 > 2.0)
+		var a := moved and not outside and r.shots_fired > shots0 and hp_min < V2Player.MAX_HP
+		ok = ok and a
+		print("[enemy] %s as enemy: %s  (travelled %.1f m, best aim %.2f rad, in arena %s, shots %d, player health down to %d)" % [
+			r.kind, "PASS" if a else "FAIL", r.travelled - trav0, best_aim, not outside, r.shots_fired - shots0, hp_min])
+		player.invulnerable = true
+		var hits0 := player.shots_hit
+		t = 0.0
+		while r.state != V2Robot.DEAD and t < 60.0:
+			await get_tree().process_frame
+			t += get_process_delta_time()
+			var d := r.hit_point() - player.cam.global_position
+			player._yaw = atan2(-d.x, -d.z)
+			player._pitch = atan2(d.y, Vector2(d.x, d.z).length())
+			if player.busy == "":
+				player.act("Fire")
+		var killed := r.state == V2Robot.DEAD
+		var t_kill := t
+		t = 0.0
+		while r.state == V2Robot.DEAD and t < 20.0:
+			await get_tree().process_frame
+			t += get_process_delta_time()
+		var back := r.state != V2Robot.DEAD and r.hp == r.max_hp
+		ok = ok and killed and back
+		print("[enemy] %s shot by the player: %s  (%d hits, destroyed after %.1f s, back after %.1f s: %s)" % [
+			r.kind, "PASS" if killed and back else "FAIL", player.shots_hit - hits0, t_kill, t, back])
+		player.invulnerable = false
+	goto(0)
+	player.revive()
+	player._grace = 0.0
+	player.hp = 8.0
+	player._since_hurt = -30.0
+	var d0 := downs
+	var t2 := 0.0
+	while downs == d0 and t2 < 60.0:
+		await get_tree().process_frame
+		t2 += get_process_delta_time()
+	var went_down := downs > d0
+	t2 = 0.0
+	while player.down and t2 < 6.0:
+		await get_tree().process_frame
+		t2 += get_process_delta_time()
+	var revived := went_down and not player.down and player.hp == V2Player.MAX_HP
+	ok = ok and revived
+	print("[enemy] player shot down and revived: %s" % ("PASS" if revived else "FAIL"))
+	print("[enemy] RESULT: %s" % ("PASS" if ok else "FAIL"))
 	get_tree().quit()
