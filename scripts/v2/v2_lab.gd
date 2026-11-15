@@ -190,6 +190,20 @@ func _room(i: int) -> void:
 			l.omni_attenuation = 0.8
 			l.light_cull_mask = _layer(i)
 			room.add_child(l)
+	# under the mezzanine the ceiling's light does not reach: its own strip lights there are two spot lights
+	# (spots, not omnis: a mesh takes 8 of each kind, and the six above, the gun's and a muzzle flash make 8 omnis)
+	for x in [-2.4, 4.0]:
+		var sp := SpotLight3D.new()
+		sp.position = Vector3(x, 2.3, -11.4)
+		sp.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
+		sp.spot_angle = 72.0
+		sp.spot_angle_attenuation = 0.6
+		sp.spot_range = 6.0
+		sp.spot_attenuation = 0.7
+		sp.light_color = Color(0.97, 0.98, 1.0)
+		sp.light_energy = 0.7
+		sp.light_cull_mask = _layer(i)
+		room.add_child(sp)
 	var robot := V2Robot.new()
 	room.add_child(robot)
 	robot.setup(KINDS[i])

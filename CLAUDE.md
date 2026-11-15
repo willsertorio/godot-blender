@@ -153,7 +153,8 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
 - Light (`v2_lab.gd _environment`, tuned against `v2/renders/stage3_scene.png` zone by zone with
   `--capture=DIR --only=tone`): half of it is one DirectionalLight3D straight down (the luminous ceiling: bright
   floor, dimmer walls) and it casts the only shadows (one orthogonal pass; the room shell casts none); six omni
-  lights per room without shadows; ambient 0.16; thin fog (at 0.012 it lifted every dark surface to mid grey); ACES.
+  lights per room without shadows, two spot lights under the mezzanine (spots: a mesh takes 8 lights of each kind,
+  and the omnis are at 8 with the gun's fill and a muzzle flash); ambient 0.16; thin fog (at 0.012 it lifted every dark surface to mid grey); ACES.
   Each room is on its own render layer and its omni lights only reach that layer (`_layer`; the gun's layer follows
   the room the player is in): side by side, a room's big meshes would be in range of more than the 8 lights a mesh
   can take in Compatibility.
@@ -174,7 +175,7 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
   `--capture=DIR --only=tone,rooms,doors,guns,look,ai,wreck` for parts (`tone` = the Blender camera's frame, 15 s;
   `look` = materials close up; `ai` = each robot moving, firing, wrecked; `wreck` = burst + smoke, on request only).
 - Performance: `F3` in the lab shows fps / frame time / draw calls / triangles / objects / video memory / adapter;
-  `-- --perf` prints that line for 12 s and quits; `-- --quality=low` = no shadows, glow or MSAA.
+  `-- --perf` prints that line for 12 s and quits; `-- --quality=low` = no shadows, glow or MSAA (exposed up to match).
   Measured here (counts do not depend on the GPU; fps here is llvmpipe, ~8 whatever is drawn): 334 draw calls,
   706k triangles, 192 MB with shadows; 249 / 629k / 160 MB at low quality. History: shadow-casting omni lights were
   the cost (two per room = 1,935 draw calls, 7.8 M triangles), and the gloves were 65k of each view's faces.
