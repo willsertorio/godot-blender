@@ -291,6 +291,32 @@ func play_runs(n: int) -> void:
 	get_tree().quit()
 
 
+## `--bot-diag`: the player strafes in sector B's hall without firing; what its two spiders do, every two seconds.
+func diag() -> void:
+	await _wait(0.5)
+	game.open_door(0, true)
+	teleport(1, "hn", 0.0)
+	var t := 0.0
+	var next := 0.0
+	while t < 30.0 and game.state == game.PLAYING:
+		var delta := await _frame()
+		t += delta
+		_strafe_t -= delta
+		if _strafe_t <= 0.0:
+			_strafe_t = randf_range(0.35, 0.6)
+			_strafe = -_strafe
+		player.auto_move = Vector3(_strafe, 0, 0)
+		_aim_at(game.robots[0].hit_point(), delta)
+		if t >= next:
+			next += 2.0
+			var line := "[diag] %4.1f s  health %3d  " % [t, player.hp]
+			for r in [game.robots[0], game.robots[1]]:
+				line += " | %s sees %s err %5.1f deg, cool %4.1f, shots %d, at (%.1f, %.1f), %.1f m off" % [V2Robot.STATE_NAMES[r.state], r._sees, rad_to_deg(minf(r._aim_err, 3.14)), r._cool, r.shots_fired,
+					r.position.x, r.position.z, r.global_position.distance_to(player.global_position)]
+			print(line)
+	get_tree().quit()
+
+
 # ---------------------------------------------------------------------------------------------- checks
 func _check(what: String, ok: bool, detail: String = "") -> bool:
 	print("[game] %s: %s%s" % [what, "PASS" if ok else "FAIL", ("  (" + detail + ")") if detail != "" else ""])

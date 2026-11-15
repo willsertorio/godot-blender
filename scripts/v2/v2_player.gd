@@ -54,6 +54,7 @@ var hp := MAX_HP
 var down := false                   # health ran out: the lab puts the player back at the room's start
 var invulnerable := false           # (capture tour, tests)
 var hurt_flash := 0.0               # 1 when hit, fades: the HUD's red flash
+var hurt_from := Vector3.ZERO       # where the round that hit came from (the HUD shows the side)
 var hit_confirm := 0.0              # > 0 just after one of the player's rounds hit a robot
 var shots_hit := 0
 var bot_fire := false               # the trigger held by code (the game's bot and checks)
@@ -209,9 +210,10 @@ func aiming() -> bool:
 
 
 ## A round from a robot.
-func hurt(damage: float, _from: Vector3) -> void:
+func hurt(damage: float, from: Vector3) -> void:
 	if down or invulnerable or _grace > 0.0:
 		return
+	hurt_from = from
 	hp -= damage
 	V2Sfx.play("hurt")
 	hurt_flash = 1.0
@@ -427,8 +429,8 @@ func _physics_process(delta: float) -> void:
 	dir = (Basis(Vector3.UP, _yaw) * dir).normalized()
 	var speed := 6.2 if sprint else (1.7 if crouched else 3.4)
 	# crouching: the eye and the capsule come down together
-	_eye = move_toward(_eye, EYE_CROUCH if crouched else EYE, 3.2 * delta)
-	var h := lerpf(HEIGHT_CROUCH, HEIGHT, inverse_lerp(EYE_CROUCH, EYE, _eye))
+	_eye = move_toward(_eye, 0.32 if (down and rules) else (EYE_CROUCH if crouched else EYE), 3.2 * delta)
+	var h := lerpf(HEIGHT_CROUCH, HEIGHT, clampf(inverse_lerp(EYE_CROUCH, EYE, _eye), 0.0, 1.0))
 	if absf(_capsule.height - h) > 0.001:
 		_capsule.height = h
 		_shape.position.y = h / 2.0

@@ -10,6 +10,7 @@ extends V2World
 ##   Magazines run out (R reloads, an empty gun reloads by itself), the machine gun's rounds are finite, health
 ##   does not come back by itself: crates (E) and some wrecks give ammunition, health cells and med kits (H).
 ##   No pause, no prompts (the GDD's rules); Esc frees the mouse and offers the way back to the title.
+##   F3 shows the frame rate and what a frame costs to draw.
 ##   godot --path . -- --play                 straight into the level
 ##   godot --path . -- --game-test            checks by code, PASS / FAIL (headless: rules; with a display: the walk too)
 ##   godot --path . -- --bot=5                the balance bot plays the level 5 times and prints how it went
@@ -36,7 +37,7 @@ const LEVEL := [
 # The robots of the game against the lab's: [aim lag in seconds (the lab: 0.3), damage x, pauses between bursts /].
 # Tuned with the bot (tools/v2_bot.sh; CLAUDE.md, "V2 game", has the runs). The spider most of all: with the lab's
 # numbers, and with the drone's here, the two spiders of sector B never once hit a bot that keeps moving sideways.
-const TOUGH := {"spider": [0.14, 1.3, 1.3], "drone": [0.24, 1.15, 1.2], "turret": [0.24, 1.15, 1.2]}
+const TOUGH := {"spider": [0.09, 1.3, 1.3], "drone": [0.24, 1.15, 1.2], "turret": [0.24, 1.15, 1.2]}
 const DROP := 0.35                  # chance that a destroyed robot leaves something
 const DROPS := ["ammo", "ammo", "ammo", "health", "health", "kit"]
 const REACH := 2.3                  # how near a door or a crate must be for E
@@ -75,6 +76,10 @@ var _bot: Node
 var _seen: Dictionary = {}          # sectors the player has been in
 var _lamps: Dictionary = {}
 var _banner: Label
+var _from_bars: Array = []          # red bars at the screen's edges: the side a hit came from (top = ahead)
+var _perf: Label                    # F3: frame rate and what the frame costs to draw
+var _perf_t := 0.0
+var _perf_n := 0
 var _banner_t := 0.0
 
 
@@ -120,11 +125,13 @@ func _ready() -> void:
 			capture = a.trim_prefix("--game-capture=")
 		if a.begins_with("--bot"):
 			bot = maxi(int(a.trim_prefix("--bot=")), 1) if a.contains("=") else 3
-	if "--game-test" in args or bot > 0 or capture != "":
+	if "--game-test" in args or bot > 0 or capture != "" or "--bot-diag" in args:
 		_bot = (load("res://scripts/v2/v2_game_bot.gd") as GDScript).new()
 		_bot.game = self
 		add_child(_bot)
-		if capture != "":
+		if "--bot-diag" in args:
+			_bot.diag()
+		elif capture != "":
 			_bot.capture(capture)
 		elif bot > 0:
 			_bot.play_runs(bot)
@@ -156,6 +163,8 @@ func _sector(i: int) -> void:
 			hide_for_rail(room)
 		else:
 			robot.place(Vector3(rs[1], 0.0, rs[2]), rs[3])
+			if rs[0] == "spider":
+				robot._spec.keep = [3.8, 6.0]              # it closes in more than the lab's (5 to 7.5 m): its rounds scatter with its guns' recoil
 			if rs[4] != null:
 				robot.arena = rs[4]
 		robot.destroyed.connect(_on_destroyed)
@@ -513,6 +522,14 @@ func _pickups(delta: float) -> void:
 			node.queue_free()
 
 
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F3:
+		_perf.visible = not _perf.visible
+		_perf.text = "measuring ..."
+		_perf_t = 0.0
+		_perf_n = 0
+
+
 # ---------------------------------------------------------------------------------------------- HUD and screens
 func _hud() -> void:
 	_ui = CanvasLayer.new()
@@ -531,6 +548,12 @@ func _hud() -> void:
 	_goal_text = V2Ui.label(_ui, "", 0.0, 0.0, 26.0, 20.0, 15, V2Ui.CYAN)
 	_note_text = V2Ui.label(_ui, "", 0.5, 1.0, 0.0, -150.0, 17, Color(0.95, 0.98, 1.0), false, HORIZONTAL_ALIGNMENT_CENTER)
 	_banner = V2Ui.label(_ui, "", 0.5, 0.0, 0.0, 90.0, 40, Color(0.95, 0.98, 1.0), true, HORIZONTAL_ALIGNMENT_CENTER)
+	# where a hit came from: ahead, right, behind, left
+	for spec in [[0.5, 0.5, -90.0, -150.0, 180.0, 6.0], [0.5, 0.5, 150.0, -90.0, 6.0, 180.0], [0.5, 0.5, -90.0, 144.0, 180.0, 6.0], [0.5, 0.5, -156.0, -90.0, 6.0, 180.0]]:
+		var bar := V2Ui.rect(_ui, Color(1.0, 0.2, 0.12, 0.0), spec[0], spec[1], spec[2], spec[3], spec[4], spec[5])
+		_from_bars.append(bar)
+	_perf = V2Ui.label(_ui, "", 0.0, 0.0, 26.0, 46.0, 14, Color(1.0, 0.9, 0.5))
+	_perf.visible = false
 	# Esc: the mouse is free; the way back
 	_menu = Control.new()
 	_menu.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -559,6 +582,19 @@ func _hud_update(delta: float) -> void:
 	_banner.modulate.a = clampf(_banner_t, 0.0, 1.0) * clampf((2.6 - _banner_t) * 4.0, 0.0, 1.0)
 	_note_text.modulate.a = clampf(_note_t, 0.0, 1.0)
 	_flash.color.a = player.hurt_flash * 0.3
+	var to := player.hurt_from - player.global_position
+	var side := wrapi(int(round(angle_difference(player._yaw, atan2(-to.x, -to.z)) / (-PI / 2.0))), 0, 4)      # 0 ahead, 1 right, 2 behind, 3 left
+	for k in 4:
+		(_from_bars[k] as ColorRect).color.a = player.hurt_flash * 0.75 if (k == side and state == PLAYING) else 0.0
+	if _perf.visible:
+		_perf_t += delta
+		_perf_n += 1
+		if _perf_t >= 1.0:
+			_perf.text = "%.0f fps (%.1f ms)   draw calls %d   triangles %dk   video memory %.0f MB   F3 hides this" % [_perf_n / _perf_t, 1000.0 * _perf_t / _perf_n,
+				Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1000.0,
+				Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0]
+			_perf_t = 0.0
+			_perf_n = 0
 	_low_hp.color.a = clampf((35.0 - player.hp) / 35.0, 0.0, 1.0) * (0.1 + 0.05 * sin(elapsed * 5.0)) if state == PLAYING else 0.0
 	var dot := player.aim_dot if player.weapon in V2Player.AUTO else size / 2.0
 	_dot.visible = state == PLAYING and dot.x >= 0.0 and not (player.busy in V2Player.NO_CURSOR)

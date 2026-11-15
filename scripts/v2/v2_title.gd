@@ -8,7 +8,7 @@ extends V2World
 const LAB := "res://scenes/v2_lab.tscn"
 const GAME := "res://scenes/v2_game.tscn"
 const LAB_ARGS := ["--lab", "--enemy-test", "--gun-test", "--input-test", "--perf", "--preview", "--concept", "--doors", "--quick"]
-const GAME_ARGS := ["--play", "--game-test"]
+const GAME_ARGS := ["--play", "--game-test", "--bot-diag"]
 
 var _cam: Camera3D
 var _t := 0.0
@@ -69,7 +69,7 @@ func _menu() -> void:
 	V2Ui.button(ui, "QUIT", 0.0, 0.0, 200.0, 398.0, func() -> void: get_tree().quit(), 280.0)
 	V2Ui.label(ui, "PLAY: the level, four sectors, to the exit gate.\nLAB: three test rooms, one robot each, to try the guns and\nwatch the animations (M: clip preview, N: next clip).",
 		0.0, 0.0, 62.0, 470.0, 14, Color(0.62, 0.7, 0.76))
-	V2Ui.label(ui, "WASD move  ·  mouse look  ·  LMB fire  ·  C or RMB aim  ·  R reload\nQ or 1 / 2 switch gun  ·  E open  ·  H med kit  ·  Shift sprint\nX crouch  ·  Space jump  ·  Esc menu",
+	V2Ui.label(ui, "WASD move  ·  mouse look  ·  LMB fire  ·  C or RMB aim  ·  R reload\nQ or 1 / 2 switch gun  ·  E open  ·  H med kit  ·  Shift sprint\nX crouch  ·  Space jump  ·  Esc menu  ·  F3 frame rate",
 		0.0, 1.0, 62.0, -96.0, 14, Color(0.62, 0.7, 0.76))
 
 

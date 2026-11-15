@@ -153,7 +153,7 @@ var _sink := 0.0                  # how much of that is taken out now
 
 func setup(robot: String) -> void:
 	kind = robot
-	_spec = SPEC[kind]
+	_spec = (SPEC[kind] as Dictionary).duplicate()     # (its own copy: the game changes a robot's numbers)
 	max_hp = _spec.hp
 	hp = max_hp
 	arena = _spec.get("arena", Rect2())
@@ -571,17 +571,24 @@ func _eye() -> Vector3:
 
 
 func _look(delta: float) -> void:
-	var chest := player.chest()
+	# It sees the player if it can see their chest or their head; it aims at the part it sees. (With the chest
+	# alone, a player behind the stairs' railings could see and shoot a spider that could not see them: measured
+	# with the bot, the two spiders of the game's sector B never fired a round at it.)
+	var seen := Vector3.INF
 	_sees = false
 	if active and not player.down:
-		var q := PhysicsRayQueryParameters3D.create(_eye(), chest)
-		q.exclude = _bodies
-		var res := get_world_3d().direct_space_state.intersect_ray(q)
-		_sees = not res.is_empty() and res.collider == player
+		for point in [player.chest(), player.cam.global_position - Vector3(0.0, 0.08, 0.0)]:
+			var q := PhysicsRayQueryParameters3D.create(_eye(), point)
+			q.exclude = _bodies
+			var res := get_world_3d().direct_space_state.intersect_ray(q)
+			if not res.is_empty() and res.collider == player:
+				_sees = true
+				seen = point
+				break
 	if _sees:
 		alerted = true
 		_unseen = 0.0
-		_aim_point = _aim_point.lerp(chest, 1.0 - exp(-delta / aim_lag)) if _aim_valid else chest
+		_aim_point = _aim_point.lerp(seen, 1.0 - exp(-delta / aim_lag)) if _aim_valid else seen
 		_aim_valid = true
 	else:
 		_unseen += delta

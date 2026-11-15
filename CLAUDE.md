@@ -322,7 +322,16 @@ User decisions: the real game has PLAY and LAB; **one level only**.
 - Robots in the game (`respawns = false`): a wreck stays (its smoke stops after 40 s, its sparks become rare) and
   **does not block the player** (`V2Robot._solid`: a wreck's hit boxes go to physics layer 2, which rounds still
   strike; a wreck in a doorway or in the gap by the stairs would have shut the level). They are a little sharper
-  than the lab's (`TOUGH` in v2_game.gd: aim lag 0.24 s instead of 0.3, damage x1.15, pauses between bursts /1.2).
+  than the lab's (`TOUGH` in v2_game.gd: drone and turret aim lag 0.24 s instead of 0.3, damage x1.15, pauses
+  between bursts /1.2; the spider lag 0.09 s, damage x1.3, pauses /1.3, and it closes to 3.8-6 m).
+- **Balance, measured with the bot** (`tools/v2_bot.sh`; about 8 minutes a run under software GL): 4 of 4 runs
+  won in about 130 s, all 8 robots destroyed, 49 / 60 / 53 / 99 health left, 0 to 2 med kits used. Sector D (spider +
+  drone + turret at once) costs most. `-- --bot-diag` prints what sector B's spiders do against a player who only
+  strafes: with the lab's numbers 66 rounds, 1 hit in 30 s (their rounds scatter several degrees with the guns'
+  recoil and trail the target); with the game's, 3 hits. The bot takes no damage in B because it fights from
+  beside the stairs, which stop the spiders' low rounds: cover that a player will find too. The bot is better at
+  strafing than a person and worse at using cover: read its numbers as "the level can be won with margin", not
+  as how hard it feels. Held down, the machine gun climbs off its target: the bot fires bursts of half a second.
   Spiders hold their hall, each in its own `arena`: **a spider cannot pass a doorway** (it is about 1.9 m across
   its legs, the doorway 1.3 m). Drones that have seen the player and lost them follow into the next sector if the
   door is open (`V2Robot.travel`, state TRAVEL): a drone is 1.7 m wide, so it goes through **on edge** (rolled 83
@@ -333,8 +342,13 @@ User decisions: the real game has PLAY and LAB; **one level only**.
 - Props: `v2/scripts/build_props.py` -> `v2/props.blend` + `assets/models/v2/props.glb` (crate with `Crate_Lid`,
   `AmmoBox`, `HealthCell`, `MedKit`, `ExitGate`; the robots' materials by name; the gate's field is
   `v2_field.gdshader`). The game duplicates each by name. Their collision is boxes added in code.
+- **A robot sees the player by their chest or their head** (`V2Robot._look`, lab too) and aims at the part it
+  sees. With the chest alone a player under the mezzanine could shoot a spider through the stairs' railings while
+  it could not see them: in nine bot runs the two spiders of sector B never fired once.
 - HUD / screens: `scripts/v2/v2_ui.gd` (`V2Ui`: labels, bars, buttons; headings in Kenney Future: no K or X).
-  Health, med kits, gun + rounds, sector line, a note line (what was picked up), cursor, hurt flash. No prompts and
+  Health, med kits, gun + rounds, sector line, a note line (what was picked up), the sector's name on entry,
+  cursor, hurt flash with a red bar on the side the hit came from (top = ahead), F3 = frame rate / draw calls.
+  Going down, the view sinks to the floor. No prompts and
   no pause (GDD): Esc frees the mouse and shows RESUME / TITLE while the game goes on. End screen: AGAIN / TITLE.
 - Checks, bot, pictures (`scripts/v2/v2_game_bot.gd`):
   `godot --headless --path . -- --game-test` = the rules (magazines, crate, kit, door, a drone following through
