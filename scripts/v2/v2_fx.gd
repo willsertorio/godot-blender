@@ -17,6 +17,13 @@ const GUNSMOKE := Color(0.82, 0.82, 0.8)
 const MAX_MARKS := 40
 
 
+## A new scene: the marks of the last one are gone with it.
+static func reset() -> void:
+	_marks.clear()
+	_mark_i = 0
+	hold = 1.0
+
+
 static func _unshaded(key: String, color: Color, energy: float, alpha: float = 1.0) -> StandardMaterial3D:
 	if not _cache.has(key):
 		var m := StandardMaterial3D.new()
@@ -234,6 +241,8 @@ static func impact(pos: Vector3, normal: Vector3, metal: bool = false) -> void:
 	if root == null:
 		return
 	V2Sfx.play("impact_metal" if metal else "impact_concrete", pos)
+	if not metal and randf() < 0.18:
+		V2Sfx.play("ricochet", pos)                        # one round in five or six glances off with a whine
 	var p := CPUParticles3D.new()
 	var streak := BoxMesh.new()
 	streak.size = Vector3(0.005, 0.07, 0.005)

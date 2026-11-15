@@ -442,6 +442,9 @@ def recipes():
                                                          bf + "hit_05.ogg", bf + "hit_09.ogg")]
     r["impact_metal"] = [level(whole(o(n))) for n in (bf + "metal_hit_01.ogg", bf + "metal_hit_03.ogg", bf + "metal_hit_06.ogg",
                                                       "sfx_100_v2/sfx100v2_metal_hit_02.ogg")]
+    # a round glancing off: a metal hit with its pitch falling away (resampled at a sliding rate): the whine of a ricochet
+    r["ricochet"] = [fade(eq(glide(whole(o(bf + "metal_hit_%02d.ogg" % i)), rates, 0.42), hp(600)), 0.001, 0.25)
+                     for i, rates in ((1, (1.5, 1.25, 0.85, 0.6)), (3, (1.7, 1.3, 0.9, 0.7)), (6, (1.4, 1.1, 0.75, 0.5)))]
     r["robot_hit"] = [level(pitch(whole(o(n)), 0.8)) for n in (bf + "metal_hit_02.ogg", bf + "metal_hit_04.ogg", bf + "metal_hit_05.ogg")] \
         + [level(whole(o("sfx_100_v2/sfx100v2_metal_hit_01.ogg")))]
     # a round passing the head: short swishes, which as recorded are a low "fwip" (80-500 Hz); a bullet's pass is
@@ -495,6 +498,19 @@ def recipes():
                       blast(layer((whole(o(bang + "cannon_01.ogg"), t_out=0.4), 1.0, 0.0), (pitch(whole(o(bang + "bang_03.ogg")), 0.9), 0.9, 0.0)), 82)]
     # a robot coming back: the fan again, run up instead of down
     r["power_up"] = [fade(glide(load(o("fan_interval.wav")), (0.35, 1.5), 1.3), 0.15, 0.35)]
+    # ---- the game: doors, crates, what is picked up, the exit (the 100 CC0 SFX #2 pack, and the motor loop again)
+    sx = "sfx_100_v2/sfx100v2_"
+    motor = eq(glide(fan, (1.2, 2.1, 2.0, 1.0), 0.75), hp(220), lp(3000))
+    r["door"] = [layer((level(whole(o(sx + "door_05.ogg")), -6.0), 1.0, 0.0), (level(fade(motor, 0.03, 0.2), -9.0), 1.0, 0.05),
+                       (level(whole(o(sx + "door_03.ogg")), -3.0), 1.0, 0.6))]            # latch, the leaves run on their motor, home with a thud
+    r["crate"] = [layer((level(whole(o(sx + "lock_open_01.ogg")), -6.0), 1.0, 0.0), (level(whole(o(sx + "door_01.ogg")), -4.0), 1.0, 0.3))]
+    r["pickup"] = [pitch(whole(o(sx + "items_01.ogg")), 0.8), pitch(whole(o(sx + "items_02.ogg")), 0.8)]
+    r["dry"] = [fade(whole(o(sx + "switch_01.ogg"))[:int(0.14 * SR)], 0.001, 0.05)]      # an empty gun
+    r["ui"] = [whole(o(sx + "switch_02.ogg"))]
+    r["heal"] = [layer((level(whole(o(sx + "air_03.ogg")), -3.0), 1.0, 0.0), (level(fade(whole(o(sx + "air_02.ogg")), 0.05, 0.6), -12.0), 1.0, 0.2))]
+    r["exit_hum"] = [loop(load(o(sx + "loop_machine_04.ogg")), 0.5)]                      # loop: the gate's field
+    r["exit"] = [layer((level(fade(glide(fan, (0.5, 2.4), 1.6), 0.2, 0.5), -6.0), 1.0, 0.0),
+                       (level(fade(whole(o(sx + "air_01.ogg")), 0.3, 1.2), -6.0), 1.0, 0.1))]   # through the gate
     r["zap"] = [level(whole(o("spark.wav")), -3.0), level(whole(o("continuousspark.wav")), -3.0)]     # a small Tesla coil
     return r
 

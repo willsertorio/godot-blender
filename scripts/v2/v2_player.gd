@@ -31,8 +31,14 @@ const DAMAGE := {"pistol": 34.0, "rifle": 12.0}
 const MAX_HP := 100.0
 const REGEN_AFTER := 4.0            # seconds without a hit before health comes back
 const REGEN := 15.0                 # health per second
+# the game's rules (`rules`): magazines, the machine gun's reserve, med kits
+const MAG := {"pistol": 15, "rifle": 30}
+const RESERVE_MAX := 240
+const KIT_HEAL := 40.0
+const MAX_KITS := 3
 
 signal died
+signal interact                     # E: the game opens the door or the crate the player stands at
 
 var cam: Camera3D
 var weapon := "pistol"
@@ -50,6 +56,14 @@ var invulnerable := false           # (capture tour, tests)
 var hurt_flash := 0.0               # 1 when hit, fades: the HUD's red flash
 var hit_confirm := 0.0              # > 0 just after one of the player's rounds hit a robot
 var shots_hit := 0
+var bot_fire := false               # the trigger held by code (the game's bot and checks)
+var grab := true                    # a click captures the mouse when it is free (the lab); the game's menu does it itself
+var rules := false                  # the game: magazines run out, health does not come back by itself (the lab: neither)
+var mag := {"pistol": 15, "rifle": 30}      # rounds in each gun
+var reserve := 60                   # machine gun rounds carried; the pistol's never run out
+var kits := 0
+var _want_reload := false           # the magazine ran dry: reload as soon as the hands are free
+var _dry_t := 0.0
 var _since_hurt := 99.0
 var _grace := 0.0
 var _sprinting := false
@@ -233,6 +247,12 @@ func act(clip: String) -> void:
 	var ap := _ap()
 	if down:
 		return
+	if clip == "Fire" and rules and mag[weapon] <= 0:
+		if _dry_t <= 0.0 and busy in ["", "ADS"]:
+			_dry_t = 0.4
+			V2Sfx.play("dry")                              # the click of an empty gun
+			_want_reload = true
+		return
 	if clip == "Fire" and busy in ["ADS", "ADSFire"]:
 		clip = "ADSFire"
 		if busy == "ADS" and ap.current_animation != &"AimHold":
@@ -261,7 +281,68 @@ func _release() -> void:
 		busy = ""                                      # (_process blends into Idle / Walk)
 
 
+## R: the reload that fits what is in the gun. False if there is nothing to do (full, or no rounds to put in).
+func reload() -> bool:
+	if not rules:
+		act("Reload" if weapon == "pistol" else "ReloadTactical")
+		return true
+	if mag[weapon] >= MAG[weapon] or (weapon == "rifle" and reserve <= 0):
+		return false
+	if busy in ["ADS", "Sprint"]:
+		busy = ""
+	act("Reload" if weapon == "pistol" else ("ReloadEmpty" if mag[weapon] <= 0 else "ReloadTactical"))
+	return busy.begins_with("Reload")
+
+
+## The fresh magazine is in (the moment of the clip's "magazine in" sound).
+func _fill() -> void:
+	if weapon == "pistol":
+		mag[weapon] = MAG[weapon]
+	else:
+		var take: int = mini(MAG[weapon] - mag[weapon], reserve)
+		mag[weapon] += take
+		reserve -= take
+
+
+## What a crate gives. Each returns false if the player has no use for it (it then stays where it lies).
+func add_ammo(rounds: int) -> bool:
+	if reserve >= RESERVE_MAX:
+		return false
+	reserve = mini(reserve + rounds, RESERVE_MAX)
+	return true
+
+
+func add_health(points: float) -> bool:
+	if hp >= MAX_HP or down:
+		return false
+	hp = minf(hp + points, MAX_HP)
+	return true
+
+
+func add_kit() -> bool:
+	if kits >= MAX_KITS:
+		return false
+	kits += 1
+	return true
+
+
+## H: a med kit.
+func use_kit() -> bool:
+	if kits <= 0 or hp >= MAX_HP or down:
+		return false
+	kits -= 1
+	hp = minf(hp + KIT_HEAL, MAX_HP)
+	V2Sfx.play("heal")
+	return true
+
+
+func select_weapon(w: String) -> void:
+	if w != weapon and w in WEAPONS and not down:
+		switch_weapon()
+
+
 func switch_weapon() -> void:
+	_want_reload = false
 	_views[weapon].scene.visible = false
 	weapon = WEAPONS[(WEAPONS.find(weapon) + 1) % WEAPONS.size()]
 	_views[weapon].scene.visible = true
@@ -290,7 +371,8 @@ func _input(event: InputEvent) -> void:
 		_pitch = clampf(_pitch - event.relative.y * sens, -1.45, 1.45)
 	elif event is InputEventMouseButton and event.pressed:
 		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
-			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+			if grab:
+				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		elif event.button_index == MOUSE_BUTTON_LEFT:
 			act("Fire")
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
@@ -298,9 +380,21 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventKey and event.pressed and not event.echo:
 		match event.keycode:
 			KEY_R:
-				act("Reload" if weapon == "pistol" else "ReloadTactical")
+				reload()
 			KEY_T:
-				act("Reload" if weapon == "pistol" else "ReloadEmpty")
+				if not rules:
+					act("Reload" if weapon == "pistol" else "ReloadEmpty")
+			KEY_E:
+				interact.emit()
+			KEY_H:
+				if rules:
+					use_kit()
+			KEY_1:
+				if rules:
+					select_weapon("pistol")
+			KEY_2:
+				if rules:
+					select_weapon("rifle")
 			KEY_F:
 				act("Inspect")
 			KEY_Q:
@@ -369,7 +463,11 @@ func _process(delta: float) -> void:
 	_grace = maxf(_grace - delta, 0.0)
 	hurt_flash = maxf(hurt_flash - delta * 2.5, 0.0)
 	hit_confirm = maxf(hit_confirm - delta, 0.0)
-	if not down and _since_hurt > REGEN_AFTER:
+	_dry_t = maxf(_dry_t - delta, 0.0)
+	if rules and _want_reload and busy in ["", "ADS"] and not down:
+		_want_reload = false
+		reload()
+	if not rules and not down and _since_hurt > REGEN_AFTER:
 		hp = minf(hp + REGEN * delta, MAX_HP)
 	rotation.y = _yaw
 	# The camera: the player's pitch, then the camera motion of the gun's clip (view punch, walk bob, burst
@@ -382,7 +480,7 @@ func _process(delta: float) -> void:
 	cam.transform = ct
 	var ap := _ap()
 	var view: Dictionary = _views[weapon]
-	var held := not down and mouse_look and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+	var held := not down and (bot_fire or (mouse_look and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)))
 	if busy == "ADS":                              # hold the aim while the button is down, then lower the gun
 		if ap.current_animation == &"ADS" and aiming() and ap.current_animation_position >= ADS_IN[weapon]:
 			ap.play("AimHold", 0.05)
@@ -423,6 +521,8 @@ func _process(delta: float) -> void:
 	for c in CUES[weapon].get(cue_clip, []):
 		if c[0] > _cue.pos and c[0] <= cue_pos:
 			V2Sfx.play(c[1])
+			if rules and String(c[1]).ends_with("mag_in"):
+				_fill()
 	_cue.pos = cue_pos
 	# automatic fire stops when the button is let go, once a round has left: no more rounds, the gun settles
 	if weapon in AUTO and busy in ["Fire", "ADSFire"] and not held and ap.current_animation == busy:
@@ -430,6 +530,14 @@ func _process(delta: float) -> void:
 		if float(view.ev.get("pos", -1.0)) >= float(first[0]) and view.ev.get("clip", "") == busy:
 			_release()
 	for node in V2Fx.fired(ap, _views[weapon].events, _views[weapon].ev, _views[weapon].flashes):   # a round leaves the muzzle
+		if rules:
+			if mag[weapon] <= 0:
+				continue                                   # (the clip had more rounds in it than the magazine)
+			mag[weapon] -= 1
+			if mag[weapon] <= 0:
+				_want_reload = true
+				if weapon in AUTO:
+					_release.call_deferred()               # the gun stops; the reload follows
 		var from := (node as Node3D).global_position
 		var aim := aim_dir()
 		var to := cam.global_position + aim * 60.0

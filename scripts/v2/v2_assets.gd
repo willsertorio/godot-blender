@@ -12,6 +12,8 @@ const SPECIAL := {  # materials that are procedural in Blender
 	"StudioDark": {"color": Color(0.13, 0.14, 0.16), "rough": 0.6},
 	"StudioBlock": {"color": Color(0.50, 0.53, 0.57), "rough": 0.75},
 	"StudioLight": {"color": Color(1, 1, 1), "rough": 0.5, "emit": Color(0.97, 0.98, 1.0), "energy": 2.6},
+	# the game's props (v2/scripts/build_props.py): the exit gate's light strips; its field is v2_field.gdshader
+	"ExitLight": {"color": Color(0.05, 0.03, 0.08), "rough": 0.5, "emit": Color(0.71, 0.55, 1.0), "energy": 3.0},
 }
 
 # Wear of the guns' and robots' paint (the numbers of the Blender materials: v2/scripts/build_*.py), drawn by
@@ -118,6 +120,10 @@ static func material(mat_name: String, mesh_key: String = "", asset: String = ""
 		var gr := ShaderMaterial.new()
 		gr.shader = load("res://assets/shaders/v2_grid.gdshader")
 		m = gr
+	elif mat_name == "ExitField":
+		var fl := ShaderMaterial.new()
+		fl.shader = load("res://assets/shaders/v2_field.gdshader")
+		m = fl
 	elif mat_name == "Hazard":
 		var hz := ShaderMaterial.new()
 		hz.shader = load("res://assets/shaders/v2_hazard.gdshader")

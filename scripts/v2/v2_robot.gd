@@ -13,8 +13,8 @@ extends Node3D
 ## A hit pushes the robot: the body is knocked back and tilted on springs and it is shoved a little way.
 ## Preview mode (set_ai(false)): the robot stands where it stands in the Blender scene and cycles through its clips.
 
-enum { ROAM, ENGAGE, AIM, SHOOT, DEAD, PREVIEW }
-const STATE_NAMES := ["roam", "engage", "aim", "shoot", "dead", "preview"]
+enum { ROAM, ENGAGE, AIM, SHOOT, DEAD, PREVIEW, TRAVEL }
+const STATE_NAMES := ["roam", "engage", "aim", "shoot", "dead", "preview", "travel"]
 const ORDER := {
 	"spider": ["Idle", "Shoot", "Walk", "Run", "Death"],
 	"drone": ["Idle", "Shoot", "Fly", "Death"],
@@ -53,6 +53,16 @@ const DIVE := 0.6                # the drone shot down: its Death clip's fall is
 const ROOM := Rect2(-3.6, -13.0, 9.0, 15.0)     # where a wreck may be shoved to and the falling drone may fly (room frame)
 const BLAST := [3.5, 40.0]                      # the drone's explosion: reach (m), damage at its centre
 const RESPAWN := 6.0             # seconds a wreck lies before the robot is back
+# The drone going from room to room (the game): it is 1.7 m across and a doorway 1.3, so it goes through on edge:
+# rolled onto its side, low, nose first. [height of its middle, roll in radians] of that attitude.
+const EDGE := [1.2, 1.45]
+# Its way through a room (room frame, x z), found by sweeping its box through the room's collision: from the hall
+# to the right door round the corner of the block beside it; from the left door into the hall through the gap
+# between the stairs and a post (1.4 m wide).
+const WAY := {"in": Vector2(2.2, -6.2), "gate": Vector2(3.8, -7.4), "right_pre": Vector2(4.6, -9.3), "right": Vector2(5.5, -10.2),
+	"left": Vector2(-3.9, -10.35), "gap": Vector2(-1.3, -10.45), "hall": Vector2(-1.3, -9.0)}
+
+signal destroyed(robot: V2Robot)
 
 var kind := ""
 var ap: AnimationPlayer
@@ -66,9 +76,20 @@ var auto := true                  # preview: cycle through the clips
 var shots_fired := 0
 var travelled := 0.0
 var kills := 0                    # times it was destroyed
+var respawns := true              # the lab: a wreck is replaced after RESPAWN seconds. The game: it stays a wreck
+var arena := Rect2()              # the part of its room's floor it may be in (room frame): SPEC's, or its own (the game)
+var rail := Vector2.ZERO          # turret: the z it may travel between along its ceiling rail (room frame); equal = fixed
+var show_label := true
+var alerted := false              # it has seen the player or been hit by them
+var world: V2World                # the game: the rooms, for a drone that goes from one to the next
+var room := 0                     # which room it is in
+var _route: Array = []            # travel: [{p: Vector2 (room frame), edge: bool, cross: int}, ...]
+var _roll := 0.0                  # drone: rolled onto its side (travel through a doorway)
+var _rail_dir := 1.0
 var _spec: Dictionary
 var _root: Node3D                 # the glb's <Kind>_Root joint, re-seated on this node
 var _bodies: Array[RID] = []        # the hit boxes, one per part (on its joint)
+var _solids: Array[StaticBody3D] = []
 var _flop: Dictionary = {}          # joint -> {off, vel (axis * angle, the joint's frame), base, mine}
 var _spin := 0.0                    # drone, shot down: seconds of flight out of control still to go
 var _spin_total := 1.0
@@ -130,6 +151,7 @@ func setup(robot: String) -> void:
 	_spec = SPEC[kind]
 	max_hp = _spec.hp
 	hp = max_hp
+	arena = _spec.get("arena", Rect2())
 	var scene: Node3D = (load(V2Assets.DIR + kind + ".glb") as PackedScene).instantiate()
 	add_child(scene)
 	V2Assets.apply(scene, kind)
@@ -198,6 +220,7 @@ func _part_boxes(scene: Node) -> void:
 		body.set_meta("joint", n)
 		n.add_child(body)
 		_bodies.append(body.get_rid())
+		_solids.append(body)
 		_parts.append([n, box.get_center()])
 
 
@@ -311,6 +334,32 @@ func _go_home() -> void:
 		rotation.y = _home_yaw
 
 
+## Stand it somewhere else in its room than where the Blender scene has it (the game). yaw in degrees.
+func place(at: Vector3, yaw_deg: float) -> void:
+	_home = Vector3(at.x, 0.0, at.z)
+	_home_yaw = deg_to_rad(yaw_deg)
+	_go_home()
+	_target = position
+
+
+## Turret: a rail under the ceiling from z0 to z1 (room frame) that its pylon runs along, and the carriage it hangs
+## from. Call before the room's render layer is set.
+func set_rail(z0: float, z1: float) -> void:
+	rail = Vector2(minf(z0, z1), maxf(z0, z1))
+	var top := _seat.y + 1.7                           # the ceiling: the pylon's upper end
+	for spec in [[Vector3(0.5, 0.05, rail.y - rail.x + 0.9), Vector3(_home.x, top - 0.025, (rail.x + rail.y) / 2.0), "DarkSteel", get_parent()],
+			[Vector3(0.09, 0.07, rail.y - rail.x + 0.9), Vector3(_home.x - 0.17, top - 0.085, (rail.x + rail.y) / 2.0), "Steel", get_parent()],
+			[Vector3(0.09, 0.07, rail.y - rail.x + 0.9), Vector3(_home.x + 0.17, top - 0.085, (rail.x + rail.y) / 2.0), "Steel", get_parent()],
+			[Vector3(0.62, 0.1, 0.62), Vector3(0.0, top - 0.17, 0.0), "DarkSteel", self]]:
+		var mi := MeshInstance3D.new()
+		var box := BoxMesh.new()
+		box.size = spec[0]
+		mi.mesh = box
+		mi.material_override = V2Assets.material(spec[2])
+		(spec[3] as Node3D).add_child(mi)
+		mi.position = spec[1]
+
+
 ## Everything this script adds to the clips back to nothing (aim, knock, tilt, the wreck's sink).
 func _settle() -> void:
 	_ayaw = 0.0
@@ -325,6 +374,8 @@ func _settle() -> void:
 	_spin = 0.0
 	_exploded = true
 	_crashed = true
+	_route.clear()
+	_roll = 0.0
 	_seat.y = _seat_y
 	for j in _flop:
 		(j as Node3D).transform = _flop[j].base
@@ -332,7 +383,15 @@ func _settle() -> void:
 	_pose()
 
 
+## A working robot stands in the player's way; a wreck does not (rounds still strike it: they ask every layer).
+## A wreck that blocked could shut a doorway or the gap by the stairs for good.
+func _solid(on: bool) -> void:
+	for b in _solids:
+		b.collision_layer = 1 if on else 2
+
+
 func respawn() -> void:
+	_solid(true)
 	var was_wreck := state == DEAD
 	hp = max_hp
 	state = ROAM
@@ -384,6 +443,8 @@ func hit(damage: float = 34.0, dir: Vector3 = Vector3.ZERO, point: Vector3 = Vec
 		hp = 0.0
 		kills += 1
 		state = DEAD
+		_solid(false)
+		destroyed.emit(self)
 		_dead_for = 0.0
 		_short_t = randf_range(0.25, 0.6)
 		V2Fx.set_smoke(_smoke, true)
@@ -411,6 +472,7 @@ func hit(damage: float = 34.0, dir: Vector3 = Vector3.ZERO, point: Vector3 = Vec
 			V2Sfx.play("power_down", hit_point())
 	else:
 		_flinch = 1.0
+		alerted = true
 		_cool = maxf(_cool, 0.3)                       # it loses its aim for a moment
 		if state == ROAM and kind != "turret":
 			_engage()                                  # it knows where that came from
@@ -427,6 +489,8 @@ func _shorts(delta: float) -> void:
 		return
 	var calm := smoothstep(0.5, 5.0, _dead_for)
 	_short_t = randf_range(lerpf(0.25, 1.2, calm), lerpf(0.9, 3.2, calm))
+	if not respawns:
+		_short_t *= 1.0 + smoothstep(8.0, 40.0, _dead_for) * 5.0      # (and its short circuits become rare)
 	var part: Array = _parts[randi() % _parts.size()]
 	var at: Vector3 = (part[0] as Node3D).global_transform * (part[1] as Vector3)
 	V2Fx.sparkle(at, randi_range(10, 20), -2.0 - 4.0 * calm)
@@ -510,6 +574,7 @@ func _look(delta: float) -> void:
 		var res := get_world_3d().direct_space_state.intersect_ray(q)
 		_sees = not res.is_empty() and res.collider == player
 	if _sees:
+		alerted = true
 		_unseen = 0.0
 		_aim_point = _aim_point.lerp(chest, 1.0 - exp(-delta / AIM_LAG)) if _aim_valid else chest
 		_aim_valid = true
@@ -579,18 +644,18 @@ func _local(p: Vector3) -> Vector3:
 
 
 func _clamp_arena(p: Vector3) -> Vector3:
-	var a: Rect2 = _spec.arena
+	var a: Rect2 = arena
 	return Vector3(clampf(p.x, a.position.x, a.end.x), 0.0, clampf(p.z, a.position.y, a.end.y))
 
 
 func in_arena(margin: float = 0.05) -> bool:
 	if kind == "turret":
-		return position.distance_to(_home) < 0.01
-	return (_spec.arena as Rect2).grow(margin).has_point(Vector2(position.x, position.z))
+		return absf(position.x - _home.x) < 0.01 and position.z >= minf(rail.x, _home.z) - 0.01 and position.z <= maxf(rail.y, _home.z) + 0.01
+	return arena.grow(margin).has_point(Vector2(position.x, position.z))
 
 
 func _pick_roam() -> void:
-	var a: Rect2 = _spec.arena
+	var a: Rect2 = arena
 	var pl := _local(player.global_position)
 	for k in 10:
 		var c := Vector3(randf_range(a.position.x, a.end.x), 0.0, randf_range(a.position.y, a.end.y))
@@ -710,6 +775,13 @@ func _servo(delta: float, on: bool) -> void:
 func _mobile(delta: float) -> void:
 	var clips: Array = _spec.clips
 	_own_vel = Vector3.ZERO                            # (_move sets it when it moves)
+	if state == TRAVEL:
+		_servo(delta, false)
+		_travel(delta)
+		return
+	if kind == "drone":
+		_roll = move_toward(_roll, 0.0, 2.5 * delta)
+		_seat.y = move_toward(_seat.y, _seat_y, 1.5 * delta)
 	if state != ROAM and _unseen > 3.0:                # lost the player
 		state = ROAM
 		_pick_roam()
@@ -753,6 +825,70 @@ func _mobile(delta: float) -> void:
 				_engage()
 
 
+## The drone: go to the next room on the right (way = 1) or the left (-1), through the doorway, and take up the
+## fight there. `world` must be set (the game).
+func travel(way: int) -> void:
+	if kind != "drone" or world == null or state == DEAD or state == TRAVEL:
+		return
+	if room + way < 0 or room + way >= world.rooms.size():
+		return
+	var e := true
+	if way > 0:                                            # out by the right door, in by the next room's left door
+		_route = [{"p": WAY["in"], "edge": false, "cross": 0}, {"p": WAY.gate, "edge": false, "cross": 0},
+			{"p": WAY.right_pre, "edge": e, "cross": 0}, {"p": WAY.right, "edge": e, "cross": 0},
+			{"p": Vector2(V2World.XR + 0.3, V2World.DOOR_Z), "edge": e, "cross": 1},
+			{"p": WAY.left, "edge": e, "cross": 0}, {"p": WAY.gap, "edge": e, "cross": 0}, {"p": WAY.hall, "edge": e, "cross": 0}]
+	else:                                                  # out by the left door, in by the next room's right door
+		_route = [{"p": WAY["in"], "edge": false, "cross": 0}, {"p": WAY.hall, "edge": false, "cross": 0},
+			{"p": WAY.gap, "edge": e, "cross": 0}, {"p": WAY.left, "edge": e, "cross": 0},
+			{"p": Vector2(V2World.XL - 0.3, WAY.left.y), "edge": e, "cross": -1},
+			{"p": WAY.right, "edge": e, "cross": 0}, {"p": WAY.right_pre, "edge": e, "cross": 0}, {"p": WAY.gate, "edge": e, "cross": 0}]
+	_route.append({"p": WAY["in"], "edge": false, "cross": 0})
+	state = TRAVEL
+
+
+func _travel(delta: float) -> void:
+	if _route.is_empty():
+		arena = _spec.arena                                # (the whole of the new room's floor is its own now)
+		state = ROAM
+		_pick_roam()
+		return
+	var wp: Dictionary = _route[0]
+	var to := Vector3(wp.p.x, 0.0, wp.p.y) - position
+	to.y = 0.0
+	var dist := to.length()
+	var edge: bool = wp.edge
+	# the attitude for this stretch first (on edge and low, or level at its flying height), then go, nose first
+	_roll = move_toward(_roll, EDGE[1] if edge else 0.0, 2.6 * delta)
+	_seat.y = move_toward(_seat.y, EDGE[0] if edge else _seat_y, 1.6 * delta)
+	var ready := absf(_roll - (EDGE[1] if edge else 0.0)) < 0.25 and absf(_seat.y - (EDGE[0] if edge else _seat_y)) < 0.2
+	if dist < 0.12:
+		_route.pop_front()
+		if int(wp.cross) != 0:
+			_cross(int(wp.cross))
+		return
+	var off := _face(to, _spec.turn, delta)
+	var speed: float = _spec.run * 0.85 if (off < deg_to_rad(20.0) and (ready or not edge)) else 0.0
+	var step := minf(speed * delta, dist)
+	position += to / dist * step
+	_own_vel = to / dist * speed
+	travelled += step
+	_play("Fly", 1.2)
+
+
+## Through the doorway: it belongs to the next room now (its frame, its render layer).
+func _cross(way: int) -> void:
+	var from := get_parent() as Node3D
+	var into := world.rooms[room + way]
+	var at := global_position
+	from.remove_child(self)
+	into.add_child(self)
+	global_position = at
+	room += way
+	world._set_layer(self, world._layer(room))
+	_home = Vector3(WAY["in"].x, 0.0, WAY["in"].y)
+
+
 # ---------------------------------------------------------------- turret
 func _apply_turret() -> void:
 	_root.basis = Basis(Vector3.UP, _tyaw + _tilt.y)
@@ -773,6 +909,18 @@ func aim_error() -> float:
 
 func _turret(delta: float) -> void:
 	var tracking := _aim_valid and _unseen < 2.5
+	if rail.y > rail.x:
+		# its carriage runs along the rail: to where the player is abreast of it, or slowly up and down on patrol
+		var want := position.z
+		if tracking:
+			want = clampf(_local(_aim_point).z, rail.x, rail.y)
+		else:
+			want = rail.y if _rail_dir > 0.0 else rail.x
+			if absf(position.z - want) < 0.05:
+				_rail_dir = -_rail_dir
+		var z := move_toward(position.z, want, (0.9 if tracking else 0.35) * delta)
+		travelled += absf(z - position.z)
+		position.z = z
 	if tracking:
 		if state == ROAM:
 			state = AIM
@@ -846,7 +994,7 @@ func _pose() -> void:
 	_root.position = _seat + _knock + shake - Vector3(0.0, _sink, 0.0)
 	var tilt := Basis(_tilt.normalized(), _tilt.length()) if _tilt.length() > 0.0001 else Basis.IDENTITY
 	if kind == "drone":
-		_root.basis = tilt * Basis(Vector3.RIGHT, _apitch) * _base
+		_root.basis = tilt * Basis(Vector3.FORWARD, _roll) * Basis(Vector3.RIGHT, _apitch) * _base
 	else:
 		_root.basis = tilt * _base
 		for i in _aims.size():
@@ -950,6 +1098,7 @@ func _process(delta: float) -> void:
 				play(clip)
 		return
 	_label.text = kind.to_upper()
+	_label.visible = show_label
 	_t -= delta
 	_cool -= delta
 	if state == DEAD:
@@ -968,8 +1117,10 @@ func _process(delta: float) -> void:
 			_blow_up()                                 # the drone hits the floor
 		_shorts(delta)
 		_springs(delta)
-		if _t <= 0.0:
+		if _t <= 0.0 and respawns:
 			respawn()
+		elif not respawns and _dead_for > 40.0 and _smoke.emitting:
+			V2Fx.set_smoke(_smoke, false)                  # (the game: a wreck that stays smokes itself out)
 		return
 	if player == null:
 		return

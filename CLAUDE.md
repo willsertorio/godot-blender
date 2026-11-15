@@ -114,13 +114,19 @@ rule no longer applies to the environment):
 V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`); it still runs with `-- --v1`.
 - **Blender side**: `v2/` (Godot ignores it). `v2/scene.blend` = room + three robots + two weapon views (pistol, machine
   gun) with rigged gloved arms, all animated, plus effects. Commands, method and what was learned: `v2/README.md`.
-- **Godot side**: pressing Play opens the **V2 lab** (`scenes/v2_lab.tscn`, `scripts/v2/`): three plain **studio** rooms
+- **Godot side**: pressing Play opens the **title** (`scenes/v2_title.tscn`): PLAY = the V2 game, one level
+  (`scenes/v2_game.tscn`, see "V2 game" below), LAB = the V2 lab; Backspace in the lab goes back to the title.
+  Options for the lab or the game on the command line skip the title (`v2_title.gd`: `--lab`, the lab's tests and
+  `--capture=`; `--play`, `--game-test`, `--bot=N`, `--game-capture=DIR`).
+  The **V2 lab** (`scenes/v2_lab.tscn`, `scripts/v2/`): three plain **studio** rooms
   side by side (11.6 m apart) joined by doorways, one robot in each (spider, drone, ceiling turret), each an **enemy**:
   it moves, aims, shoots the player and can be shot. The player holds the V2 guns. Keys: walk through the doors or
   `1 2 3` / Tab jump to a room, LMB fire (the machine gun fires for as long as it is held), RMB aim (held; LMB fires
   from the aim), `R` reload, `T` reload from empty, `F` inspect, `Q` switch gun, Shift sprint, Space jump,
   `C` aim as well (the user plays on a trackpad: no right button), `X` crouch (toggle; eye 1.0 m, capsule 1.15 m),
   `M` enemy <-> clip preview, `N` next clip (switches to preview), F3 performance, Esc frees the mouse.
+- `scripts/v2/v2_world.gd` (`V2World`): what the lab, the game and the title are built from: the row of rooms
+  (`_room_shell`: shell, collision, floor box, lights), render layers, door frames, `_environment`. All three extend it.
 - Rooms: the studio is `v2/scripts/build_studio.py` -> `v2/studio.blend` + `assets/models/v2/studio.glb` (the size of
   the concept room, same doorways, a metre grid on the floor = `v2_grid.gdshader`, three blocks for cover outside the
   robots' arenas, its materials are `V2Assets.SPECIAL` entries). **User decision: the lab is a test studio; the
@@ -285,11 +291,58 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
 - Learned: "hidden by scale 0" breaks Godot's glTF import (node comes in at scale 1): export hides at 0.001.
   A fine weave seen at arm's length beats against the pixel grid even with mipmaps: the glove fabrics are sampled
   with a mip bias. A directional light with shadows on came out about half as bright again as without.
-- Not done yet: the turret does not travel (its cables); a browser build; the pistol has no cursor recoil (it
-  shoots at the middle of the screen: the user called its firing good); no ricochet sound (nothing CC0 that fits
-  was found); music (the user: not now).
-  User decisions: realistic recorded sound, CC0, one consistent line, no music for now; no browser build of V2 for now (`tools/export_web.sh` is untested with the V2 lab);
-  studio rooms in the lab, the concept room for the real game.
+- Not done yet: a browser build of V2; the pistol has no cursor recoil (it shoots at the middle of the screen: the
+  user called its firing good); music (the user: not now); the V1 game's dungeon generator, map, difficulty curve
+  and Quaternius art are not part of the V2 game (V1 still runs with `-- --v1`).
+  User decisions: realistic recorded sound, CC0, one consistent line, no music for now; no browser build of V2 for now (`tools/export_web.sh` is untested with V2);
+  studio rooms in the lab, the concept room for the real game; the game has PLAY and LAB and one level;
+  wrecks are electrical (no fire); the pistol wears the machine gun's colours; footsteps quiet and dull;
+  a drone shot down goes down in a straight line; the dead turret is heavy.
+
+## V2 game (one level; `scripts/v2/v2_game.gd`)
+
+User decisions: the real game has PLAY and LAB; **one level only**.
+- Level (`LEVEL` in v2_game.gd): four sectors A-D = the concept room four times in a row (x = i * 11.6 m), told apart
+  by the colour of their tanks (cyan, green, amber, violet) and a letter by the doors. A: start, a crate. B: two
+  spiders. C: two drones, a turret. D: spider, drone, turret, the exit gate at the front wall. Doors between sectors
+  (E opens, they stay open; **a sector's door onward is locked while one of its robots works**: lamp red / amber /
+  green. Without the lock the level is a sprint from door to door under the mezzanine). Only the player's sector and a neighbour behind an open door are drawn and awake.
+- **The concept room's floor plan** (learned the hard way: `tools/v2_room_map.gd` prints it by trying the player's
+  capsule on a grid; a map made by casting rays down from 2.3 m missed every thin or tall thing): the doorways
+  (z = -10.2) open under the mezzanine's edge. From the left door the hall is reached through a 1.4 m gap between
+  the stairs (x -0.2..3.2, z -9.6..-11.2) and a post, at x = -1.3; or round under the mezzanine (z -12) to the
+  right side. The right door is beside the hall's right-back corner (4.6, -9.3). Two blocks stand at z -7.8..-9.4
+  (x < -2.4 and x 1.2..3.0). **A strip along the right wall (x 4.6..6.4, z -7.6..2.6) is closed off** (a
+  partition the capsule cannot pass): nothing may be put there. Waypoints: `V2Robot.WAY` (drone), `NODES` in
+  v2_game_bot.gd (the bot); the drone's verified by sweeping its box, the bot's by the walk check.
+- Rules (`V2Player.rules = true`): pistol 15 rounds, unlimited magazines; machine gun 30 + 60 carried (max 240);
+  R reloads (the magazine is filled at the clip's "magazine in" sound), an empty gun clicks and reloads by itself;
+  no health regeneration; med kits (H, +40, max 3); E = `interact` (nearest door or crate within 2.3 m);
+  1 / 2 or Q switch gun; going down ends the run. In the lab none of this applies.
+- Robots in the game (`respawns = false`): a wreck stays (its smoke stops after 40 s, its sparks become rare).
+  Spiders hold their hall, each in its own `arena`: **a spider cannot pass a doorway** (it is about 1.9 m across
+  its legs, the doorway 1.3 m). Drones that have seen the player and lost them follow into the next sector if the
+  door is open (`V2Robot.travel`, state TRAVEL): a drone is 1.7 m wide, so it goes through **on edge** (rolled 83
+  degrees, 1.2 m up, nose first) along `WAY`, and is re-parented to the next room's node as it crosses (robots live
+  in their room's frame). The turret runs along a rail under the ceiling (`set_rail`; the concept room's cable
+  `Loop3` is hidden for it) to where the player is abreast of it; in the lab's studio too.
+  35 % of destroyed robots leave a pickup. Score: turret 100, drone 150, spider 200, + (300 - seconds) on a win.
+- Props: `v2/scripts/build_props.py` -> `v2/props.blend` + `assets/models/v2/props.glb` (crate with `Crate_Lid`,
+  `AmmoBox`, `HealthCell`, `MedKit`, `ExitGate`; the robots' materials by name; the gate's field is
+  `v2_field.gdshader`). The game duplicates each by name. Their collision is boxes added in code.
+- HUD / screens: `scripts/v2/v2_ui.gd` (`V2Ui`: labels, bars, buttons; headings in Kenney Future: no K or X).
+  Health, med kits, gun + rounds, sector line, a note line (what was picked up), cursor, hurt flash. No prompts and
+  no pause (GDD): Esc frees the mouse and shows RESUME / TITLE while the game goes on. End screen: AGAIN / TITLE.
+- Checks, bot, pictures (`scripts/v2/v2_game_bot.gd`):
+  `godot --headless --path . -- --game-test` = the rules (magazines, crate, kit, door, a drone following through
+  a door on edge, the turret's rail, wrecks stay, win, lose, sounds);
+  `xvfb-run -a godot --rendering-driver opengl3 --path . --resolution 480x270 -- --game-test --quality=low` = the
+  same plus the walk through every waypoint and door to the exit (needs the rooms' collision: headless has none);
+  `tools/v2_bot.sh [N]` = the balance bot plays the level N times (one process per run; slow under software GL);
+  `... -- --game-capture=DIR` = pictures of every sector, the crate, a door, the exit, the menu, the end screen;
+  `... -- --title-capture=FILE.png`.
+- Static state survives a scene change (`V2Fx._marks`, `V2Sfx.root`): every scene's `_ready` sets the roots and
+  calls `V2Fx.reset()`.
 
 ## Conventions (fixed on day one; do not drift)
 

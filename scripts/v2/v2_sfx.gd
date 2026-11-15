@@ -37,6 +37,7 @@ const SOUNDS := {
 	# rounds landing
 	"impact_concrete": [["impactPlate_light_002"], 1.7, -9.0, 0.15, 22.0],
 	"impact_metal": [["impactMetal_medium_002", "impactMetal_medium_004"], 1.2, -8.0, 0.12, 24.0],
+	"ricochet": [[], 1.0, -10.0, 0.12, 24.0],                                                  # now and then a round glances off
 	"flyby": [[], 1.0, -9.0, 0.15, 0.0],                                                       # a robot's round passing the head
 	# the player's body
 	"step": [["impactPlate_light_002"], 0.75, -25.0, 0.1, 0.0],
@@ -58,9 +59,18 @@ const SOUNDS := {
 	"power_up": [[], 1.0, -9.0, 0.04, 22.0],                                                   # a robot back in service
 	"crash": [["impactMetal_heavy_000"], 0.7, 0.0, 0.06, 32.0],                               # a wreck hits the floor
 	"explosion": [["lowFrequency_explosion_000"], 1.0, 6.0, 0.04, 60.0],
+	# the game: doors, crates, what is picked up, the exit, the menus
+	"door": [[], 1.0, -9.0, 0.04, 26.0],
+	"crate": [[], 1.0, -11.0, 0.05, 20.0],
+	"pickup": [[], 1.0, -15.0, 0.06, 0.0],
+	"dry": [[], 1.0, -13.0, 0.05, 0.0],                                                        # the click of an empty gun
+	"heal": [[], 1.0, -13.0, 0.03, 0.0],                                                       # a med kit
+	"ui": [[], 1.0, -17.0, 0.03, 0.0],
+	"exit_hum": [[], 1.0, -18.0, 0.0, 16.0],                                                   # loop: the exit gate's field
+	"exit": [[], 1.0, -7.0, 0.0, 0.0],                                                         # through the gate
 	"zap": [["glitch_002"], 1.6, -9.0, 0.2, 18.0],                                            # sparks
 }
-const LOOPS := ["drone_rotor"]
+const LOOPS := ["drone_rotor", "exit_hum"]
 const MAX_VOICES := 12                # per key: the oldest is cut off
 const GAIN := 3.0                     # dB on everything, into the limiter (the files sit at -20 dB loudness: a pistol shot peaks near full scale)
 

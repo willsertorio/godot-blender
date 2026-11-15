@@ -49,3 +49,12 @@ the build script; a volume is one number in `SOUNDS`.
 | `crash` | a heavy machine hitting the floor | metal falling, pitched down, + a low thud |
 | `explosion` | the drone blowing up | firework bangs and cannon shots, layered, a low thump under them, in the room |
 | `zap` | electric sparks | a small Tesla coil |
+| `ricochet` | now and then a round glances off a wall | a metal hit with its pitch falling away |
+| `door` | a sector door: latch, motor, home with a thud | door sounds + the motor loop, gliding |
+| `crate` | a supply crate's lock and lid | a lock opening, a door thump |
+| `pickup` | ammunition / a health cell / a med kit taken | small items rattling, lowered |
+| `dry` | an empty gun | a switch click |
+| `heal` | a med kit used | compressed air |
+| `exit_hum` | LOOP: the exit gate's field | a machine loop |
+| `exit` | through the exit gate | the motor running up, a rush of air |
+| `ui` | a menu button | a switch |
