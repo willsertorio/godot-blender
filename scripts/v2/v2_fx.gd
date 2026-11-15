@@ -293,8 +293,6 @@ static func impact(pos: Vector3, normal: Vector3, metal: bool = false) -> void:
 	if root == null:
 		return
 	V2Sfx.play("impact_metal" if metal else "impact_concrete", pos)
-	if not metal and randf() < 0.14:
-		V2Sfx.play("ricochet", pos)
 	var p := CPUParticles3D.new()
 	var streak := BoxMesh.new()
 	streak.size = Vector3(0.005, 0.07, 0.005)

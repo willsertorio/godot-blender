@@ -323,8 +323,6 @@ func _settle() -> void:
 
 
 func respawn() -> void:
-	if state == DEAD:
-		V2Sfx.play("power_up", hit_point())
 	hp = max_hp
 	state = ROAM
 	V2Fx.set_smoke(_smoke, false)
@@ -432,12 +430,14 @@ func _push(dir: Vector3, k: float) -> void:
 func _play(clip_name: String, speed: float = 1.0, restart: bool = false) -> void:
 	if ap == null or not ap.has_animation(clip_name):
 		return
+	# (the speed first: the spider's right turn runs its clip backwards, and a clip started while the speed is
+	# still negative ends on the spot. A spider killed in mid-turn stood frozen instead of falling.)
+	ap.speed_scale = speed
 	if clip != clip_name or restart or not ap.is_playing():
 		clip = clip_name
 		ap.play(clip_name, 0.0 if restart else 0.12)
 		if restart:
 			ap.seek(0.0, true)
-	ap.speed_scale = speed
 
 
 ## Preview: play a clip from its start (and hold the pose a moment after one that does not loop).

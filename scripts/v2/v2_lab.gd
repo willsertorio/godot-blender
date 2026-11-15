@@ -57,8 +57,6 @@ var _quick := false
 var _door_only := false
 var _room_lights: Array = []        # per room: its omni and spot lights
 var _gun_room := -1
-var _listen := false              # tests: remember every sound key played (V2Sfx.log is a short tail)
-var _heard: Dictionary = {}
 var _concept := false             # --concept: the detailed room of the Blender scene instead of the studio
 
 
@@ -450,10 +448,6 @@ func _process(delta: float) -> void:
 		return
 	if _perf.visible:
 		_perf_update(delta)
-	if _listen:
-		for key in V2Sfx.log:
-			_heard[key] = true
-		V2Sfx.log.clear()
 	current = _room_at(player.global_position.x)
 	_gun_lights(current)                             # the gun is lit by the lights of the room it is in
 	for k in robots.size():
@@ -509,7 +503,6 @@ func _key(code: int, pressed: bool) -> void:
 ## is held and stop when it is let go; its rounds must leave along the barrel and the cursor must ride on it (in
 ## the middle at rest, climbing in fire); fire while aiming; a sprint must end when the player stops.
 func _gun_test() -> void:
-	_listen = true
 	for r in robots:
 		r.set_ai(false)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -596,7 +589,6 @@ func _gun_test() -> void:
 	ok = ok and a
 	print("[gun] X crouches and stands: ", "PASS" if a else "FAIL", " (eye %.2f -> %.2f -> %.2f m, crouched chest at %.2f m)" % [eye0, eye1, player.cam.position.y, chest1])
 	# reload: its sounds come at the clip's moments
-	_listen = true
 	_key(KEY_T, true)
 	_key(KEY_T, false)
 	await _until(func() -> bool: return player.busy == "ReloadEmpty", 1.0)
@@ -619,8 +611,8 @@ func _gun_test() -> void:
 	print("[gun] sprint ends when the player stops: ", "PASS" if a else "FAIL", " (sprinting: %s, the clip let go after %.2f s)" % [was_sprinting, t_run])
 	await get_tree().process_frame
 	var unheard: Array = []
-	for key in ["rifle_shot", "casing", "handling", "mag_out", "mag_in", "bolt", "step", "crouch"]:
-		if not (key in _heard) and not (key in V2Sfx.log):
+	for key in ["rifle_shot", "rifle_tail", "casing", "handling", "rifle_mag_out", "rifle_mag_in", "bolt", "step", "crouch"]:
+		if not V2Sfx.heard.has(key):
 			unheard.append(key)
 	ok = ok and unheard.is_empty()
 	print("[gun] sounds of the gun and the player: ", "PASS" if unheard.is_empty() else "FAIL", "" if unheard.is_empty() else "  never played: " + ", ".join(unheard))
@@ -1006,7 +998,6 @@ func _capture(dir: String) -> void:
 ## real clips) must destroy it, and it must come back. Then the player is left to be shot down and must be revived.
 func _enemy_test() -> void:
 	Engine.time_scale = 4.0
-	_listen = true
 	player.mouse_look = false
 	var ok := true
 	for i in rooms.size():
@@ -1130,7 +1121,7 @@ func _enemy_test() -> void:
 			while not r._exploded and t_boom < 4.0:
 				await get_tree().process_frame
 				t_boom += get_process_delta_time()
-			a = flew > 5.0 and t_fly > 1.5 and r._exploded and (_heard.has("explosion") or "explosion" in V2Sfx.log)
+			a = flew > 5.0 and t_fly > 1.5 and r._exploded and V2Sfx.heard.has("explosion")
 			ok = ok and a
 			print("[enemy] drone, shot down, flies out of control, then crashes and explodes: %s  (%.1f m in %.1f s, exploded %.1f s later: %s)" % [
 				"PASS" if a else "FAIL", flew, t_fly, t_boom, r._exploded])
@@ -1180,7 +1171,7 @@ func _enemy_test() -> void:
 		"spider_step", "explosion", "power_down", "crash", "hurt", "down", "zap"]
 	var unheard: Array = []
 	for key in want:
-		if not (key in V2Sfx.log) and not (key in _heard):
+		if not V2Sfx.heard.has(key):
 			unheard.append(key)
 	ok = ok and unheard.is_empty()
 	print("[enemy] sounds of the fight: %s  (%d keys%s)" % ["PASS" if unheard.is_empty() else "FAIL", want.size(),

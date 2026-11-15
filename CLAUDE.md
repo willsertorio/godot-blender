@@ -15,6 +15,8 @@ None of this is in the base image. A fresh container needs them reinstalled (see
 Network: the session runs on the personal cloud environment `godot-blender`, which allows Poly Haven,
 ambientCG, Quaternius, Kenney (send a browser User-Agent, or it returns 403), download.blender.org, GitHub,
 itch.io + quaternius.itch.io and itch's file host `itchio-mirror.cb031a832f44726753d6267436f3b414.r2.cloudflarestorage.com`.
+`opengameart.org` is allowed too (the V2 sounds); in one session a safety check refused shell fetches from it until
+the user said in the chat that the session may fetch.
 Blender's viewport renderer (thumbnails) needs `libegl1` (`apt-get install -y libegl1`) and `xvfb-run`.
 
 ### Reinstall
@@ -187,10 +189,19 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
   bouncing off the walls, spinning, shedding sparks), then falls (Death clip) and **explodes** where it lands
   (`V2Fx.explosion`; `BLAST`: up to 40 damage within 3.5 m). `v2_fx.gd` (`V2Fx`): tracers, impact sparks / chips / dust / scorch
   marks, smoke, flash lights.
-- Sound: `scripts/v2/v2_sfx.gd` (`V2Sfx`): one table, a key per interaction (`assets/audio/v2/README.md` lists
-  them), `play(key[, place])`, `loop` / `drive` for the drone's rotors and a wreck's fire, `V2Sfx.log` for the
-  checks, `-- --no-sound`. Files go in `assets/audio/v2/<key>_*.ogg`. **State: no realistic library yet** (see
-  "Not done"): every key plays a stand-in from V1's Kenney set, pitched; they prove the timing, not the tone.
+- Sound: `scripts/v2/v2_sfx.gd` (`V2Sfx`): one table, a key per interaction (33; `assets/audio/v2/README.md`),
+  `play(key[, place])`, `loop` / `drive` for the drone's rotors and a wreck's fire, `V2Sfx.log` for the checks,
+  `-- --no-sound`. Everything goes through one bus with a short room reverb (`V2Sfx.bus`): the guns were recorded
+  outdoors, and one shared space is what makes different recordings sit together.
+  Files: `assets/audio/v2/<key>_NN.ogg` (86, 1 MB), **real recordings, all CC0, from opengameart.org**: the guns from
+  The Free Firearm Sound Library (pistol = Walther PPQ, machine gun = AR-15, spider = Tikka .30-06, drone = Carl
+  Gustav M45, turret = AK-47), the rest from foley packs (rubberduck, Thimras, Fantozzi, BMacZero and others).
+  `tools/fetch_v2_audio.sh` downloads the raw files to `assets_src/audio_v2/` (git-ignored; needs `py7zr`),
+  `python3 -I tools/build_v2_audio.py` cuts / levels / names them (recipes per key), then `godot --headless --import`
+  and set `loop=true` in `fire_01.ogg.import` and `drone_rotor_01.ogg.import`.
+  The guns were picked by what they are; **everything else was picked by name, length and spectrum, not by ear**
+  (no sound here): expect to swap a few recipes after the user listens. A derived sound whose source licence cannot
+  be checked is not CC0 for this project (one "machine shutting down" was dropped for that).
   Timed sounds of the gun clips are `V2Player.CUES` (seconds into each clip, from anim_*.py).
 - Light (`v2_lab.gd _environment`, tuned against `v2/renders/stage3_scene.png` zone by zone with
   `--capture=DIR --only=tone`): half of it is one DirectionalLight3D straight down (the luminous ceiling: bright
@@ -249,16 +260,16 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
   the aim, and its forearm twist was a full turn from the aim clip's, so the blend swung the hand through half a
   turn for single frames (`Baker.clip(seed=...)` starts a clip from another clip's twist).
   `Object.get_meta(name, null)` still errors when the meta is missing: test `has_meta`.
+  Set an AnimationPlayer's `speed_scale` before `play()` / `seek()`, not after: a clip started while the speed is
+  still negative (the spider's right turn plays its clip backwards) ends on the spot. A spider killed in mid-turn
+  stood frozen; the sound check caught it one run in five ("crash" never played).
 - Learned: "hidden by scale 0" breaks Godot's glTF import (node comes in at scale 1): export hides at 0.001.
   A fine weave seen at arm's length beats against the pixel grid even with mipmaps: the glove fabrics are sampled
   with a mip bias. A directional light with shadows on came out about half as bright again as without.
-- Not done yet: **the realistic CC0 sound library** (wanted: guns and robots in one consistent, recorded line; the
-  Free Firearm Sound Library on opengameart.org was the lead; `opengameart.org` was added to the environment's
-  hosts with the user's approval, but this session's safety check refused shell fetches from it and the fetch
-  tool could not resolve it: ask the user to drop the archive into `incoming/`, or to allow the fetch); the
-  turret does not travel (its cables); a browser build; the pistol has no cursor recoil (it shoots at the middle
-  of the screen: the user called its firing good).
-  User decisions: no sound for now; no browser build of V2 for now (`tools/export_web.sh` is untested with the V2 lab);
+- Not done yet: the turret does not travel (its cables); a browser build; the pistol has no cursor recoil (it
+  shoots at the middle of the screen: the user called its firing good); no ricochet sound and no "robot is back"
+  sound (nothing CC0 that fits was found); music (the user: not now).
+  User decisions: realistic recorded sound, CC0, one consistent line, no music for now; no browser build of V2 for now (`tools/export_web.sh` is untested with the V2 lab);
   studio rooms in the lab, the concept room for the real game.
 
 ## Conventions (fixed on day one; do not drift)

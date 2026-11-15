@@ -14,9 +14,10 @@ const AUTO := ["rifle"]             # fires for as long as the button is held
 const NO_CURSOR := ["Sprint", "Draw", "Reload", "ReloadTactical", "ReloadEmpty", "Inspect"]
 # sounds timed to the clips: clip -> [[seconds, sound key], ...] (the moments are the ones in v2/scripts/anim_*.py)
 const CUES := {
-	"pistol": {"Reload": [[0.12, "mag_out"], [0.84, "mag_in"], [1.14, "slide"]], "Draw": [[0.05, "handling"]],
+	"pistol": {"Reload": [[0.12, "pistol_mag_out"], [0.84, "pistol_mag_in"], [1.14, "slide"]], "Draw": [[0.05, "handling"]],
 		"ADS": [[0.02, "handling"]], "AimOut": [[0.02, "handling"]], "Inspect": [[0.25, "handling"], [1.5, "handling"]]},
-	"rifle": {"ReloadTactical": [[0.32, "mag_out"], [1.12, "mag_in"]], "ReloadEmpty": [[0.32, "mag_out"], [1.12, "mag_in"], [1.58, "bolt"]],
+	"rifle": {"ReloadTactical": [[0.32, "rifle_mag_out"], [1.12, "rifle_mag_in"]],
+		"ReloadEmpty": [[0.32, "rifle_mag_out"], [1.12, "rifle_mag_in"], [1.58, "bolt"]],
 		"Draw": [[0.05, "handling"]], "ADS": [[0.02, "handling"]], "AimOut": [[0.02, "handling"]],
 		"Inspect": [[0.3, "handling"], [1.6, "handling"]]},
 }
@@ -251,6 +252,8 @@ func act(clip: String) -> void:
 ## Leave a held clip (automatic fire, sprint) for the rest pose, or for the aim it was fired from.
 func _release() -> void:
 	var ap := _ap()
+	if weapon in AUTO and busy in ["Fire", "ADSFire"]:
+		V2Sfx.play("rifle_tail")                        # the burst dies away (each round's own tail is cut short)
 	if busy == "ADSFire":
 		busy = "ADS"
 		ap.play("AimHold", 0.12)
