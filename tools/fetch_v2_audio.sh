@@ -11,7 +11,7 @@ cd assets_src/audio_v2/firearms
 cd ../oga
 for f in sfx_100_v2.zip 25-CC0-bang-sfx.zip sfx_breaking_and_falling.zip swishes.zip Fantozzi-footsteps.7z metal_steps_48k24b.7z \
   fan_interval.wav roboticsqueeze.flac lightclunk2.wav rattle1.wav clink1_0.wav clink2.wav clink3.wav \
-  reload.wav assaultriflereload1_0.wav clipload1.wav clipload2.wav equipmentclicks.wav spark.wav continuousspark.wav fire-1.wav; do
+  reload.wav assaultriflereload1_0.wav clipload1.wav clipload2.wav equipmentclicks.wav spark.wav continuousspark.wav; do
   [ -s "$f" ] || curl -sS -o "$f" "$B/$f"
 done
 for z in *.zip; do d="${z%.zip}"; mkdir -p "$d"; (cd "$d" && unzip -oq "../$z"); done

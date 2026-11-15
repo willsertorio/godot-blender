@@ -34,4 +34,3 @@ it is a one-line swap in the build script.
 | `crash` | a heavy machine hitting the floor | metal falling, pitched down, + a low thud |
 | `explosion` | the drone blowing up | firework bangs and cannon shots, layered |
 | `zap` | electric sparks | a small Tesla coil |
-| `fire` | LOOP: a wreck burning | a fire crackling |

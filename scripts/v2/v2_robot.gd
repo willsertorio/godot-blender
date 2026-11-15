@@ -70,6 +70,9 @@ var _spin_total := 1.0
 var _vel := Vector3.ZERO            # its velocity then (room frame)
 var _wob := 0.0
 var _spark_t := 0.0
+var _short_t := 0.0                 # wreck: seconds to its next short circuit
+var _dead_for := 0.0
+var _parts: Array = []              # [joint, centre of its meshes (the joint's frame)]: where a wreck can spark
 var _seat_y := 0.0
 var _exploded := true
 var _rotor: AudioStreamPlayer3D     # drone: the loop of its rotors
@@ -189,6 +192,7 @@ func _part_boxes(scene: Node) -> void:
 		body.set_meta("joint", n)
 		n.add_child(body)
 		_bodies.append(body.get_rid())
+		_parts.append([n, box.get_center()])
 
 
 ## A node between `joint` and its parent, for turning the joint about its own pivot on top of what the clips do to
@@ -360,6 +364,8 @@ func hit(damage: float = 34.0, dir: Vector3 = Vector3.ZERO, point: Vector3 = Vec
 		# the wreck is still a thing in the room: the part that is struck swings, the whole of it is jarred
 		_knock_joint(joint if joint != null else _hit_joint, point, dir, 1.0)
 		_push(dir, 0.45)
+		if randf() < 0.4:
+			V2Fx.sparkle(point, 7, -3.0)               # (something inside still has power)
 		return
 	_knock_joint(joint if joint != null else _hit_joint, point, dir, 0.5)
 	_push(dir, 1.6 if hp - damage <= 0.0 else 1.0)
@@ -369,6 +375,8 @@ func hit(damage: float = 34.0, dir: Vector3 = Vector3.ZERO, point: Vector3 = Vec
 		hp = 0.0
 		kills += 1
 		state = DEAD
+		_dead_for = 0.0
+		_short_t = randf_range(0.25, 0.6)
 		V2Fx.set_smoke(_smoke, true)
 		V2Fx.burst(hit_point())
 		if kind == "drone":
@@ -392,6 +400,24 @@ func hit(damage: float = 34.0, dir: Vector3 = Vector3.ZERO, point: Vector3 = Vec
 		_cool = maxf(_cool, 0.3)                       # it loses its aim for a moment
 		if state == ROAM and kind != "turret":
 			_engage()                                  # it knows where that came from
+
+
+## A wreck's short circuits: sparks and a crackle from one of its parts, often just after it dies, then now and
+## then. (The drone in its last flight sheds its own sparks: `_spin_out`.)
+func _shorts(delta: float) -> void:
+	_dead_for += delta
+	if _spin > 0.0 or not _exploded or _parts.is_empty():
+		return
+	_short_t -= delta
+	if _short_t > 0.0:
+		return
+	var calm := smoothstep(0.5, 5.0, _dead_for)
+	_short_t = randf_range(lerpf(0.25, 1.2, calm), lerpf(0.9, 3.2, calm))
+	var part: Array = _parts[randi() % _parts.size()]
+	var at: Vector3 = (part[0] as Node3D).global_transform * (part[1] as Vector3)
+	V2Fx.sparkle(at, randi_range(10, 20), -2.0 - 4.0 * calm)
+	if randf() < 0.35:
+		_short_t = randf_range(0.08, 0.2)              # (they come in twos and threes)
 
 
 ## The joint that was struck, and the joints it hangs from (less and less), are set swinging about their own
@@ -918,6 +944,7 @@ func _process(delta: float) -> void:
 				var d := player.global_position.distance_to(hit_point())
 				if d < BLAST[0]:
 					player.hurt(BLAST[1] * (1.0 - d / BLAST[0]), hit_point())
+		_shorts(delta)
 		_springs(delta)
 		if _t <= 0.0:
 			respawn()

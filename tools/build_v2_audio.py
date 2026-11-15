@@ -195,7 +195,6 @@ def recipes():
     r["explosion"] = [level(layer((whole(o(bang + "bang_03.ogg"), t_out=0.3), 1.0, 0.0), (whole(o(bang + "cannon_02.ogg"), t_out=0.5), 0.8, 0.0))),
                       level(layer((whole(o(bang + "cannon_01.ogg"), t_out=0.4), 1.0, 0.0), (pitch(whole(o(bang + "bang_03.ogg")), 0.9), 0.9, 0.0)))]
     r["zap"] = [level(whole(o("spark.wav")), -3.0), level(whole(o("continuousspark.wav")), -3.0)]     # a small Tesla coil
-    r["fire"] = [level(loop(load(o("fire-1.wav")), 0.4), -3.0)]                                       # loop
     return r
 
 

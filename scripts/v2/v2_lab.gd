@@ -850,6 +850,23 @@ func _capture(dir: String) -> void:
 		V2Fx.hold = 1.0                                   # (the flash of the burst must be gone for the next picture)
 		await _wait(5.0)
 		await _shot(dir, "wreck_smoke")
+		# from close by, with a short circuit caught in the air
+		var away := (player.global_position - hp)
+		away.y = 0.0
+		player.global_position = Vector3(hp.x, player.global_position.y, hp.z) + away.normalized() * 2.4
+		player._pitch = deg_to_rad(-22.0)
+		await _wait(1.0)
+		Engine.time_scale = 0.05
+		V2Fx.hold = 8.0
+		V2Fx.sparkle(w.hit_point() + Vector3(0.15, 0.25, 0.0), 14)
+		await _wait(0.03)
+		await _shot(dir, "wreck_sparkle")                 # the flash and the arcs
+		V2Fx.hold = 1.0
+		V2Fx.sparkle(w.hit_point() + Vector3(-0.2, 0.2, 0.1), 14)
+		await _wait(0.15)
+		await _shot(dir, "wreck_sparks")                  # the sparks in the air, the flash gone
+		Engine.time_scale = 1.0
+		V2Fx.hold = 1.0
 	if _only != "" and "fx" in _only.split(","):
 		# (only on request: the player's rounds on a wall: sparks, chips and dust at the moment of a hit, then the marks)
 		goto(0)

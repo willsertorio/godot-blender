@@ -54,9 +54,8 @@ const SOUNDS := {
 	"crash": [["impactMetal_heavy_000"], 0.7, -3.0, 0.06, 32.0],                               # a wreck hits the floor
 	"explosion": [["lowFrequency_explosion_000"], 1.0, 0.0, 0.04, 60.0],
 	"zap": [["glitch_002"], 1.6, -10.0, 0.2, 18.0],                                            # sparks
-	"fire": [[], 1.0, -10.0, 0.0, 14.0],                                                       # loop: a wreck burning
 }
-const LOOPS := ["drone_rotor", "fire"]
+const LOOPS := ["drone_rotor"]
 const MAX_VOICES := 12                # per key: the oldest is cut off
 
 static var root: Node                # where one-shot players are parented (the lab)
