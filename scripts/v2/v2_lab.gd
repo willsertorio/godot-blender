@@ -120,7 +120,8 @@ func _environment() -> void:
 	env.sky = sky
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_exposure = 0.9
+	env.tonemap_exposure = 1.15 if _low else 0.9    # (low quality has no glow and no shadow pass: both add light,
+	#                                                 so it is exposed up and its floor light is stronger, to look the same)
 	env.glow_enabled = not _low                     # the bloom of the Blender look
 	env.glow_intensity = 0.6
 	env.glow_bloom = 0.08
@@ -137,7 +138,7 @@ func _environment() -> void:
 	var down := DirectionalLight3D.new()
 	down.rotation_degrees = Vector3(-84.0, 20.0, 0.0)
 	down.light_color = Color(0.98, 0.99, 1.0)
-	down.light_energy = 0.32
+	down.light_energy = 0.5 if _low else 0.32
 	# Its shadows fall straight down: the pools under the robots, the stairs and the mezzanine. They are the only
 	# shadows: one flat pass over the three rooms (the shell casts none). A shadow-casting omni light draws
 	# everything in its range six times (a cube; the dual-paraboloid mode drew nothing here): two of those per room
@@ -656,6 +657,28 @@ func _capture(dir: String) -> void:
 		V2Fx.hold = 1.0                                   # (the flash of the burst must be gone for the next picture)
 		await _wait(5.0)
 		await _shot(dir, "wreck_smoke")
+	if _only != "" and "fx" in _only.split(","):
+		# (only on request: the player's rounds on a wall: sparks, chips and dust at the moment of a hit, then the marks)
+		goto(0)
+		robots[0].set_ai(false)
+		V2Fx.hold = 1.0
+		player._yaw = deg_to_rad(52.0)
+		player._pitch = deg_to_rad(-8.0)
+		for k in 3:
+			player._yaw += deg_to_rad(2.5)
+			player.busy = ""
+			player.act("Fire")
+			await _wait(0.6)
+		player._yaw += deg_to_rad(2.5)
+		player.busy = ""
+		player.act("Fire")
+		Engine.time_scale = 0.05
+		await _wait(0.12)
+		await _shot(dir, "fx_impact")
+		Engine.time_scale = 1.0
+		await _wait(1.5)
+		await _shot(dir, "fx_marks")
+		V2Fx.hold = 40.0
 	if _want("ai"):
 		# the robots as enemies: on the move, firing (the game slowed down to catch the flash), wrecked and smoking
 		for i in rooms.size():
@@ -672,9 +695,11 @@ func _capture(dir: String) -> void:
 			await _shot(dir, "ai%d_%s_fire" % [i + 1, KINDS[i]])
 			Engine.time_scale = 1.0
 			player._yaw = atan2(-(r.hit_point().x - player.global_position.x), -(r.hit_point().z - player.global_position.z))
+			V2Fx.hold = 1.0                               # (the burst's flash must be over in the wreck picture)
 			r.hit(9999.0)
 			await _wait(4.0)
 			await _shot(dir, "ai%d_%s_wreck" % [i + 1, KINDS[i]])
+			V2Fx.hold = 40.0
 			r.set_ai(false)
 	get_tree().quit()
 
