@@ -975,7 +975,7 @@
     0.6,
     0.72
    ],
-   "emit_strength": 0.9,
+   "emit_strength": 0.12,
    "alpha": 1.0,
    "transmission": 0.0,
    "linked": false

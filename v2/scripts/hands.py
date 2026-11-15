@@ -96,6 +96,9 @@ def hand_frame(pb, side):
     return w0, k, F, A, pn.normalized()
 
 
+TWIST_REF = {}      # rig name -> forearm twist of its last pose (radians, not wrapped); None / missing = no memory
+
+
 def pose(rig, side, curls, F_t, A_hint, anchor_fn, anchor_target, shoulder, pole, thumb_dirs, quiet=False, reach=None,
          index_pts=None, thumb_roll=0.0, wrap=None):
     """Put one arm in a pose (gun space). Starts from the rest pose, so the result depends only on the arguments.
@@ -155,6 +158,14 @@ def pose(rig, side, curls, F_t, A_hint, anchor_fn, anchor_target, shoulder, pole
     q = (wrist_goal.to_3x3() @ pb["wrist"].matrix.to_3x3().inverted()).to_quaternion()
     twist = 2 * math.atan2(Vector((q.x, q.y, q.z)).dot(fax), q.w)
     twist = (twist + math.pi) % (2 * math.pi) - math.pi
+    # The twist is spread over the forearm bones, so its sign must not flip from one frame to the next: at +-180
+    # degrees the forearm bones would jump while the hand stays, and between the two keys the hand shows turned
+    # half round (a one-frame flash in the game). Take the turn nearest to the one before (TWIST_REF; the baker
+    # resets it to the hold pose's at the start of every clip).
+    ref = TWIST_REF.get(rig.name)
+    if ref is not None:
+        twist = ref + (twist - ref + math.pi) % (2 * math.pi) - math.pi
+    TWIST_REF[rig.name] = twist
     rot_about(la, la.head.copy(), Matrix.Rotation(twist * 0.35, 3, fax))
     l2b = pb["lowerarm02"]
     rot_about(l2b, l2b.head.copy(), Matrix.Rotation(twist * 0.45, 3, fax))

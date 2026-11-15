@@ -234,6 +234,7 @@ class Baker(Recorder):
         self.last_loc = {n: I4.decompose()[:2] for n in parts}
         self.clips = {}
         self.worst = {}
+        self.twist0 = {}
         for ob in list(self.objs.values()) + list(self.rigs.values()):
             ob.animation_data_clear()
         for idb, _ in self.props:
@@ -288,10 +289,22 @@ class Baker(Recorder):
     def clip(self, name, start, n, fn, loop=False):
         """Bake n frames of fn(t seconds) -> state from frame `start`, with the rest pose keyed just outside."""
         self.worst = {}
+        # forearm twist: every clip starts from the hold pose's own turn and stays continuous from there (hands.pose)
+        for side, rig in self.rigs.items():
+            if side in self.twist0:
+                H.TWIST_REF[rig.name] = self.twist0[side]
+            else:
+                H.TWIST_REF.pop(rig.name, None)
         self.frame(start - 1)
+        for side, rig in self.rigs.items():
+            self.twist0.setdefault(side, H.TWIST_REF[rig.name])
         for i in range(n):
             self.frame(start + i, fn(i / FPS))
         self.frame(start + n)
+        for side, rig in self.rigs.items():
+            turns = (H.TWIST_REF[rig.name] - self.twist0[side]) / math.tau
+            if abs(turns) > 0.5:
+                print(f"  !! {name}: the {side} forearm ends {turns:+.1f} turns from where it started")
         self.clips[name] = dict(start=start, end=start + n - 1, loop=loop)
         print(f"clip {name}: frames {start}-{start + n - 1}" + (" (loop)" if loop else "")
               + "  max wrist bend " + ", ".join(f"{s} {v:.0f}" for s, v in self.worst.items()))

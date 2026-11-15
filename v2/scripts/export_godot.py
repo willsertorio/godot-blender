@@ -236,10 +236,16 @@ def flash_frames(objs, first, last):
 
 def write_clips(name, clips, objs):
     first, last = min(c["start"] for c in clips.values()), max(c["end"] for c in clips.values())
+    table = {"fps": FPS, "clips": {k: [c["start"], c["end"]] for k, c in clips.items()},
+             "loops": [k for k, c in clips.items() if c.get("loop")], "flashes": flash_frames(objs, first, last)}
+    # automatic fire: {"loop": [first, last frame of the part of Fire / ADSFire the game repeats, from the clip's
+    # start], "ads_in", "ads_out": seconds} (anim_rifle.py)
+    hold = sc.get("v2_fire_loop_" + name.replace("view_", ""))
+    if hold:
+        table["fire"] = json.loads(hold)
     with open(os.path.join(OUT, name + "_clips.json"), "w") as f:
         # (the exported animation keeps the timeline's own times: frame / fps, whatever the first exported frame is)
-        json.dump({"fps": FPS, "clips": {k: [c["start"], c["end"]] for k, c in clips.items()},
-                   "loops": [k for k, c in clips.items() if c.get("loop")], "flashes": flash_frames(objs, first, last)}, f, indent=1)
+        json.dump(table, f, indent=1)
     return first, last
 
 

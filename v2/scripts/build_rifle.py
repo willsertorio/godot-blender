@@ -72,7 +72,7 @@ def materials():
     m["lens"] = L.plain("RfLens", (0.6, 0.85, 0.8), rough=0.0, transmission=1.0, ior=1.45)
     m["reticle"] = L.plain("RfReticle", (0, 0, 0), emit=(1.0, 0.06, 0.03), emit_strength=9.0)
     m["cyan"] = L.plain("RfCyan", (0, 0.02, 0.03), emit=(0.15, 0.85, 1.0), emit_strength=3.5)
-    m["screen"] = L.plain("RfScreen", (0, 0.01, 0.015), rough=0.08, emit=(0.1, 0.6, 0.72), emit_strength=0.9)
+    m["screen"] = L.plain("RfScreen", (0, 0.01, 0.015), rough=0.08, emit=(0.1, 0.6, 0.72), emit_strength=0.12)   # dark glass, faintly lit
     return m
 
 
@@ -151,20 +151,23 @@ def build(collection, parent=None):
             sbox(c, 0, 0, 3.0, 19.5, 58.5, 12)
         done(pod)
     bz = Part("R_ScreenBezel", M["matte"], bevel=1.6, segs=3)     # low frame, sunk into the pod
+    # (heights: the frame's top is at -0.7 mm, its opening is cut down to -2.2; the glass fills it up to -1.6 and the
+    # read-out stands 0.8 mm proud of the glass. No two faces share a plane: the glass used to lie exactly in the
+    # floor of the opening and 0.25 mm under the read-out, and flickered in the game.)
     sbox(bz, 0, 0, -3.4, 20, 59, 5.4)
     c = bz.cut()
-    sbox(c, 0, 0, -0.2, 16.6, 55, 1.6)
+    sbox(c, 0, 0, -0.8, 16.6, 55, 2.8)
     done(bz)
     scr = Part("R_Screen", M["screen"], bevel=0)
-    sbox(scr, 0, 0, -1.2, 16.6, 55, 0.4)
+    sbox(scr, 0, 0, -1.9, 16.8, 55.2, 0.6)
     done(scr)
     sd = Part("R_ScreenInk", M["cyan"], bevel=0)   # read-out: bar graph, frame line, two digit blocks
     for i in range(9):
         hgt = 3.2 + (i * 5 % 4) * 1.0
-        sbox(sd, -6.0 + hgt / 2, -24 + i * 3.1, -0.9, hgt, 2.0, 0.3)
-    sbox(sd, 6.0, 0, -0.9, 0.6, 49, 0.3)
+        sbox(sd, -6.0 + hgt / 2, -24 + i * 3.1, -1.25, hgt, 2.0, 0.9)
+    sbox(sd, 6.0, 0, -1.25, 0.6, 49, 0.9)
     for i in range(2):
-        sbox(sd, -2.3, 11 + i * 8.5, -0.9, 8.2, 5.6, 0.3)
+        sbox(sd, -2.3, 11 + i * 8.5, -1.25, 8.2, 5.6, 0.9)
     done(sd)
     tb = Part("R_TopPlate", M["grey"], bevel=0.8)
     tb.box((-8, -146, 33.6), (8, -126, 37.4))

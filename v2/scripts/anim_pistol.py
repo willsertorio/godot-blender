@@ -132,6 +132,13 @@ def ads(t):
     return dict(root=move(s["right"], s["fwd"], s["up"]) @ mix_m(L0, L_ADS, k) @ rot(s["pitch"], s["yaw"], s["roll"], PIV))
 
 
+def ads_fire(t):
+    """A shot from the aimed pose, as the game holds it (ADS at ADS_IN); a little steadier than from the hip."""
+    sw = sway(ADS_IN, k=0.22)
+    base = move(sw["right"], sw["fwd"], sw["up"]) @ L_ADS @ rot(sw["pitch"], sw["yaw"], sw["roll"], PIV)
+    return shot(t * FPS - 1, root_fn=lambda **r: gun(base=base, **r), k=0.7)
+
+
 DRAW_T = 0.85
 
 
@@ -213,7 +220,7 @@ def inspect(t):
 
 CLIPS = [("Idle", 3.0, idle, True), ("Walk", 1.0, walk, True), ("Sprint", SPRINT_IN + SPRINT_RUN + SPRINT_OUT, sprint, False),
          ("Fire", 0.5, fire, False), ("ADS", ADS_IN + ADS_HOLD + ADS_OUT, ads, False), ("Draw", DRAW_T, draw, False),
-         ("Reload", RELOAD_T, reload, False), ("Inspect", INSPECT_T, inspect, False)]
+         ("Reload", RELOAD_T, reload, False), ("Inspect", INSPECT_T, inspect, False), ("ADSFire", 0.5, ads_fire, False)]
 FF_BASE = dict(yaw=12.0, pitch=-15.0, right=-0.01, up=-0.01)   # the gun turned toward the spider, low on the left
 
 

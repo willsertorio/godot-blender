@@ -20,12 +20,17 @@
   "Death": [
    1477,
    1552
+  ],
+  "Turn": [
+   1561,
+   1580
   ]
  },
  "loops": [
   "Idle",
   "Walk",
-  "Run"
+  "Run",
+  "Turn"
  ],
  "flashes": {
   "Spider_FlashL": [

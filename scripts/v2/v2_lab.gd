@@ -23,12 +23,13 @@ const XR := 6.4
 # Meshes that get no collision. The floor's (tiles, paint, drains) are replaced by one flat box per room: a capsule
 # walking on the tile mesh snags on its edges (it stuck fast 13 cm from the right wall).
 const NO_COLLISION := ["Cable", "TrayCable", "Loop", "Bubbles", "CoveLights", "LightStrips", "CeilingLights", "Screens",
-	"FloorTiles", "FloorBase", "FloorPaint", "Drains"]
+	"FloorTiles", "FloorBase", "FloorPaint", "Drains", "StudioFloor", "StudioLight", "StudioTrim"]
 
 # Room meshes that cast no shadow: the shell and what hangs above the lights. The things standing in the room
 # (mezzanine, stairs, railings, tanks, door frames) and the robots do.
 const NO_SHADOW := ["Floor", "Wall", "Ceiling", "Trim", "Cable", "TrayCable", "Loop", "LightGrid", "Ducts", "Pipes",
-	"CoveLights", "LightStrips", "Screens", "Signs", "StatusLights", "Drains", "Bubbles", "Hazard"]
+	"CoveLights", "LightStrips", "Screens", "Signs", "StatusLights", "Drains", "Bubbles", "Hazard",
+	"StudioFloor", "StudioWalls", "StudioCeiling", "StudioLight", "StudioTrim"]
 
 var rooms: Array[Node3D] = []
 var robots: Array[V2Robot] = []
@@ -54,6 +55,7 @@ var _perf_worst := 0.0
 var _perf_line := ""
 var _quick := false
 var _door_only := false
+var _concept := false             # --concept: the detailed room of the Blender scene instead of the studio
 
 
 func _ready() -> void:
@@ -63,6 +65,7 @@ func _ready() -> void:
 		return
 	V2Fx.root = self
 	_low = "--quality=low" in args                 # (before the environment is built: it reads this)
+	_concept = "--concept" in args
 	_environment()
 	for i in KINDS.size():
 		_room(i)
@@ -98,6 +101,8 @@ func _ready() -> void:
 		get_tree().create_timer(12.0).timeout.connect(get_tree().quit)
 	elif "--enemy-test" in args:
 		_enemy_test()
+	elif "--gun-test" in args:
+		_gun_test()
 	elif "--input-test" in args:
 		_input_test()
 	elif capture != "":
@@ -158,7 +163,9 @@ func _room(i: int) -> void:
 	room.name = "Room_" + KINDS[i]
 	room.position = Vector3(i * ROOM_DX, 0, 0)
 	add_child(room)
-	var shell: Node3D = (load(V2Assets.DIR + "room.glb") as PackedScene).instantiate()
+	# The lab's rooms are a plain studio (v2/scripts/build_studio.py), the size of the concept room and with the
+	# same doorways. The concept room itself (room.glb, from scene.blend) is kept for the real game: --concept.
+	var shell: Node3D = (load(V2Assets.DIR + ("room.glb" if _concept else "studio.glb")) as PackedScene).instantiate()
 	room.add_child(shell)
 	V2Assets.apply(shell)
 	for n in shell.find_children("*", "MeshInstance3D", true, false):
@@ -192,7 +199,7 @@ func _room(i: int) -> void:
 			room.add_child(l)
 	# under the mezzanine the ceiling's light does not reach: its own strip lights there are two spot lights
 	# (spots, not omnis: a mesh takes 8 of each kind, and the six above, the gun's and a muzzle flash make 8 omnis)
-	for x in [-2.4, 4.0]:
+	for x in ([-2.4, 4.0] if _concept else []):
 		var sp := SpotLight3D.new()
 		sp.position = Vector3(x, 2.3, -11.4)
 		sp.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
@@ -204,6 +211,15 @@ func _room(i: int) -> void:
 		sp.light_energy = 0.7
 		sp.light_cull_mask = _layer(i)
 		room.add_child(sp)
+	if not _concept:                                   # the room's number and tenant on the far wall
+		var plate := Label3D.new()
+		plate.text = "%02d  %s" % [i + 1, KINDS[i].to_upper()]
+		plate.font_size = 160
+		plate.pixel_size = 0.004
+		plate.modulate = Color(0.2, 0.22, 0.25)
+		plate.outline_size = 0
+		plate.position = Vector3((XL + XR) / 2.0, 3.6, -13.985)
+		room.add_child(plate)
 	var robot := V2Robot.new()
 	room.add_child(robot)
 	robot.setup(KINDS[i])
@@ -368,8 +384,12 @@ func _hud_update(delta: float) -> void:
 	_enemy_text.text = r.kind.to_upper() + ("" if preview else ("   destroyed, back soon" if r.state == V2Robot.DEAD else ""))
 	_flash.color.a = clampf(player.hurt_flash * 0.3 + (0.25 if player.down else 0.0) + maxf(0.3 - h, 0.0) * 0.4, 0.0, 0.6)
 	var hit := player.hit_confirm > 0.0
-	_dot.color = Color(1.0, 0.3, 0.2, 1.0) if hit else Color(1, 1, 1, 0.8)
-	_bar_place(_dot, 0.5, 0.5, -4 if hit else -2, -4 if hit else -2, 8 if hit else 4, 8 if hit else 4)
+	# the cursor: where the next round goes (the middle of the screen for the pistol; the machine gun's rides on
+	# its barrel and climbs with the recoil); hidden while the gun is busy with something else
+	_dot.color = Color(1.0, 0.3, 0.2, 1.0) if hit else Color(1, 1, 1, 0.85)
+	_dot.visible = player.aim_dot.x >= 0.0
+	var half := 4.0 if hit else 2.5
+	_bar_place(_dot, 0.0, 0.0, player.aim_dot.x - half, player.aim_dot.y - half, half * 2.0, half * 2.0)
 	_down_text.visible = player.down
 	if player.down:
 		_down_t -= delta
@@ -441,6 +461,111 @@ func _unhandled_input(event: InputEvent) -> void:
 ## Sends real input events through the viewport (as the mouse and keyboard would) and reports what the player did
 ## with them: PASS / FAIL lines, then quits. The capture tour drives the player by code and cannot catch a control
 ## that swallows the mouse.
+func _press(button: int, pressed: bool) -> void:
+	var mb := InputEventMouseButton.new()
+	mb.position = Vector2(get_viewport().get_visible_rect().size / 2.0)
+	mb.global_position = mb.position
+	mb.button_index = button
+	mb.pressed = pressed
+	Input.parse_input_event(mb)
+
+
+func _key(code: int, pressed: bool) -> void:
+	var k := InputEventKey.new()
+	k.keycode = code
+	k.physical_keycode = code
+	k.pressed = pressed
+	Input.parse_input_event(k)
+
+
+## --gun-test (under xvfb, with real events): the machine gun must fire without a break for as long as the button
+## is held and stop when it is let go; its rounds must leave along the barrel and the cursor must ride on it (in
+## the middle at rest, climbing in fire); fire while aiming; a sprint must end when the player stops.
+func _gun_test() -> void:
+	for r in robots:
+		r.set_ai(false)
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	player.invulnerable = true
+	var ok := true
+	var centre := Vector2(get_viewport().get_visible_rect().size / 2.0)
+	await _wait(0.5)
+	player.switch_weapon()                             # the machine gun
+	await _until(func() -> bool: return player.busy == "", 4.0)
+	await _wait(0.4)
+	var rest_off := player.aim_dot.distance_to(centre)
+	var a := rest_off < 14.0
+	ok = ok and a
+	print("[gun] cursor at rest in the middle of the screen: ", "PASS" if a else "FAIL", " (%.1f px off)" % rest_off)
+	# hold the trigger for 2.5 s
+	player.shot_times.clear()
+	player.worst_bend = 0.0
+	var highest := centre.y
+	_press(MOUSE_BUTTON_LEFT, true)
+	var t := 0.0
+	while t < 2.5:
+		await get_tree().process_frame
+		t += get_process_delta_time()
+		if player.aim_dot.x >= 0.0:
+			highest = minf(highest, player.aim_dot.y)
+	var n_held := player.shot_times.size()
+	var gap := 0.0
+	for i in range(1, n_held):
+		gap = maxf(gap, player.shot_times[i] - player.shot_times[i - 1])
+	_press(MOUSE_BUTTON_LEFT, false)
+	var t_stop := 0.0
+	while player.busy != "" and t_stop < 2.0:
+		await get_tree().process_frame
+		t_stop += get_process_delta_time()
+	await _wait(0.5)
+	var after := player.shot_times.size() - n_held
+	# (game time. A frame here is 0.13 s of software rendering and the rounds of one frame leave together, so the
+	# gap is measured against a frame and a half; on a real graphics card it is the 1/12 s between rounds)
+	var frame := get_process_delta_time()
+	# (the release reaches the game a frame late, and the gun stops the frame after: two frames' worth of rounds)
+	a = n_held >= 24 and gap < maxf(0.1, 1.5 * frame) and t_stop < maxf(0.15, 2.5 * frame) and after <= int(2.0 * frame * 12.0) + 1
+	ok = ok and a
+	print("[gun] held 2.5 s: ", "PASS" if a else "FAIL", " (%d rounds, longest gap %.2f s, stopped %.2f s after release, %d rounds after it)" % [
+		n_held, gap, t_stop, after])
+	a = player.worst_bend < 3.0 and highest < centre.y - 12.0
+	ok = ok and a
+	print("[gun] rounds leave along the barrel, cursor climbs: ", "PASS" if a else "FAIL",
+		" (path bends %.1f degrees at most, cursor up to %.0f px above the middle)" % [player.worst_bend, centre.y - highest])
+	# aimed fire
+	player.shot_times.clear()
+	_press(MOUSE_BUTTON_RIGHT, true)
+	await _wait(0.8)
+	var aimed_off := player.aim_dot.distance_to(centre)
+	_press(MOUSE_BUTTON_LEFT, true)
+	await _wait(1.0)
+	_press(MOUSE_BUTTON_LEFT, false)
+	await _wait(0.5)
+	var still_aiming := player.busy == "ADS"
+	_press(MOUSE_BUTTON_RIGHT, false)
+	await _until(func() -> bool: return player.busy == "", 3.0)
+	a = player.shot_times.size() >= 8 and still_aiming and player.busy == "" and aimed_off < 14.0
+	ok = ok and a
+	print("[gun] fire while aiming: ", "PASS" if a else "FAIL", " (%d rounds, back at the aim: %s, lowered: %s, cursor %.1f px off)" % [
+		player.shot_times.size(), still_aiming, player.busy == "", aimed_off])
+	# sprint, then stop
+	player._yaw = PI                                   # (down the room, away from the wall behind)
+	player.global_position = rooms[0].position + Vector3(0.2, 0.02, -10.0)
+	_key(KEY_SHIFT, true)
+	_key(KEY_W, true)
+	await _wait(1.2)
+	var was_sprinting := player.busy == "Sprint"
+	_key(KEY_W, false)
+	_key(KEY_SHIFT, false)
+	var t_run := 0.0
+	while player.busy == "Sprint" and t_run < 3.0:
+		await get_tree().process_frame
+		t_run += get_process_delta_time()
+	a = was_sprinting and t_run < 0.35
+	ok = ok and a
+	print("[gun] sprint ends when the player stops: ", "PASS" if a else "FAIL", " (sprinting: %s, the clip let go after %.2f s)" % [was_sprinting, t_run])
+	print("[gun] RESULT: ", "PASS" if ok else "FAIL")
+	get_tree().quit()
+
+
 func _input_test() -> void:
 	for r in robots:
 		r.set_ai(false)                               # (nothing shooting back while the controls are checked)
@@ -693,6 +818,18 @@ func _capture(dir: String) -> void:
 		await _wait(1.5)
 		await _shot(dir, "fx_marks")
 		V2Fx.hold = 40.0
+	if _only != "" and "panel" in _only.split(","):
+		# (only on request: consecutive frames of the machine gun at rest and walking, to look for flicker)
+		goto(0)
+		robots[0].set_ai(false)
+		if player.weapon != "rifle":
+			player.switch_weapon()
+		await _wait(1.6)
+		Engine.time_scale = 0.25
+		for k in 12:
+			await get_tree().process_frame
+			await _shot(dir, "panel_%02d" % k)
+		Engine.time_scale = 1.0
 	if _want("ai"):
 		# the robots as enemies: on the move, firing (the game slowed down to catch the flash), wrecked and smoking
 		for i in rooms.size():
@@ -713,6 +850,8 @@ func _capture(dir: String) -> void:
 			r.hit(9999.0)
 			await _wait(4.0)
 			await _shot(dir, "ai%d_%s_wreck" % [i + 1, KINDS[i]])
+			print("[capture] %s wreck: lowest point %.3f m above the floor, barrels point %.0f degrees below level" % [
+				KINDS[i], r.lowest_point() - rooms[i].global_position.y, -rad_to_deg(asin(r._barrel().y))])
 			V2Fx.hold = 40.0
 			r.set_ai(false)
 	get_tree().quit()
@@ -755,6 +894,71 @@ func _enemy_test() -> void:
 		print("[enemy] %s as enemy: %s  (travelled %.1f m, best aim %.2f rad, in arena %s, shots %d, player health down to %d)" % [
 			r.kind, "PASS" if a else "FAIL", r.travelled - trav0, best_aim, not outside, r.shots_fired - shots0, hp_min])
 		player.invulnerable = true
+		# a hit pushes it: the body is knocked off its seat and tips, comes back on its springs; spider and drone are shoved
+		r.respawn()
+		await _wait(0.3)
+		var p0 := r.position
+		var dir := (r.hit_point() - player.cam.global_position).normalized()
+		r.hit(1.0, dir)
+		var shoved := r._shove.dot(Vector3(dir.x, 0, dir.z).normalized())
+		var knock := 0.0
+		var tip := 0.0
+		t = 0.0
+		while t < 1.0:
+			await get_tree().process_frame
+			t += get_process_delta_time()
+			knock = maxf(knock, r._knock.length())
+			tip = maxf(tip, r._tilt.length())
+		a = tip > 0.04 and r._tilt.length() < 0.02 and (r.kind == "turret" or (knock > 0.02 and r._knock.length() < 0.01 and shoved > 0.3))
+		ok = ok and a
+		print("[enemy] %s pushed by a hit: %s  (knocked %.0f mm, tipped %.0f degrees, both back; shoved off at %.1f m/s)" % [
+			r.kind, "PASS" if a else "FAIL", knock * 1000.0, rad_to_deg(tip), shoved])
+		if r.kind == "spider":
+			# it turns on the spot by stepping round: the feet that stand must stay where they are on the floor
+			r.respawn()
+			r.set_process(false)                           # (driven from here: a fixed half turn)
+			var face := Basis(Vector3.UP, r.rotation.y + deg_to_rad(165.0)) * Vector3.FORWARD
+			var feet: Array = []
+			for k in 4:
+				feet.append(r.find_child("Spider_Foot%d" % k, true, false))
+			var prev: Array = []
+			var slip := 0.0
+			var slips: Array[float] = []
+			var turned := 0.0
+			var yaw_prev := r.rotation.y
+			var t_turn := 0.0
+			t = 0.0
+			Engine.time_scale = 1.0                        # (fine steps: a foot is watched from frame to frame)
+			while t < 6.0 and turned < deg_to_rad(150.0):
+				await get_tree().process_frame
+				var dt := get_process_delta_time()
+				t += dt
+				r._step_round(face, dt)
+				t_turn += dt
+				turned += absf(angle_difference(yaw_prev, r.rotation.y))
+				yaw_prev = r.rotation.y
+				var now: Array = []
+				var low := 1e9
+				for f in feet:
+					now.append((f as Node3D).global_position)
+					low = minf(low, (f as Node3D).global_position.y)
+				if prev.size() == 4 and t_turn > 0.35:        # (after the blend into the clip)
+					for k in 4:
+						if now[k].y < low + 0.006 and prev[k].y < low + 0.006:      # this foot stands
+							slips.append(Vector2(now[k].x - prev[k].x, now[k].z - prev[k].z).length() / dt)
+				prev = now
+			Engine.time_scale = 4.0
+			r.set_process(true)
+			slips.sort()
+			var mean := 0.0
+			for v in slips:
+				mean += v / maxf(slips.size(), 1.0)
+			slip = slips[int(slips.size() * 0.95)] if not slips.is_empty() else 9.0      # (95th percentile: a foot's last frame down may count)
+			a = turned > deg_to_rad(140.0) and slip < 0.15 and mean < 0.06
+			ok = ok and a
+			print("[enemy] spider turns by stepping: %s  (turned %.0f degrees in %.1f s; a standing foot moves %.2f m/s on average, %.2f at worst; sliding round would be 1.5)" % [
+				"PASS" if a else "FAIL", rad_to_deg(turned), t_turn, mean, slip])
+		r.respawn()
 		var hits0 := player.shots_hit
 		t = 0.0
 		while r.state != V2Robot.DEAD and t < 60.0:

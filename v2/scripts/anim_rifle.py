@@ -8,6 +8,7 @@ ReloadTactical, ReloadEmpty (charging handle locked back; ends with a slap on th
 Kept simple on purpose: the right hand never leaves the grip; the left hand stays on the magazine well except in the
 reloads (it slides down to the magazine, takes it out of frame and brings one back) and in Inspect (it drops away).
 """
+import json
 import math
 import os
 import random
@@ -70,25 +71,37 @@ TRIGGER_PULL = Matrix.Translation(R.TRIGGER_PIVOT) @ Matrix.Rotation(math.radian
 
 
 # ---------------------------------------------------------------------- automatic fire
-def burst(f, n, base, k=1.0, seed=7, shake=1.0):
+def burst(f, n, base, k=1.0, seed=7, shake=1.0, climb_max=6.2, loop=None):
     """n rounds, one every 2 frames (720 rpm); f = whole frames since the first shot. Returns a state: the muzzle
     climbs round after round about the shoulder, every shot kicks, the handle cycles, cases stream out to the right,
-    the flash and the view shake on every shot. k scales the recoil (aimed fire is steadier)."""
+    the flash and the view shake on every shot. k scales the recoil (aimed fire is steadier).
+    loop = (first round, rounds): from that round on the burst repeats itself exactly every `rounds` rounds (the
+    climb has reached its top, the shot-to-shot scatter comes round again), so the game can keep the trigger down by
+    jumping back that many rounds. (The scatter then repeats every 5 rounds from the start: one case per slot.)"""
     rng = random.Random(seed)
     jit = [(rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(0.8, 1.25), rng.uniform(0, 3.1), rng.uniform(-1, 1)) for _ in range(n)]
+    if loop:
+        jit = [jit[s % loop[1]] for s in range(n)]
+    top = (loop[0] + 1) if loop else 1e9                   # the climb stops growing where the loop starts
+
+    def rise(x):
+        return climb_max * (1 - math.exp(-min(x, top) / 3.2))
+
+    def turn(i):                                           # the round's place in the side-to-side wander
+        return i if not loop or i < loop[0] else loop[0] + (i - loop[0]) % loop[1]
     end = 2 * n
     if f < 0:
         climb, i, phase = 0.0, -1, 2
     elif f < end:
         i, phase = f // 2, f % 2
-        climb = 6.2 * (1 - math.exp(-(f / 2 + 1) / 3.2))
+        climb = rise(f / 2 + 1)
     else:
         i, phase = n - 1, 2
-        climb = 6.2 * (1 - math.exp(-n / 3.2)) * table(f - end, [(0, 0.8), (2, 0.45), (4, 0.15), (6, -0.05), (9, 0)])
+        climb = rise(n) * table(f - end, [(0, 0.8), (2, 0.45), (4, 0.15), (6, -0.05), (9, 0)])
     kick = (1.0, 0.4, 0.0)[phase]
     j = jit[max(i, 0)]
     root_m = move(fwd=-0.013 * k * kick, up=0.0015 * k * climb) @ base \
-        @ rot(pitch=k * (climb + 1.2 * kick), yaw=k * (0.9 * j[0] * kick + 0.12 * climb * math.sin(i * 1.7)), roll=k * 1.3 * j[1] * kick, pivot=BUTT)
+        @ rot(pitch=k * (climb + 1.2 * kick), yaw=k * (0.9 * j[0] * kick + 0.12 * climb * math.sin(turn(i) * 1.7)), roll=k * 1.3 * j[1] * kick, pivot=BUTT)
     objs = {"R_ChargingHandle": Matrix.Translation((0, -R.HANDLE_TRAVEL * (1.0, 0.3, 0.0)[phase], 0)),
             "R_Trigger": TRIGGER_PULL if -1 <= f <= end else I4}
     props = {}
@@ -134,24 +147,42 @@ def sprint(t):
                 cam=move(right=k * 0.012 * math.sin(ph), up=k * 0.022 * math.cos(2 * ph)) @ cam_rot(roll=k * 0.8 * math.sin(ph)))
 
 
-FIRE_ROUNDS = 8
+# Automatic fire for as long as the trigger is held: 5 rounds in which the muzzle climbs, then 5 that repeat exactly
+# (the game plays FIRE_LOOP over and over), one more that is the first of those again (so the frames between the
+# last key of the loop and its first are right), and the recovery. The climb is lower than it was (4.2 degrees,
+# not 6.2): in the game the rounds go where the barrel points.
+FIRE_REST, FIRE_IN, FIRE_REPEAT = 2, 5, 5
+FIRE_ROUNDS = FIRE_IN + FIRE_REPEAT + 1
+FIRE_LOOP = (FIRE_REST + 2 * FIRE_IN, FIRE_REST + 2 * (FIRE_IN + FIRE_REPEAT))   # frames from the clip's start
+FIRE_T = (FIRE_REST + 2 * FIRE_ROUNDS + 11) / FPS
 
 
 def fire(t):
-    return burst(round(t * FPS) - 2, FIRE_ROUNDS, L0)      # two frames of rest, the burst, the recovery
+    return burst(round(t * FPS) - FIRE_REST, FIRE_ROUNDS, L0, climb_max=4.2, loop=(FIRE_IN, FIRE_REPEAT))
 
 
-ADS_IN, ADS_WAIT, ADS_ROUNDS, ADS_AFTER, ADS_OUT = 0.25, 0.45, 6, 0.6, 0.3
-ADS_T = ADS_IN + ADS_WAIT + ADS_ROUNDS * 2 / FPS + ADS_AFTER + ADS_OUT
+# Aiming: up to the eye, held there by the game for as long as the button is down (it parks the clip at ADS_IN),
+# and down again. Firing while aimed is its own clip, built like Fire (same loop frames) on the aimed pose.
+ADS_IN, ADS_WAIT, ADS_OUT = 0.25, 0.5, 0.3
+ADS_T = ADS_IN + ADS_WAIT + ADS_OUT
 # aimed: the gun straight ahead with the red cross on the eye's axis (75 mm above the bore), stock back to the cheek
 L_ADS = Matrix.Translation((0.0, -0.075, -0.25)) @ Matrix(((1, 0, 0), (0, 0, 1), (0, -1, 0))).to_4x4()
 
 
+def aimed(t, k):
+    s = heavy_sway(t, k=lerp(1.0, 0.2, k))
+    return move(s["right"], s["fwd"], s["up"]) @ mix_m(L0, L_ADS, k) @ rot(s["pitch"], s["yaw"], s["roll"], PIV)
+
+
 def ads(t):
     k = ease_out(seg(t, 0, ADS_IN)) * (1 - smooth(seg(t, ADS_T - ADS_OUT, ADS_T)))
-    s = heavy_sway(t, k=lerp(1.0, 0.2, k))
-    base = move(s["right"], s["fwd"], s["up"]) @ mix_m(L0, L_ADS, k) @ rot(s["pitch"], s["yaw"], s["roll"], PIV)
-    return burst(round((t - ADS_IN - ADS_WAIT) * FPS), ADS_ROUNDS, base, k=0.45, seed=11, shake=1.5)
+    return dict(root=aimed(t, k))
+
+
+def ads_fire(t):
+    """Starts and ends in the aimed pose as the game holds it (ADS at ADS_IN: the sway of that moment)."""
+    return burst(round(t * FPS) - FIRE_REST, FIRE_ROUNDS, aimed(ADS_IN, 1.0), k=0.45, seed=11, shake=1.5, climb_max=4.2,
+                 loop=(FIRE_IN, FIRE_REPEAT))
 
 
 DRAW_T = 1.1
@@ -216,7 +247,7 @@ def inspect(t):
 
 
 CLIPS = [("Idle", 4.0, idle, True), ("Walk", 1.0, walk, True), ("Sprint", SPRINT_IN + SPRINT_RUN + SPRINT_OUT, sprint, False),
-         ("Fire", 1.1, fire, False), ("ADS", ADS_T, ads, False), ("Draw", DRAW_T, draw, False),
+         ("Fire", FIRE_T, fire, False), ("ADS", ADS_T, ads, False), ("ADSFire", FIRE_T, ads_fire, False), ("Draw", DRAW_T, draw, False),
          ("ReloadTactical", RELOAD_T, reload, False), ("ReloadEmpty", RELOAD_EMPTY_T, reload_empty, False),
          ("Inspect", INSPECT_T, inspect, False)]
 def firefight(t):
@@ -233,6 +264,7 @@ def firefight(t):
 
 
 clips = B.run(CLIPS, sys.argv, extra=[("Firefight", PLAN.FF_START, PLAN.FF_N, firefight)])
+bpy.context.scene["v2_fire_loop_rifle"] = json.dumps(dict(loop=FIRE_LOOP, ads_in=ADS_IN, ads_out=ADS_OUT))
 if "nosave" not in sys.argv:
     bpy.ops.wm.save_mainfile(compress=True)
 print("clips:", clips)

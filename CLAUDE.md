@@ -112,12 +112,16 @@ rule no longer applies to the environment):
 V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`); it still runs with `-- --v1`.
 - **Blender side**: `v2/` (Godot ignores it). `v2/scene.blend` = room + three robots + two weapon views (pistol, machine
   gun) with rigged gloved arms, all animated, plus effects. Commands, method and what was learned: `v2/README.md`.
-- **Godot side**: pressing Play opens the **V2 lab** (`scenes/v2_lab.tscn`, `scripts/v2/`): three copies of the room
+- **Godot side**: pressing Play opens the **V2 lab** (`scenes/v2_lab.tscn`, `scripts/v2/`): three plain **studio** rooms
   side by side (11.6 m apart) joined by doorways, one robot in each (spider, drone, ceiling turret), each an **enemy**:
   it moves, aims, shoots the player and can be shot. The player holds the V2 guns. Keys: walk through the doors or
-  `1 2 3` / Tab jump to a room, LMB fire (the machine gun keeps firing while held), RMB aim, `R` reload, `T` reload
-  from empty, `F` inspect, `Q` switch gun, Shift sprint, Space jump, `M` enemy <-> clip preview, `N` next clip
-  (switches to preview), F3 performance, Esc frees the mouse.
+  `1 2 3` / Tab jump to a room, LMB fire (the machine gun fires for as long as it is held), RMB aim (held; LMB fires
+  from the aim), `R` reload, `T` reload from empty, `F` inspect, `Q` switch gun, Shift sprint, Space jump,
+  `M` enemy <-> clip preview, `N` next clip (switches to preview), F3 performance, Esc frees the mouse.
+- Rooms: the studio is `v2/scripts/build_studio.py` -> `v2/studio.blend` + `assets/models/v2/studio.glb` (the size of
+  the concept room, same doorways, a metre grid on the floor = `v2_grid.gdshader`, three blocks for cover outside the
+  robots' arenas, its materials are `V2Assets.SPECIAL` entries). **User decision: the lab is a test studio; the
+  detailed concept room (`room.glb`, from `scene.blend`) is kept for the real game** and still loads with `-- --concept`.
 - Export: `v2/scripts/export_godot.sh` (one Blender process per asset; several animated exports in one process crash
   Blender 4.2) -> `assets/models/v2/*.glb` + `<name>_clips.json` + `<name>_mask.png` + `materials.json`, textures 1K
   -> `assets/textures/v2/`. Then `godot --headless --import` (this registers new `class_name`s too; `--editor --quit`
@@ -126,6 +130,11 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
   G = convex edges), adds `CamKick` under `Eye` (the camera's keyed offset in each gun clip), takes one subdivision
   level off the gloves (32k -> 8k faces each), and writes the gloves' rest position and rest normal into
   UV / UV2 / vertex colour (`prep_glove`).
+- Clips the game drives by hand (frames from the clip tables): machine gun `Fire` / `ADSFire` = 5 rounds of climb,
+  then 5 that repeat exactly (`"fire": {"loop": [12, 22]}` in `view_rifle_clips.json`: while the button is held the
+  player jumps back from frame 22 to 12; letting go blends to Idle or back to the aim); `ADS` is parked at its aimed
+  frame while RMB is down; `Sprint`'s running part (two strides) repeats while sprinting and is left at once when
+  the player stops; the spider's `Turn` (stepping round on the spot, 60 deg/s to the left; played backwards = right).
 - `scripts/v2/v2_assets.gd` (`V2Assets`): rebuilds every material by name from `materials.json` (StandardMaterial3D with
   object-space triplanar = Blender's box projection), cuts the baked "Scene" animation into clips
   (`AnimUtil.split_clips`; clip frames are **timeline** frames: the export keeps time = frame / fps), rebuilds the
@@ -143,13 +152,26 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
   made the gloves blue and twice too bright.
 - `v2_player.gd`: Camera3D with `fov 80` + `KEEP_WIDTH` (the Blender camera); each view glb hangs from it through its
   `Eye` node: `scene.transform = Rx(90 deg) * Eye^-1`; the camera follows `CamKick` (recoil, bob from the clips).
+  The machine gun's rounds leave **along its barrel** and the HUD's cursor is where the barrel points (it climbs
+  and jumps with the recoil; `aim_dir`, `aim_dot`). In Blender the gun is held toed in (barrel 6 degrees left of and
+  4 above the line of sight), so tracers to the screen's middle looked bent: the whole view is turned about the eye
+  until the barrel is parallel to the line of sight (`fix`, found from the Idle clip; faded out while aiming).
+  The pistol still shoots at the middle of the screen.
   Health 100, regenerates after 4 s without a hit; at 0 the player is "down" for a moment, then revived in place.
   Damage: pistol 34, machine gun 12 a round.
 - `v2_robot.gd` (`V2Robot`): states ROAM / ENGAGE / AIM / SHOOT / DEAD (+ PREVIEW = clip cycle). Numbers in `SPEC`
   (health, damage, spread, speeds, arena). The aim point lags the player by 0.3 s, so moving makes them miss. Spider
-  and drone stay inside an obstacle-free rectangle of their room (`arena`); the turret swings its Root joint and
-  an inserted `AimPitch` node. A hit shakes the robot and wakes it; at 0 health: burst, Death clip, a smoking wreck,
-  back after 6 s. `v2_fx.gd` (`V2Fx`): tracers, impact sparks / chips / dust / scorch marks, smoke, flash lights.
+  and drone stay inside an obstacle-free rectangle of their room (`arena`).
+  **Aiming is a servo on the barrel**: each frame the direction the muzzle really points (-Z of its flash node, clip
+  and all) is compared with the direction to the target and the aim joints are turned by the difference: spider =
+  `AimYaw` above its turret + `AimPitch` above its guns (nodes inserted at setup, the clips' tracks re-pointed
+  through them: `_insert_aim`), drone = body pitch + the node's heading, turret = arm heading + `AimPitch` above
+  the head. A round leaves along the barrel, wherever it points: a shot is never bent.
+  The spider turns by stepping (`_step_round`, the Turn clip at the speed of the turn), not by sliding. A hit
+  pushes: body knocked back and tipped on springs (`_springs`, `PUSH`), spider / drone shoved, the turret's arm
+  swung aside; at 0 health: burst, Death clip, a smoking wreck (lowered onto the floor by the gap measured at
+  setup: `_measure_wreck`), back after 6 s. `v2_fx.gd` (`V2Fx`): tracers, impact sparks / chips / dust / scorch
+  marks, smoke, flash lights.
 - Light (`v2_lab.gd _environment`, tuned against `v2/renders/stage3_scene.png` zone by zone with
   `--capture=DIR --only=tone`): half of it is one DirectionalLight3D straight down (the luminous ceiling: bright
   floor, dimmer walls) and it casts the only shadows (one orthogonal pass; the room shell casts none); six omni
@@ -165,27 +187,48 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
   against a 6 mm lip (the bevel left at the foot of a cut skirting plate), so openings are cut below the floor line.
 - Checks (run after touching the player, robots or HUD):
   `godot --headless --path . -- --enemy-test` (each robot moves / aims, stays in its arena, fires, hurts a standing
-  player, is destroyed by the player's rounds and comes back; the player goes down and is revived; prints PASS / FAIL;
+  player, is pushed by a hit and comes back on its springs, is destroyed by the player's rounds and returns; the
+  spider turns half round with its standing feet still; the player goes down and is revived; prints PASS / FAIL;
   headless has no meshes, so walls do not block anything in this test);
+  `xvfb-run -a godot --rendering-driver opengl3 --path . -- --gun-test` (real events: machine gun held 2.5 s = no gap
+  between rounds, stops on release; rounds leave along the barrel, cursor in the middle at rest and climbing in
+  fire; fire while aiming; a sprint ends when the player stops);
   `xvfb-run -a godot --rendering-driver opengl3 --path . -- --input-test` (real mouse / key events through the
   viewport: look, fire, aim, reload, inspect, camera kick). The capture tour drives the player by code, so it passed
   while a HUD ColorRect at screen centre (mouse filter STOP by default) was swallowing every mouse event: HUD
   controls are `MOUSE_FILTER_IGNORE`, and the player reads the mouse in `_input`.
-- Captures: `tools/capture_v2.sh` -> `captures/v2/` (everything, ~25 min here), or
-  `--capture=DIR --only=tone,rooms,doors,guns,look,ai,wreck` for parts (`tone` = the Blender camera's frame, 15 s;
-  `look` = materials close up; `ai` = each robot moving, firing, wrecked; `wreck` = burst + smoke, on request only).
+- Captures: `tools/capture_v2.sh` -> `captures/v2/` (everything), or
+  `--capture=DIR --only=tone,rooms,doors,guns,look,ai,wreck,fx,panel` for parts (`tone` = the Blender camera's frame;
+  `look` = materials close up; `ai` = each robot moving, firing, wrecked (prints how far the wreck's lowest point is
+  above the floor and where its barrels point); on request only: `wreck` = burst + smoke, `fx` = hits on a wall,
+  `panel` = 12 consecutive frames of the machine gun, to look for flicker).
+  Scratch tools worth rewriting when needed: a "pops" script (step every clip in half frames and print the largest
+  bone move / turn: it found the hand flips) and a clip strip (frames of one clip side by side).
 - Performance: `F3` in the lab shows fps / frame time / draw calls / triangles / objects / video memory / adapter;
   `-- --perf` prints that line for 12 s and quits; `-- --quality=low` = no shadows, glow or MSAA (exposed up to match).
-  Measured here (counts do not depend on the GPU; fps here is llvmpipe, ~8 whatever is drawn): 334 draw calls,
-  706k triangles, 192 MB with shadows; 249 / 629k / 160 MB at low quality. History: shadow-casting omni lights were
+  Measured here (counts do not depend on the GPU; fps here is llvmpipe, ~8 whatever is drawn): studio rooms
+  232 draw calls, 224k triangles, 166 MB; the concept room (`--concept`) 334 / 706k / 192 MB (249 / 629k / 160 MB
+  at low quality). History: shadow-casting omni lights were
   the cost (two per room = 1,935 draw calls, 7.8 M triangles), and the gloves were 65k of each view's faces.
   The user's M1 gave 77 fps at 1280x720 before the enemies and the look work; not measured since.
+- Learned in the feedback round:
+  a forearm twist that wraps at +-180 degrees flips the forearm bones between two keys, and the game, interpolating
+  between them, shows the hand turned half round for a frame (it was in eight clips): `hands.pose` keeps the twist
+  continuous (`TWIST_REF`, reset by the baker per clip);
+  a looping clip of n frames must last n frames, not n - 1 (`V2Assets.clips`): one frame short, a walking foot
+  jumped 3 cm every cycle;
+  an object stored hidden (scale 0) has no rotation in its matrix: the ceiling turret's muzzle flames, turned a
+  quarter to lie along the barrels, pointed sideways (read `rotation_quaternion`, set the mode before placing);
+  two faces in one plane, or 0.25 mm apart on a gun 0.5 m from the eye, flicker (the machine gun's screen):
+  keep 0.6 mm or more between layers;
+  explicit springs (the hit push) are stepped at 8 ms whatever the frame time.
 - Learned: "hidden by scale 0" breaks Godot's glTF import (node comes in at scale 1): export hides at 0.001.
   A fine weave seen at arm's length beats against the pixel grid even with mipmaps: the glove fabrics are sampled
   with a mip bias. A directional light with shadows on came out about half as bright again as without.
-- Not done yet: the turret does not travel (its cables), sound, a browser build.
+- Not done yet: the turret does not travel (its cables), sound, a browser build; the pistol has no cursor recoil
+  (it shoots at the middle of the screen: the user called its firing good).
   User decisions: no sound for now; no browser build of V2 for now (`tools/export_web.sh` is untested with the V2 lab);
-  the lab rooms may be simplified (the concept room is kept as it is so far).
+  studio rooms in the lab, the concept room for the real game.
 
 ## Conventions (fixed on day one; do not drift)
 

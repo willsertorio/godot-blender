@@ -122,9 +122,10 @@ class Robot:
         """A muzzle flash (hidden by scale 0) with its light; `local` puts its origin at the muzzle, +Y along the barrel."""
         from build_pistol import make_flash
         fl, lo = make_flash(f"{self.name}_{name}", self.coll, None, (0, 0, 0), size)
+        fl.rotation_mode = "QUATERNION"                 # (before it is placed: changing the mode afterwards drops the
+        #                                                 rotation, and the turret's flames pointed sideways)
         self._attach(fl, self.M @ local, joint)
         self._attach(lo, self.M @ local @ T(0, 60, 10), joint)
-        fl.rotation_mode = "QUATERNION"
         fl.scale = (0, 0, 0)
         self.objs += [fl, lo]
 

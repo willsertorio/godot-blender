@@ -7,6 +7,11 @@ const TEX := "res://assets/textures/v2/"
 const SPECIAL := {  # materials that are procedural in Blender
 	"TankLiquid": {"color": Color(0.2, 0.62, 0.68, 0.45), "rough": 0.08, "emit": Color(0.16, 0.5, 0.55), "energy": 1.3},
 	"DarkGlass": {"color": Color(0.03, 0.05, 0.07, 0.75), "rough": 0.05},
+	# the studio test room (v2/scripts/build_studio.py); its floor is v2_grid.gdshader
+	"StudioWall": {"color": Color(0.80, 0.81, 0.82), "rough": 0.9},
+	"StudioDark": {"color": Color(0.13, 0.14, 0.16), "rough": 0.6},
+	"StudioBlock": {"color": Color(0.50, 0.53, 0.57), "rough": 0.75},
+	"StudioLight": {"color": Color(1, 1, 1), "rough": 0.5, "emit": Color(0.97, 0.98, 1.0), "energy": 2.6},
 }
 
 # Wear of the guns' and robots' paint (the numbers of the Blender materials: v2/scripts/build_*.py), drawn by
@@ -109,6 +114,10 @@ static func material(mat_name: String, mesh_key: String = "", asset: String = ""
 	var m: Material
 	if mat_name.begins_with("Flash"):
 		m = _flash(mat_name == "FlashCore")
+	elif mat_name == "StudioFloor":
+		var gr := ShaderMaterial.new()
+		gr.shader = load("res://assets/shaders/v2_grid.gdshader")
+		m = gr
 	elif mat_name == "Hazard":
 		var hz := ShaderMaterial.new()
 		hz.shader = load("res://assets/shaders/v2_hazard.gdshader")
@@ -147,7 +156,8 @@ static func material(mat_name: String, mesh_key: String = "", asset: String = ""
 			if d.emit_strength > 0.0 and (d.emit[0] + d.emit[1] + d.emit[2]) > 0.0:
 				s.emission_enabled = true
 				s.emission = _c(d.emit)
-				s.emission_energy_multiplier = clampf(d.emit_strength * 0.3, 1.0, 6.0)
+				# (a faint glow keeps its own strength: the machine gun's screen glass is 0.12)
+				s.emission_energy_multiplier = clampf(d.emit_strength * 0.3, 1.0, 6.0) if d.emit_strength >= 1.0 else d.emit_strength
 			if d.transmission > 0.0:
 				s.albedo_color.a = 0.22
 				s.roughness = 0.05
@@ -205,7 +215,12 @@ static func clips(root: Node, asset: String) -> AnimationPlayer:
 	var spec: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
 	for c in spec.loops:
 		if ap.has_animation(c):
-			ap.get_animation(c).loop_mode = Animation.LOOP_LINEAR
+			# A looping clip of n frames lasts n frames: the frame after its last key is its first again. Cut to
+			# the keys alone it is one frame short, and every time round it skipped that frame's worth of motion
+			# (a walking foot jumped 3 cm). The step from the last key back to the first is interpolated.
+			var anim := ap.get_animation(c)
+			anim.loop_mode = Animation.LOOP_LINEAR
+			anim.length = maxf(anim.length, (spec.clips[c][1] - spec.clips[c][0] + 1.0) / float(spec.fps))
 	# Muzzle flashes are shown for one frame by their scale; the importer drops those one-frame keys, so their scale
 	# tracks are rebuilt from the frames listed by the exporter (once per shared library).
 	var lib := ap.get_animation_library("")

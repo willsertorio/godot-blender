@@ -45,9 +45,11 @@ for o in LIGHTS:
     o.data.animation_data_clear()
     o.data.energy = 0.0
 REST = {o.name: o.matrix_basis.copy() for o in ANIMATED}
-for o in FLASHES:                                  # (they are stored hidden: scale 0)
-    loc, quat, _ = REST[o.name].decompose()
-    REST[o.name] = Matrix.Translation(loc) @ quat.to_matrix().to_4x4()
+for o in FLASHES:                                  # (they are stored hidden: scale 0, so their matrix holds no rotation:
+    #                                                 the ceiling turret's flames, turned a quarter to lie along its
+    #                                                 barrels, came out sideways. Read the rotation itself.)
+    assert o.rotation_mode == "QUATERNION"
+    REST[o.name] = Matrix.Translation(o.location) @ o.rotation_quaternion.to_matrix().to_4x4()
 
 
 def Rx(d):
@@ -212,6 +214,29 @@ def spider_run(t):
     return gait(t, RUN_T, 0.47, 0.24, body, yaw=-20 + 7 * math.sin(ph + 1.0), pitch=5 * math.sin(2 * ph + 1.2))
 
 
+TURN_T = 20 / FPS
+TURN_STEP = 25.0                                           # degrees the body turns over one planted pair of feet
+
+
+def spider_turn(t):
+    """Turning on the spot, to its left (60 degrees a second): the planted pair of feet stays where it is on the
+    floor while the body turns over it, the other pair lifts and reaches round. Played backwards it turns right.
+    (The game turned the robot under a standing pose: the feet slid over the floor.)"""
+    feet = []
+    for i in range(4):
+        ph = (t / TURN_T + (0.0 if i in (0, 2) else 0.5)) % 1.0
+        if ph < 0.5:
+            a, z = TURN_STEP * (0.5 - ph / 0.5), 0.0
+        else:
+            s_ = (ph - 0.5) / 0.5
+            a, z = TURN_STEP * (smooth(s_) - 0.5), 0.10 * math.sin(math.pi * s_)
+        p = Rz(a) @ Vector((FEET0[i].x, FEET0[i].y, 0.0))
+        feet.append(Vector((p.x, p.y, FEET0[i].z + z)))
+    ph = TAU * t / TURN_T
+    body = Tm(0, 0, -0.008 - 0.012 * math.cos(2 * ph)) @ Ry(1.6 * math.sin(ph)) @ Rx(1.0 * math.sin(2 * ph + 0.6))
+    return spider(body, feet)
+
+
 SPIDER_DIES = 0.35                                         # seconds into the Death section
 
 
@@ -291,7 +316,8 @@ def drone_fly(t, f):
                  Tm(0.6 * math.sin(ph), 0.2 * math.sin(2 * ph)) @ Rz(-14 * math.cos(ph)) @ Ry(-24 * math.sin(ph)) @ Rx(-6 - 8 * math.cos(2 * ph)))
 
 
-DRONE_DROP = DRONE_M.translation.z - 0.34                  # how far it falls before a rotor duct hits the floor
+DRONE_DROP = DRONE_M.translation.z - 0.25                  # how far it falls before a rotor duct hits the floor
+#                                                            (0.34 left it 9 cm in the air, measured in the game)
 _yaw0 = math.atan2(DRONE_M.col[1].y, DRONE_M.col[1].x) - math.pi / 2
 DRONE_DIES = 0.15                                          # seconds into the Death section
 DRONE_G = 7.0                                              # it falls slower than a stone: the rotors still bite
@@ -382,14 +408,20 @@ def turret_aim(t):
 
 def turret_death(t):
     """Short circuit: half a second of spasms (head whipping, mount jerking), then the power goes: the arm drops on
-    its joints, the head hangs and swings a long time, and it twitches once more at the end."""
+    its joints until all of it hangs straight down from the shoulder, the head last, swinging a long time like a
+    weight on a rope, and it twitches once more at the end.
+    At rest the upper arm points 45 degrees down, the forearm 13.5 up, the head 14 down. Hanging: shoulder +42,
+    elbow +60, head -22 (it straightens on the wrist) = upper arm 87, forearm 88.5, barrels 94 degrees down.
+    (The head used to swing +55 on: 169 degrees, the barrels level again, pointing backwards.)"""
     sp = math.exp(-t / 0.22) * seg(t, 0.0, 0.04)            # the spasms
     off = 0.45
     late = imp(t, [2.2], 0.18, 0.07)                        # the last twitch
+    x = t - off - 0.1
+    pend = 26 * math.exp(-x / 0.9) * math.sin(TAU * x / 1.05) if x > 0 else 0.0     # the head as a pendulum
     return turret(yaw=16 * math.sin(41 * t) * sp + swing(t, off, 30, 2.2, 0.9),
-                  shoulder=5 * math.sin(33 * t + 1) * sp + swing(t, off, 26, 1.4, 0.7),
-                  elbow=-9 * math.sin(37 * t) * sp + swing(t, off + 0.05, 66, 1.1, 0.6) + 3 * late,
-                  head=22 * math.sin(47 * t + 2) * sp + swing(t, off + 0.1, 55, 0.85, 0.7) - 7 * late,
+                  shoulder=5 * math.sin(33 * t + 1) * sp + swing(t, off, 42, 1.4, 0.7),
+                  elbow=-9 * math.sin(37 * t) * sp + swing(t, off + 0.05, 60, 1.1, 0.6) + 3 * late,
+                  head=22 * math.sin(47 * t + 2) * sp + swing(t, off + 0.1, -22, 0.85, 0.7) + pend - 5 * late,
                   lights=flicker(t, 0.6))
 
 
@@ -442,6 +474,8 @@ f = section("Run", f, 60, lambda t, i: merge(spider_run(t), drone_idle(t, i), tu
 DEATH_N = 76
 f = section("Death", f, DEATH_N, lambda t, i: merge(spider_death(t), drone_death(t, i), turret_death(t)),
             {"Spider Death": (0, DEATH_N, False), "Drone Death": (0, DEATH_N, False), "Turret Death": (0, DEATH_N, False)})
+f = section("Turn", f, 20, lambda t, i: merge(spider_turn(t), drone_idle(t, i), turret_idle(t)), {"Spider Turn": (0, 20, True)})
+assert f <= PLAN.FF_START, "the robots' sections run into the Firefight"
 FF_END = PLAN.FF_N / FPS
 _sp, _dr, _tu = (tuple(x / FPS for x in v) for v in (PLAN.FF_SPIDER, PLAN.FF_DRONE, PLAN.FF_TURRET))
 section("Firefight", PLAN.FF_START, PLAN.FF_N,
