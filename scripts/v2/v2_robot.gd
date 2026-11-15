@@ -44,7 +44,12 @@ const PUSH := {"spider": [1.5, 3.2, 0.7], "drone": [1.2, 5.0, 2.2], "turret": [0
 # quick twitch: the motors hold it) and of a wreck's (limp: the spider's legs and the drone's ducts flop and
 # settle; the turret's arm hangs from the ceiling and swings a long time)
 const FLOP_LIVE := [30.0, 16.0]
-const FLOP_DEAD := {"spider": [15.0, 3.2], "drone": [15.0, 3.2], "turret": [3.4, 0.35]}
+const FLOP_DEAD := {"spider": [15.0, 3.2], "drone": [15.0, 3.2], "turret": [7.0, 3.0]}
+# how much of a round's push a wreck takes: [struck joint, the whole body]. The turret is a heavy arm on a ceiling
+# mount: a round rocks it a few degrees and it settles within a second (it used to swing 80 degrees for a long time, like a
+# lamp on a cord).
+const WRECK_PUSH := {"spider": [1.0, 0.45], "drone": [1.0, 0.45], "turret": [0.22, 0.08]}
+const DIVE := 0.6                # the drone shot down: its Death clip's fall is played at this speed (1.7 s to the floor)
 const ROOM := Rect2(-3.6, -13.0, 9.0, 15.0)     # where a wreck may be shoved to and the falling drone may fly (room frame)
 const BLAST := [3.5, 40.0]                      # the drone's explosion: reach (m), damage at its centre
 const RESPAWN := 6.0             # seconds a wreck lies before the robot is back
@@ -68,6 +73,7 @@ var _flop: Dictionary = {}          # joint -> {off, vel (axis * angle, the join
 var _spin := 0.0                    # drone, shot down: seconds of flight out of control still to go
 var _spin_total := 1.0
 var _vel := Vector3.ZERO            # its velocity then (room frame)
+var _own_vel := Vector3.ZERO        # where it is flying / walking to, and how fast (room frame): a drone shot down keeps this line
 var _wob := 0.0
 var _spark_t := 0.0
 var _short_t := 0.0                 # wreck: seconds to its next short circuit
@@ -365,8 +371,8 @@ func hit(damage: float = 34.0, dir: Vector3 = Vector3.ZERO, point: Vector3 = Vec
 		point = hit_point()
 	if state == DEAD:
 		# the wreck is still a thing in the room: the part that is struck swings, the whole of it is jarred
-		_knock_joint(joint if joint != null else _hit_joint, point, dir, 1.0)
-		_push(dir, 0.45)
+		_knock_joint(joint if joint != null else _hit_joint, point, dir, WRECK_PUSH[kind][0])
+		_push(dir, WRECK_PUSH[kind][1])
 		if randf() < 0.4:
 			V2Fx.sparkle(point, 7, -3.0)               # (something inside still has power)
 		return
@@ -383,16 +389,21 @@ func hit(damage: float = 34.0, dir: Vector3 = Vector3.ZERO, point: Vector3 = Vec
 		V2Fx.set_smoke(_smoke, true)
 		V2Fx.burst(hit_point())
 		if kind == "drone":
-			# shot down, it does not drop at once: it careers round the room out of control, spinning and shedding
-			# sparks, then falls, and blows up where it lands
-			_spin_total = randf_range(2.2, 3.2)
-			_spin = _spin_total
+			# shot down, it goes down like an aircraft: on along the line it was flying (the way it faces, if it
+			# was hovering), nose dropping, faster and faster, into the floor or whatever is in its way, and blows
+			# up there. No spinning about: the first version careered round the room like a top.
 			_exploded = false
-			var flat := Vector3(dir.x, 0.0, dir.z).normalized()
-			_vel = (flat * 3.0 + Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)) * 2.0)
+			var going := _own_vel                          # (its own flight: not the shove of the rounds that hit it)
+			going.y = 0.0
+			if going.length() < 0.8:
+				going = -global_basis.z
+				going.y = 0.0
+			_vel = going.normalized() * maxf(_own_vel.length(), 2.6)
+			_spin_total = ap.get_animation("Death").length
+			_spin = 1.0                                    # > 0 while it is still in the air
 			_shove = Vector3.ZERO
-			_play("Fly", 2.4, true)
-			_t = _spin_total + ap.get_animation("Death").length + RESPAWN
+			_play("Death", DIVE, true)
+			_t = 1.02 / DIVE + ap.get_animation("Death").length + RESPAWN
 		else:
 			_play("Death", 1.0, true)
 			_t = ap.get_animation("Death").length + RESPAWN
@@ -633,6 +644,7 @@ func _move(delta: float, fast: bool, face_player: bool) -> bool:
 	to.y = 0.0
 	var dist := to.length()
 	var clips: Array = _spec.clips
+	_own_vel = Vector3.ZERO
 	if dist < 0.3:
 		return true
 	var k := 1.0
@@ -652,6 +664,7 @@ func _move(delta: float, fast: bool, face_player: bool) -> bool:
 	if pl.length() < 3.0 and pl.dot(to) > 0.0:         # never into the player
 		k = 0.0
 	var speed: float = (_spec.run if fast else _spec.walk) * k
+	_own_vel = to / dist * speed
 	var step := minf(speed * delta, dist)
 	position = _clamp_arena(position + to / dist * step)
 	travelled += step
@@ -696,6 +709,7 @@ func _servo(delta: float, on: bool) -> void:
 
 func _mobile(delta: float) -> void:
 	var clips: Array = _spec.clips
+	_own_vel = Vector3.ZERO                            # (_move sets it when it moves)
 	if state != ROAM and _unseen > 3.0:                # lost the player
 		state = ROAM
 		_pick_roam()
@@ -842,43 +856,55 @@ func _pose() -> void:
 
 
 # ---------------------------------------------------------------- every frame
-## The drone, shot down and still flying: it careers about the room faster and faster, turning at random and
-## bouncing off the walls, spinning about its own axis, rolling and pitching, shedding sparks.
+## The drone, shot down and still in the air: it flies on in a straight line, facing as it faced (it does not turn),
+## gathering speed as it loses height (the Death clip is the fall and the attitude: nose down, banked), shedding
+## sparks. It ends on the floor (the clip's moment of impact) or against the first thing in its way.
 func _spin_out(delta: float) -> void:
-	var k := 1.0 - _spin / _spin_total                # 0 -> 1 over the flight
 	_wob += delta
-	rotation.y += deg_to_rad(lerpf(220.0, 640.0, k)) * delta
-	_vel = _vel.rotated(Vector3.UP, (sin(_wob * 3.1) * 2.2 + randf_range(-1.6, 1.6)) * delta)
-	_vel = Vector3(_vel.x, 0.0, _vel.z).normalized() * lerpf(3.2, 5.6, k)
-	var p := position + _vel * delta
-	for axis in 2:
-		var lo: float = ROOM.position.x if axis == 0 else ROOM.position.y
-		var hi: float = ROOM.end.x if axis == 0 else ROOM.end.y
-		var v: float = p.x if axis == 0 else p.z
-		if v < lo or v > hi:                               # off a wall: it glances away in a shower of sparks
-			if axis == 0:
-				_vel.x = -_vel.x
-				p.x = clampf(p.x, lo, hi)
-			else:
-				_vel.z = -_vel.z
-				p.z = clampf(p.z, lo, hi)
-			V2Fx.sparks(hit_point(), Vector3(_vel.x, 0.3, _vel.z).normalized(), 26)
-			_wob += 1.7
-	position = p
-	var wild := (0.45 + 0.55 * k) * (1.0 - smoothstep(0.88, 1.0, k))      # (level again as the fall begins: the clip takes over)
-	_tilt = Vector3(sin(_wob * 11.0) * 0.5, 0.0, cos(_wob * 8.3) * 0.6) * wild
-	_tilt_v = Vector3.ZERO
-	_seat.y = _seat_y + sin(_wob * 5.0) * 0.28 * wild
+	var k := clampf(ap.current_animation_position / 1.02, 0.0, 1.0)      # 0 -> 1 over the fall
+	_vel = _vel.normalized() * minf(_vel.length() + 3.2 * delta, 7.0)
 	_apitch = move_toward(_apitch, 0.0, 3.0 * delta)
+	var p := position + _vel * delta
+	var struck := false
+	if p.x < ROOM.position.x or p.x > ROOM.end.x or p.z < ROOM.position.y or p.z > ROOM.end.y:
+		struck = true                                      # a wall
+		p = Vector3(clampf(p.x, ROOM.position.x, ROOM.end.x), 0.0, clampf(p.z, ROOM.position.y, ROOM.end.y))
+	else:
+		var from := hit_point()                            # or anything that stands in the room
+		var q := PhysicsRayQueryParameters3D.create(from, from + _vel.normalized() * 0.75)
+		var skip: Array[RID] = _bodies.duplicate()
+		if player != null:
+			skip.append(player.get_rid())
+		q.exclude = skip
+		struck = not get_world_3d().direct_space_state.intersect_ray(q).is_empty()
+	if not struck:
+		position = p
 	_spark_t -= delta
 	if _spark_t <= 0.0:
-		_spark_t = randf_range(0.2, 0.45)
-		V2Fx.sparks(hit_point(), Vector3.DOWN, 12)
-	V2Sfx.drive(_rotor, true, 1.25 + 0.55 * k + 0.2 * sin(_wob * 9.0))      # the rotors scream and stutter
-	if _spin <= 0.0:
-		_seat.y = _seat_y
-		_shove = _vel * 0.35                               # (it carries on a little as it falls)
-		_play("Death", 1.0, true)
+		_spark_t = randf_range(0.12, 0.3)
+		V2Fx.sparks(hit_point(), -_vel.normalized() + Vector3(0, 0.4, 0), 10)
+	V2Sfx.drive(_rotor, true, 1.2 + 0.7 * k + 0.12 * sin(_wob * 23.0))      # the rotors scream
+	if struck:                                             # into a wall, a tank, a column: it blows up there and drops
+		_spin = 0.0
+		_blow_up()
+		_vel = Vector3.ZERO
+		ap.speed_scale = 1.0
+	elif ap.current_animation_position >= 1.02:           # into the floor
+		_spin = 0.0
+		_shove = _vel * 0.3                                # (what is left of it skids on)
+		ap.speed_scale = 1.0
+
+
+func _blow_up() -> void:
+	if _exploded:
+		return
+	_exploded = true
+	V2Sfx.drive(_rotor, false)
+	V2Fx.explosion(hit_point())
+	if player != null:
+		var d := player.global_position.distance_to(hit_point())
+		if d < BLAST[0]:
+			player.hurt(BLAST[1] * (1.0 - d / BLAST[0]), hit_point())
 
 
 ## What is heard of a live robot: the spider's feet coming down (twice per cycle of its gait), a servo when a robot
@@ -933,20 +959,13 @@ func _process(delta: float) -> void:
 		_apitch = move_toward(_apitch, 0.0, 3.0 * delta)
 		_tpitch = move_toward(_tpitch, 0.0, 2.5 * delta)
 		if _spin > 0.0:
-			_spin -= delta
 			_spin_out(delta)
 		_sink = _gap * smoothstep(0.25, 1.05, ap.current_animation_position) if clip == "Death" else _sink
 		if not _crashed and clip == "Death" and ap.current_animation_position >= 1.4:
 			_crashed = true                            # the spider's body slams down
 			V2Sfx.play("crash", hit_point())
 		if not _exploded and clip == "Death" and ap.current_animation_position >= 1.02:
-			_exploded = true                           # the drone hits the floor
-			V2Sfx.drive(_rotor, false)
-			V2Fx.explosion(hit_point())
-			if player != null:
-				var d := player.global_position.distance_to(hit_point())
-				if d < BLAST[0]:
-					player.hurt(BLAST[1] * (1.0 - d / BLAST[0]), hit_point())
+			_blow_up()                                 # the drone hits the floor
 		_shorts(delta)
 		_springs(delta)
 		if _t <= 0.0:

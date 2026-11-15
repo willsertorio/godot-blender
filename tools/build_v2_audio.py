@@ -6,7 +6,8 @@
 
 Sources (all CC0, opengameart.org; one row each in licenses.csv; `tools/fetch_v2_audio.sh` downloads them):
   firearms/   The Free Firearm Sound Library (Still North Media): real guns, 24 bit / 96 kHz, several shots per file
-  oga/        foley by rubberduck, Thimras, Fantozzi, BMacZero, zer0_sol, SpringySpringo, LFA, artisticdude, qubodup
+  oga/        foley by rubberduck, Thimras, BMacZero, zer0_sol, SpringySpringo, LFA, artisticdude, qubodup
+  ../audio/impact-sounds/   Kenney Impact Sounds (the player's footsteps; V1's download, kenney.nl)
 
 Foley: a region or its loud events are cut out, faded, sometimes re-pitched (resampled) or layered.
 
@@ -447,11 +448,14 @@ def recipes():
     # a sharper thing: played 1.6 times as fast, the treble lifted
     r["flyby"] = [eq(pitch(whole(o("swishes/swishes/swish-%d.wav" % i)), 1.6), hp(180), shelf_hi(1500, 6.0)) for i in (1, 10, 11, 12, 13)]
     # ---- the player's body
-    st = "Fantozzi-footsteps/Fantozzi-footsteps/flac/Fantozzi-Stone%s.flac"
-    r["step"] = [level(whole(o(st % n)), -3.0) for n in ("L1", "L2", "L3", "R1", "R2", "R3")]
-    r["jump"] = [level(pitch(whole(o(st % "L2")), 1.15), -3.0)]
+    # Boots on a hard floor: Kenney's concrete footsteps (Impact Sounds, CC0; in assets_src/audio/, V1's download):
+    # a short dull tap, nearly all of it under 500 Hz. (The first set, steps on stone from a "sand and stone" pack,
+    # had a 0.15 s gritty scrape at 1.5-10 kHz in every step: the user heard sand, and tired of it.)
+    ks = os.path.join(SRC, "..", "audio", "impact-sounds", "Audio", "footstep_concrete_%03d.ogg")
+    r["step"] = [whole(ks % i) for i in range(5)] + [pitch(whole(ks % 1), 0.93), pitch(whole(ks % 2), 1.07)]
+    r["jump"] = [pitch(whole(ks % 2), 1.15)]
     thud = whole(o(bf + "hit_02.ogg"))                                      # a low, dull blow
-    r["land"] = [level(layer((pitch(whole(o(st % "R1")), 0.8), 1.0, 0.0), (thud, 0.9, 0.0)), -2.0)]
+    r["land"] = [layer((level(pitch(whole(ks % 1), 0.8), -3.0), 1.0, 0.0), (level(thud, -3.0), 0.9, 0.0))]
     r["crouch"] = [level(whole(o("rattle1.wav")), -6.0), level(whole(o("lightclunk2.wav")), -6.0)]
     r["hurt"] = [level(whole(o(bf + "hit_07.ogg"))), level(whole(o("sfx_100_v2/sfx100v2_hit_01.ogg")))]
     # going down: the dull blow, with a harder hit in it (alone and pitched down it was all under 200 Hz: nothing on a laptop)

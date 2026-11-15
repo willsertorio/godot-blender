@@ -442,19 +442,19 @@
   },
   "PFrame": {
    "type": "pbr",
-   "set": "Plastic012B",
-   "scale": 0.05,
+   "set": "PaintedPlaster017",
+   "scale": 0.12,
    "tint": [
-    0.775,
-    0.85,
-    0.975
+    0.46,
+    0.475,
+    0.5
    ],
    "rough": [
-    0.5,
-    0.72
+    0.34,
+    0.54
    ],
    "metallic": 0.0,
-   "normal": 0.8,
+   "normal": 0.3,
    "vcol": false
   },
   "PGripTex": {
@@ -550,19 +550,19 @@
   },
   "PSlide": {
    "type": "pbr",
-   "set": "Metal032",
-   "scale": 0.09,
+   "set": "PaintedPlaster017",
+   "scale": 0.16,
    "tint": [
-    0.94,
-    0.9,
-    0.84
+    0.86,
+    0.87,
+    0.89
    ],
    "rough": [
-    0.34,
-    0.52
+    0.3,
+    0.5
    ],
-   "metallic": 0.25,
-   "normal": 0.5,
+   "metallic": 0.0,
+   "normal": 0.3,
    "vcol": false
   },
   "PSteel": {

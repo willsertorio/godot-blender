@@ -150,17 +150,26 @@ class Part:
         return out
 
 
+# The painted parts, in the machine gun's colours (build_rifle.py: RfWhite, a grey between RfShell2 and RfGrey): the
+# slide white, the frame grey. (It was a dark steel slide on a black plastic frame: a black gun beside a white one.
+# recolor_pistol.py puts these two into an existing scene.blend.)
+PAINT = {
+    "PSlide": lambda: L.pbr("PSlide", "PaintedPlaster017", scale=0.16, tint=(0.86, 0.87, 0.89), rough=(0.3, 0.5), normal=0.3,
+                            grunge=0.16, grunge_scale=40, round_edges=0.0004, edge_wear=0.55,
+                            wear_color=(0.22, 0.23, 0.25), cavity=0.7),
+    "PFrame": lambda: L.pbr("PFrame", "PaintedPlaster017", scale=0.12, tint=(0.46, 0.475, 0.5), rough=(0.34, 0.54), normal=0.3,
+                            round_edges=0.0005, edge_wear=0.5, wear_color=(0.6, 0.6, 0.6), cavity=0.6),
+}
+
+
 def materials():
     for n in ("PSlide", "PFrame", "PGripTex", "PSteel", "PBlack", "PBarrel", "PLens", "PDotRed", "PSightDot", "PCyan",
               "PLightLens", "PRubber", "PBrass", "PFlash"):    # (not FlashFire / FlashCore: the robots' flashes share them)
         if bpy.data.materials.get(n):
             bpy.data.materials.remove(bpy.data.materials[n])
     m = {}
-    m["slide"] = L.pbr("PSlide", "Metal032", scale=0.09, tint=(0.94, 0.9, 0.84), rough=(0.34, 0.52), metallic=0.25,
-                       normal=0.5, grunge=0.14, grunge_scale=40, round_edges=0.0004, edge_wear=0.8,
-                       wear_color=(0.7, 0.69, 0.66), cavity=0.5)
-    m["frame"] = L.pbr("PFrame", "Plastic012B", scale=0.05, tint=(0.62, 0.68, 0.78), bright=1.25, rough=(0.5, 0.72), normal=0.8,
-                       round_edges=0.0005, edge_wear=0.35, wear_color=(0.2, 0.21, 0.23), cavity=0.5)
+    m["slide"] = PAINT["PSlide"]()
+    m["frame"] = PAINT["PFrame"]()
     m["grip"] = L.pbr("PGripTex", "Rubber004", scale=0.012, bright=0.55, rough=(0.7, 0.95), normal=4.0)
     m["steel"] = L.pbr("PSteel", "Metal032", scale=0.06, tint=(0.2, 0.2, 0.21), rough=(0.28, 0.45), metallic=1.0,
                        round_edges=0.0003)

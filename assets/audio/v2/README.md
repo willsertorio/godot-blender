@@ -36,7 +36,7 @@ the build script; a volume is one number in `SOUNDS`.
 | `impact_concrete` | a round into a wall or floor | stone and rock hits |
 | `impact_metal` | a round on a wreck or on armour | metal hits |
 | `flyby` | a robot's round passing the head | short swishes |
-| `step` / `jump` / `land` | boots on a hard floor | footsteps on stone; a low thud for the landing |
+| `step` / `jump` / `land` | boots on a hard floor, quiet | Kenney's concrete footsteps (short dull taps); a low thud for the landing |
 | `crouch` | gear as the player drops or rises | a rattle, a light clunk |
 | `hurt` / `down` | the player is hit / goes down | dull blows |
 | `spider_shot` / `drone_shot` / `turret_shot` | the robots' guns, at their muzzles (mono), 4 / 6 / 6 variants | Tikka .30-06 / Carl Gustav M45 9 mm / AK-47: single shots at mid distance and rounds out of the near bursts, designed |

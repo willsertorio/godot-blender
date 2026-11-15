@@ -17,7 +17,7 @@ const SPECIAL := {  # materials that are procedural in Blender
 # Wear of the guns' and robots' paint (the numbers of the Blender materials: v2/scripts/build_*.py), drawn by
 # v2_worn.gdshader from the asset's baked mask. [wear, wear colour (linear), wear metallic, cavity, grunge]
 const WEAR := {
-	"PSlide": [0.8, Vector3(0.7, 0.69, 0.66), 1.0, 0.5, 0.14], "PFrame": [0.35, Vector3(0.2, 0.21, 0.23), 1.0, 0.5, 0.0],
+	"PSlide": [0.55, Vector3(0.22, 0.23, 0.25), 0.6, 0.7, 0.16], "PFrame": [0.5, Vector3(0.6, 0.6, 0.6), 1.0, 0.6, 0.0],
 	"PBlack": [0.9, Vector3(0.6, 0.6, 0.6), 1.0, 0.3, 0.0],
 	"RfWhite": [0.55, Vector3(0.22, 0.23, 0.25), 0.6, 0.7, 0.16], "RfShell2": [0.5, Vector3(0.2, 0.21, 0.23), 0.6, 0.7, 0.16],
 	"RfGrey": [0.5, Vector3(0.6, 0.6, 0.6), 1.0, 0.6, 0.0], "RfDark": [0.35, Vector3(0.3, 0.31, 0.33), 1.0, 0.5, 0.0],

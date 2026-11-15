@@ -1124,36 +1124,45 @@ func _enemy_test() -> void:
 				player.act("Fire")
 		var killed := r.state == V2Robot.DEAD
 		var t_kill := t
-		# shot down, the drone flies on out of control before it falls and blows up; the others drop where they are
-		var flew := 0.0
+		# shot down, the drone goes down in a straight line, like an aircraft, and blows up where it comes down; the
+		# others drop where they are
 		if r.kind == "drone":
-			var last := r.position
+			var path: Array[Vector3] = [r.position]
+			var turned := 0.0
+			var yaw0 := r.rotation.y
 			var t_fly := 0.0
 			while r._spin > 0.0 and t_fly < 6.0:
 				await get_tree().process_frame
 				t_fly += get_process_delta_time()
-				flew += r.position.distance_to(last)
-				last = r.position
+				path.append(r.position)
+				turned += absf(angle_difference(yaw0, r.rotation.y))
+				yaw0 = r.rotation.y
 			var t_boom := 0.0
 			while not r._exploded and t_boom < 4.0:
 				await get_tree().process_frame
 				t_boom += get_process_delta_time()
-			a = flew > 5.0 and t_fly > 1.5 and r._exploded and V2Sfx.heard.has("explosion")
+			var line := path[path.size() - 1] - path[0]
+			var off := 0.0                                  # how far it strays from the straight line between its ends
+			for p in path:
+				var rel := p - path[0]
+				off = maxf(off, (rel - line.normalized() * rel.dot(line.normalized())).length() if line.length() > 0.01 else rel.length())
+			a = line.length() > 1.0 and off < 0.1 and turned < PI and r._exploded and V2Sfx.heard.has("explosion")
 			ok = ok and a
-			print("[enemy] drone, shot down, flies out of control, then crashes and explodes: %s  (%.1f m in %.1f s, exploded %.1f s later: %s)" % [
-				"PASS" if a else "FAIL", flew, t_fly, t_boom, r._exploded])
+			print("[enemy] drone, shot down, goes down in a straight line and explodes: %s  (%.1f m in %.1f s, %.2f m off the line, turned %.0f degrees, exploded: %s)" % [
+				"PASS" if a else "FAIL", line.length(), t_fly, off, rad_to_deg(turned), r._exploded])
 		# the wreck still answers a round: the joint that is struck swings and comes to rest again
 		await _wait(0.6)
 		var joint := r._hit_joint
-		var rest := joint.transform
 		r.hit(12.0, (r.hit_point() - player.cam.global_position).normalized(), r.hit_point() + Vector3(0.2, 0.1, 0.0), joint)
-		var swing := 0.0
+		var swing := 0.0                                   # (what the round adds to the clip's pose: the joint's spring)
 		t = 0.0
 		while t < 0.5:
 			await get_tree().process_frame
 			t += get_process_delta_time()
-			swing = maxf(swing, joint.transform.basis.get_rotation_quaternion().angle_to(rest.basis.get_rotation_quaternion()))
-		a = r.state == V2Robot.DEAD and swing > deg_to_rad(2.0)
+			if r._flop.has(joint):
+				swing = maxf(swing, (r._flop[joint].off as Vector3).length())
+		# a wreck's part swings; the turret's is a heavy arm: it only rocks
+		a = r.state == V2Robot.DEAD and swing > deg_to_rad(1.0) and (r.kind != "turret" or swing < deg_to_rad(12.0))
 		ok = ok and a
 		print("[enemy] %s wreck struck by a round: %s  (the struck joint swings %.0f degrees)" % [r.kind, "PASS" if a else "FAIL", rad_to_deg(swing)])
 		t = 0.0

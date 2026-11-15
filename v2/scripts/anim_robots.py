@@ -325,8 +325,9 @@ DRONE_HIT = 0.12 + math.sqrt(2 * DRONE_DROP / DRONE_G)     # when it reaches the
 
 
 def drone_death(ts, f):
-    """Hit: thrown sideways, it corkscrews down spinning about its own axis with the rotors sputtering, slams into
-    the floor, bounces twice while skidding, and rocks to rest on a duct. ts = section time."""
+    """Hit: it goes down like an aircraft that has been shot: nose dropping, banking over to one side, no spin;
+    slams into the floor, bounces twice, and rocks to rest on a duct. It falls where it is: the game carries it
+    forward along the line it was flying (v2_robot.gd). ts = section time."""
     t = max(ts - DRONE_DIES, 0.0)
     jolt = imp(t, [0.0], 0.3, 0.1) if ts >= DRONE_DIES else 0.0
     tf = max(t - 0.12, 0.0)
@@ -341,17 +342,14 @@ def drone_death(ts, f):
         z = -DRONE_DROP + 1.15 * x - 4.9 * x * x           # second, smaller
     else:
         z = -DRONE_DROP
-    ang = 9.0 * min(tf, DRONE_HIT - 0.12)                  # the corkscrew (stops where it lands)
-    rad = 0.1 + 0.3 * k
-    skid = 0.35 * smooth(seg(tb, 0.0, 0.9))
-    # (it drifts toward the middle of the floor: the other way it ends against the tank, half out of the frame)
-    pos = DRONE_M.translation + Vector((-0.12 * jolt + rad * math.sin(ang) - 0.3 * k - skid * 0.7,
-                                        -0.06 * jolt + rad * (1 - math.cos(ang)) - 0.15 * k - skid * 0.5, z))
-    turns = math.radians(900) * smooth(seg(t, 0.05, DRONE_HIT + 0.5))             # spinning about the vertical
+    pos = DRONE_M.translation + Vector((0.0, 0.0, z))
     rock = 14 * math.exp(-max(tb, 0) / 0.3) * math.cos(TAU * max(tb, 0) / 0.36) if tb >= 0 else 0.0
-    land = (Matrix.Rotation(_yaw0 + 0.5, 4, "Z") @ Ry(19 + rock)).to_quaternion()
-    fall_rot = (Matrix.Rotation(turns, 4, "Z") @ DRONE_M.to_3x3().to_4x4() @ Ry(25 * jolt + 38 * math.sin(7.0 * tf) * (1 - k))).to_quaternion()
-    world_rot = fall_rot.slerp(Matrix.Rotation(turns, 4, "Z").to_quaternion() @ land, smooth(seg(t, DRONE_HIT - 0.25, DRONE_HIT + 0.05)))
+    land = (Matrix.Rotation(_yaw0, 4, "Z") @ Ry(19 + rock)).to_quaternion()
+    # (Rx = pitch, negative = nose down; Ry = roll: the ducts are on its X)
+    dive = -(10 * jolt + 34 * smooth(k))
+    bank = 6 * jolt + 20 * smooth(k) + 5 * math.sin(8.0 * tf) * (1 - k)
+    fall_rot = (DRONE_M.to_3x3().to_4x4() @ Rx(dive) @ Ry(bank)).to_quaternion()
+    world_rot = fall_rot.slerp(land, smooth(seg(t, DRONE_HIT - 0.12, DRONE_HIT + 0.06)))
     # rotor angle = the integral of a speed that sputters and runs down in a second
     run = t - t * t / 2.0 if t < 1.0 else 0.5
     spin = PROP_STEP * FPS * (min(ts, DRONE_DIES) + run + 0.03 * math.sin(30 * t) * (1 - seg(t, 0, 1.0)))

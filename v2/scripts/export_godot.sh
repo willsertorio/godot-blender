@@ -1,7 +1,7 @@
 #!/bin/bash
 # V2 -> Godot: every asset in its own Blender process (see export_godot.py), then the textures.
 cd "$(dirname "$0")/../.."
-for what in materials room spider drone turret pistol rifle; do
+for what in ${@:-materials room spider drone turret pistol rifle}; do
   out=assets/models/v2/$what.glb
   [ "$what" = materials ] && out=assets/models/v2/materials.json
   [ "$what" = pistol ] || [ "$what" = rifle ] && out=assets/models/v2/view_$what.glb

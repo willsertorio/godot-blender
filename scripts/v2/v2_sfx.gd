@@ -39,9 +39,9 @@ const SOUNDS := {
 	"impact_metal": [["impactMetal_medium_002", "impactMetal_medium_004"], 1.2, -8.0, 0.12, 24.0],
 	"flyby": [[], 1.0, -9.0, 0.15, 0.0],                                                       # a robot's round passing the head
 	# the player's body
-	"step": [["impactPlate_light_002"], 0.75, -21.0, 0.1, 0.0],
-	"jump": [["impactPlate_light_002"], 0.6, -21.0, 0.05, 0.0],
-	"land": [["impactPunch_heavy_002"], 0.8, -15.0, 0.05, 0.0],
+	"step": [["impactPlate_light_002"], 0.75, -25.0, 0.1, 0.0],
+	"jump": [["impactPlate_light_002"], 0.6, -24.0, 0.05, 0.0],
+	"land": [["impactPunch_heavy_002"], 0.8, -16.0, 0.05, 0.0],
 	"crouch": [["switch_003"], 0.6, -25.0, 0.05, 0.0],
 	"hurt": [["impactPlate_heavy_001"], 1.0, -7.0, 0.06, 0.0],
 	"down": [["lowFrequency_explosion_000"], 1.2, -5.0, 0.0, 0.0],
