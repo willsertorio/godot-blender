@@ -844,6 +844,20 @@ func _capture(dir: String) -> void:
 			await _until(r.flash_on, 4.0)
 			Engine.time_scale = 0.02
 			await _shot(dir, "ai%d_%s_fire" % [i + 1, KINDS[i]])
+			# the same moment from the side: the round must leave along the barrel, toward the player
+			var side_cam := Camera3D.new()
+			add_child(side_cam)
+			var from_p := r.hit_point()
+			var to_p := player.global_position + Vector3(0, 1.2, 0)
+			var across := (to_p - from_p).cross(Vector3.UP).normalized()
+			side_cam.fov = 55.0
+			side_cam.look_at_from_position(from_p.lerp(to_p, 0.3) + across * 4.2 + Vector3(0, 0.6, 0), from_p.lerp(to_p, 0.3), Vector3.UP)
+			side_cam.make_current()
+			_hud.get_parent().visible = false
+			await _shot(dir, "ai%d_%s_fire_side" % [i + 1, KINDS[i]])
+			_hud.get_parent().visible = true
+			player.cam.make_current()
+			side_cam.queue_free()
 			Engine.time_scale = 1.0
 			player._yaw = atan2(-(r.hit_point().x - player.global_position.x), -(r.hit_point().z - player.global_position.z))
 			V2Fx.hold = 1.0                               # (the burst's flash must be over in the wreck picture)
