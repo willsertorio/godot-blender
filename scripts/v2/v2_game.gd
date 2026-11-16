@@ -42,6 +42,7 @@ enum { PLAYING, WON, LOST }
 
 static var missions := 0            # missions completed in this sitting: the threat level
 static var total_score := 0
+static var trained := false         # the training of the first room was done in this sitting (it is not repeated)
 
 var gen: DungeonGen
 var dungeon: V2Dungeon
@@ -65,6 +66,15 @@ var _ui: CanvasLayer                 # the HUD's layer (4): over the 3D view, th
 var _fx: CanvasLayer
 var hud: V2Hud
 var ending := false                  # an end screen is up
+# The training of the first room (the user's five points): a dummy spider on a striped pad; aim with the pistol
+# and hit it; take the rifle, aim and hit it; take the health kit out of the crate; E opens a door, and the run
+# starts. Until then the room's doors are locked and the robots beyond hear nothing.
+const TRAIN_HITS := [3, 6]           # hits wanted with the pistol, with the rifle (each one aimed)
+var training := false
+var train_step := 0                  # 0 pistol, 1 rifle, 2 the kit, 3 the door
+var train_hits := 0
+var dummy: V2Robot
+var _train_kits := 0
 var _perf: Label
 var _perf_t := 0.0
 var _perf_n := 0
@@ -88,6 +98,7 @@ func _ready() -> void:
 	V2Fx.reset()
 	V2Sfx.root = self
 	V2Sfx.enabled = not ("--no-sound" in args)
+	V2Music.stop(1.0)                                      # (the menu's music does not follow into play)
 	_low = "--quality=low" in args
 	if _low:
 		get_viewport().msaa_3d = Viewport.MSAA_DISABLED
@@ -112,12 +123,26 @@ func _ready() -> void:
 			part = a.trim_prefix("--part=")
 		if a.begins_with("--bot"):
 			bot = maxi(int(a.trim_prefix("--bot=")), 1) if a.contains("=") else 1
+	# the training: the first run of a sitting, never for the bot, the checks or the pictures
+	# (-- --no-training skips it, -- --training forces it, -- --training-test checks it)
+	var automated := "--game-test" in args or bot > 0 or capture != ""
+	training = ("--training" in args or "--training-test" in args) or (not trained and missions == 0 and not automated and not ("--no-training" in args))
 	_rng.seed = hash(seed_used) + 5
 	_loot_rng.seed = hash(seed_used) + 11
 	_environment(0.38, 0.25, 22.0)
 	gen = DungeonGen.new().generate(seed_used, 0)           # (the threat level is applied here, not by the generator: see below)
 	dungeon = V2Dungeon.new()
 	add_child(dungeon)
+	# (nothing is stood where the player appears: the middle of a room with an even number of cells is a cell corner)
+	dungeon.keep_clear.append([gen.player_spawn, 2.3, false])
+	var dummy_at := Vector3.ZERO
+	if training:
+		dummy_at = _training_spot()
+		dungeon.locked_room = gen.spawn_room
+		dungeon.keep_clear.append([dummy_at, 3.0, true])
+		for l in gen.loot_spawns:                          # (the room's crate holds the health kit of the fourth step)
+			if int(l.room) == gen.spawn_room:
+				l.payoff = "kit"
 	dungeon.build(gen)
 	V2Fx.layer_at = func(p: Vector3) -> int:               # (bullet marks, the dropped gun: lit by the room they are in)
 		var a := dungeon.area_at(p)
@@ -128,7 +153,7 @@ func _ready() -> void:
 		_crate(l)
 		# med kits thin out with the threat level (the first number is drawn at every level, so that the robots,
 		# drawn next from the same stream, are the same at every level of a seed, plus the level's extra ones)
-		if l.payoff == "kit" and _rng.randf() > _kit_weight() / (_kit_weight() + 7.0) * 11.0 / 4.0:
+		if l.payoff == "kit" and _rng.randf() > _kit_weight() / (_kit_weight() + 7.0) * 11.0 / 4.0 and not (training and int(l.room) == gen.spawn_room):
 			crates[-1].what = "ammo" if _loot_rng.randf() < 0.57 else "health"
 	_exit()
 	var per_room: Dictionary = {}                          # the generator's robots, room by room: a share of each room's is kept
@@ -168,13 +193,17 @@ func _ready() -> void:
 	player.interact.connect(interact)
 	for r in robots:
 		r.player = player
+	if training:
+		_training_build(dummy_at)
 	_hud()
 	V2Sfx.ambience("room_tone")
-	if "--game-test" in args or bot > 0 or capture != "":
+	if automated or "--training-test" in args:
 		_bot = (load("res://scripts/v2/v2_game_bot.gd") as GDScript).new()
 		_bot.game = self
 		add_child(_bot)
-		if capture != "" and part != "":
+		if "--training-test" in args:
+			_bot.training_test()
+		elif capture != "" and part != "":
 			_bot.call(part, capture)
 		elif capture != "":
 			_bot.capture(capture)
@@ -300,6 +329,131 @@ func _exit() -> void:
 	V2Sfx.drive(V2Sfx.loop("exit_hum", gate), true)
 
 
+# ---------------------------------------------------------------------------------------------- the training
+## Where the dummy stands: the middle of a cell of the first room, 5 m or more from the player if the room has
+## one, rather in front of them than behind, not at a doorway and not where the crate is.
+func _training_spot() -> Vector3:
+	var room: DungeonGen.Room = gen.rooms[gen.spawn_room]
+	var fwd := Vector3(-sin(gen.player_yaw), 0, -cos(gen.player_yaw))
+	var best := room.center()
+	var best_score := -1e9
+	for x in range(room.rect.position.x, room.rect.end.x):
+		for y in range(room.rect.position.y, room.rect.end.y):
+			var c := Vector2i(x, y)
+			var at := V2Dungeon.center(c)
+			var to := at - gen.player_spawn
+			var ok := to.length() > 3.4
+			for dc in room.doorway_cells:
+				if absi(dc.x - x) + absi(dc.y - y) <= 1:
+					ok = false
+			for l in gen.loot_spawns:
+				if V2Dungeon.cell_of(l.pos) == c:
+					ok = false
+			if not ok:
+				continue
+			var score := minf(to.length(), 8.0) + to.normalized().dot(fwd) * 1.5
+			if score > best_score:
+				best_score = score
+				best = at
+	return best
+
+
+## The dummy and its pad: a low dark plinth with two of the set's striped floor tiles on it, the spider on top,
+## facing where the player appears. It is no enemy: not among `robots`, it only takes hits.
+func _training_build(at: Vector3) -> void:
+	var layer: int = dungeon.areas[dungeon.area_of[gen.rooms[gen.spawn_room].rect.position]].layer
+	var pad := Node3D.new()
+	add_child(pad)
+	var to := gen.player_spawn - at
+	pad.position = at
+	pad.rotation.y = atan2(to.x, to.z)
+	var base := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = Vector3(2.16, 0.24, 2.16)
+	base.mesh = box
+	base.position.y = 0.12
+	base.material_override = V2Assets.material("EDarkSteel")
+	pad.add_child(base)
+	for x in [-0.5, 0.5]:
+		var tile := _prop("floor_hazard")
+		pad.add_child(tile)
+		tile.position = Vector3(x, 0.24, 0)
+	_set_layer(pad, layer)
+	var body := StaticBody3D.new()
+	var shape := CollisionShape3D.new()
+	var bs := BoxShape3D.new()
+	bs.size = Vector3(2.16, 0.31, 2.16)
+	shape.shape = bs
+	shape.position.y = 0.155
+	body.add_child(shape)
+	pad.add_child(body)
+	dummy = V2Robot.new()
+	add_child(dummy)
+	dummy.setup("spider")
+	dummy.dummy = true
+	dummy.respawns = false
+	dummy.show_label = false
+	dummy.player = player
+	dummy.place(at, rad_to_deg(atan2(-to.x, -to.z)))
+	dummy.set_ai(false)
+	dummy.auto = false
+	dummy.play("Idle")
+	dummy._home.y = 0.31
+	dummy.position.y = 0.31
+	_set_layer(dummy, layer)
+	dummy.struck.connect(_on_dummy_struck)
+	_train_kits = player.kits
+
+
+func _aimed() -> bool:
+	return player._aimed > 0.6 or player.busy == "ADSFire"
+
+
+func _on_dummy_struck() -> void:
+	if not training or train_step > 1:
+		return
+	var want := "pistol" if train_step == 0 else "rifle"
+	if player.weapon != want:
+		if train_step == 0:
+			say("The pistol first · press 1", "weapon_pistol", true)
+		return
+	if not _aimed():
+		say("Aim first · hold C or right mouse", "", true)
+		return
+	train_hits += 1
+	if train_hits >= TRAIN_HITS[train_step]:
+		_training_next()
+
+
+func _training_next() -> void:
+	train_step += 1
+	train_hits = 0
+	V2Sfx.play("ui")
+	hud.train_done()
+	if train_step == 3:
+		dungeon.unlock()
+
+
+func _training_tick() -> void:
+	if train_step == 2 and player.kits > _train_kits:
+		_training_next()
+	elif train_step == 3:
+		for d in dungeon.doors:
+			if d.door and d.open and gen.room_at(d.a) == gen.spawn_room:
+				_training_end()
+				return
+
+
+## The door is open: the run starts. What was fired at the dummy is given back.
+func _training_end() -> void:
+	training = false
+	trained = true
+	player.mag.rifle = V2Player.MAG.rifle
+	player.reserve = maxi(player.reserve, 60)
+	elapsed = 0.0
+	hud.train_done()
+
+
 # ---------------------------------------------------------------------------------------------- what the player does
 ## E: the shut door or the crate within reach that the player is nearest to.
 func interact() -> void:
@@ -319,6 +473,8 @@ func interact() -> void:
 			crate = c
 	if not crate.is_empty():
 		open_crate(crate)
+	elif door >= 0 and dungeon.doors[door].locked:
+		say("Locked · finish the training", "door", true)
 	elif door >= 0:
 		open_door(door)
 
@@ -374,7 +530,7 @@ func _take(p: Dictionary) -> bool:
 			icon = "health_cross"
 		"kit":
 			ok = player.add_kit()
-			note = "Health kit stored"
+			note = "Health kit stored · H uses it" if training else "Health kit stored"
 			icon = "health_kit"
 	if ok:
 		V2Sfx.play("pickup")
@@ -393,7 +549,7 @@ func in_reach() -> String:
 	var door := dungeon.door_near(at, REACH)
 	var best := REACH
 	var what := ""
-	if door >= 0:
+	if door >= 0 and not dungeon.doors[door].locked:
 		var d: Vector3 = dungeon.doors[door].at
 		best = Vector2(at.x - d.x, at.z - d.z).length()
 		what = "door"
@@ -537,8 +693,11 @@ func _process(delta: float) -> void:
 		else:
 			walked[a.id] = true
 	dungeon.update(at, V2Player.GUN_LAYER)
+	if training and state == PLAYING:
+		_training_tick()
 	if state == PLAYING:
-		elapsed += delta
+		if not training:
+			elapsed += delta
 		var local := _exit_xf.affine_inverse() * at
 		if absf(local.x) < 0.8 and absf(local.z) < 0.45:
 			finish(true)
@@ -556,8 +715,10 @@ func _process(delta: float) -> void:
 func _robots_tick() -> void:
 	var at := player.global_position
 	var my_cell := V2Dungeon.cell_of(at)
-	var gunfire := player._rounds != _rounds_heard         # the player has fired since the last tick
+	var gunfire := player._rounds != _rounds_heard and not training      # the player has fired since the last tick (practice is not heard)
 	_rounds_heard = player._rounds
+	if dummy != null:                                      # (drawn with its room)
+		dummy.visible = (dungeon.areas[dungeon.area_of[gen.rooms[gen.spawn_room].rect.position]].node as Node3D).visible
 	for r in robots:
 		var d := r.global_position.distance_to(at)
 		if gunfire and d < HEAR and r.state != V2Robot.DEAD:

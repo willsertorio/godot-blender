@@ -577,7 +577,142 @@ func test() -> void:
 	get_tree().quit()
 
 
+## The training of the first room (-- --training-test, headless): the room's doors are locked and E does nothing
+## at them; a shot from the hip does not count; three aimed pistol hits, then six aimed rifle hits on the dummy;
+## the crate holds a health kit; taking it unlocks the doors; opening one starts the run. No robot hears any of it.
+func training_test() -> void:
+	var ok := true
+	await _wait(1.0)
+	var doors: Array = []
+	for i in dungeon.doors.size():
+		if gen.room_at(dungeon.doors[i].a) == gen.spawn_room:
+			doors.append(i)
+	var shut := doors.all(func(i: int) -> bool: return dungeon.doors[i].door and not dungeon.doors[i].open and dungeon.doors[i].locked)
+	ok = _check("training: the first room's doors are shut and locked, the dummy stands on its pad",
+		game.training and game.dummy != null and not doors.is_empty() and shut and game.dummy.position.y > 0.25, "%d doors" % doors.size()) and ok
+	var d0: Dictionary = dungeon.doors[doors[0]]
+	var inward := Vector3(-d0.dir.x, 0, -d0.dir.y)
+	teleport((d0.at as Vector3) + inward * 1.6)
+	await _wait(0.3)
+	var prompt: String = game.in_reach()
+	game.interact()
+	await _wait(0.4)
+	ok = _check("training: E does nothing at a locked door, and no prompt offers it", not d0.open and prompt == "") and ok
+	# in front of the dummy, 2.8 m from it (the ground round it is kept clear)
+	var target: V2Robot = game.dummy
+	var to_spawn := (gen.player_spawn - target.global_position)
+	to_spawn.y = 0.0
+	var stand := target.global_position + to_spawn.normalized() * 2.8
+	stand.y = 0.0                                          # (the dummy stands on its pad; the player on the floor)
+	_look_at(stand, target.hit_point())
+	await _wait(0.4)
+	player.act("Fire")
+	await _wait(0.6)
+	ok = _check("training: a shot from the hip does not count", game.train_step == 0 and game.train_hits == 0) and ok
+	player.bot_aim = true
+	player.act("ADS")
+	await _until(func() -> bool: return player._aimed > 0.9, 2.0)
+	for k in 3:
+		_look_at(stand, target.hit_point())
+		await _wait(0.15)
+		player.act("Fire")
+		await _wait(0.6)
+	ok = _check("training: three aimed pistol hits pass the first step", game.train_step == 1, "step %d, hits %d" % [game.train_step, game.train_hits]) and ok
+	player.bot_aim = false
+	await _until(func() -> bool: return player.busy == "", 3.0)
+	player.switch_weapon()
+	await _until(func() -> bool: return player.busy == "" and player.weapon == "rifle", 4.0)
+	_look_at(stand, target.hit_point())
+	player.bot_aim = true
+	player.act("ADS")
+	await _until(func() -> bool: return player._aimed > 0.9, 2.0)
+	player.bot_fire = true
+	await _until(func() -> bool: return game.train_step == 2, 4.0)
+	player.bot_fire = false
+	player.bot_aim = false
+	ok = _check("training: six aimed rifle hits pass the second step; the doors stay locked", game.train_step == 2 and d0.locked, "step %d, hits %d" % [game.train_step, game.train_hits]) and ok
+	await _until(func() -> bool: return player.busy == "", 3.0)
+	var crate: Dictionary = {}
+	for c in game.crates:
+		if dungeon.room_id_at((c.node as Node3D).global_position) == gen.spawn_room:
+			crate = c
+	var cat: Vector3 = (crate.node as Node3D).global_position
+	teleport(cat + (crate.node as Node3D).global_basis.z * 1.3)
+	await _wait(0.3)
+	var crate_prompt: String = game.in_reach()
+	game.interact()
+	await _wait(1.6)
+	for p in game.pickups.duplicate():
+		if is_instance_valid(p.node):
+			teleport((p.node as Node3D).global_position)
+	await _wait(1.0)
+	ok = _check("training: the room's crate holds a health kit; taking it unlocks the doors",
+		String(crate.what) == "kit" and crate_prompt == "crate" and player.kits == 1 and game.train_step == 3 and not d0.locked,
+		"crate: %s, kits %d, step %d" % [crate.what, player.kits, game.train_step]) and ok
+	var heard: int = (game.robots as Array).filter(func(r: V2Robot) -> bool: return r.alerted).size()
+	teleport((d0.at as Vector3) + inward * 1.6)
+	await _wait(0.3)
+	var door_prompt: String = game.in_reach()
+	game.interact()
+	await _wait(0.6)
+	ok = _check("training: E opens the door and the run starts; the practice rounds are given back; no robot heard the practice",
+		d0.open and door_prompt == "door" and not game.training and game.trained and player.mag.rifle == V2Player.MAG.rifle and heard == 0,
+		"door open %s, training %s, magazine %d, robots alerted %d" % [str(d0.open), str(game.training), player.mag.rifle, heard]) and ok
+	print("[game] RESULT: %s" % ("PASS" if ok else "FAIL"))
+	get_tree().quit()
+
+
 # ---------------------------------------------------------------------------------------------- pictures
+## The training (-- --training --game-capture=DIR --part=train): each step's card with what it asks for in view.
+func train(dir: String) -> void:
+	DirAccess.make_dir_recursive_absolute(dir)
+	await _wait(1.0)
+	var target: V2Robot = game.dummy
+	var to_spawn := gen.player_spawn - target.global_position
+	to_spawn.y = 0.0
+	var feet := target.global_position
+	feet.y = 0.0
+	_look_at(gen.player_spawn, target.hit_point())
+	await _wait(0.6)
+	await _shot(dir, "Train1_start")
+	var stand := feet + to_spawn.normalized() * 3.4
+	_look_at(stand, target.hit_point())
+	player.bot_aim = true
+	player.act("ADS")
+	await _until(func() -> bool: return player._aimed > 0.9, 2.0)
+	player.act("Fire")
+	await _wait(0.7)
+	await _shot(dir, "Train1_aimed")
+	player.bot_aim = false
+	await _until(func() -> bool: return player.busy == "", 3.0)
+	game._training_next()
+	player.switch_weapon()
+	await _until(func() -> bool: return player.busy == "" and player.weapon == "rifle", 4.0)
+	_look_at(feet + to_spawn.normalized() * 4.2 + Vector3(to_spawn.z, 0, -to_spawn.x).normalized() * 1.6, target.hit_point())
+	await _wait(0.5)
+	await _shot(dir, "Train2_rifle")
+	game._training_next()
+	var crate: Dictionary = {}
+	for c in game.crates:
+		if dungeon.room_id_at((c.node as Node3D).global_position) == gen.spawn_room:
+			crate = c
+	var cat: Vector3 = (crate.node as Node3D).global_position
+	_look_at(cat + (crate.node as Node3D).global_basis.z * 1.9 + (crate.node as Node3D).global_basis.x * 0.5, cat + Vector3(0, 0.5, 0))
+	await _wait(0.6)
+	await _shot(dir, "Train3_crate")
+	game._training_next()
+	var d0: Dictionary = {}
+	for d in dungeon.doors:
+		if gen.room_at(d.a) == gen.spawn_room:
+			d0 = d
+	var inward := Vector3(-d0.dir.x, 0, -d0.dir.y)
+	_look_at((d0.at as Vector3) + inward * 2.0 + Vector3(-inward.z, 0, inward.x) * 0.7, (d0.at as Vector3) + Vector3(0, 1.35, 0))
+	await _wait(0.6)
+	await _shot(dir, "Train4_door")
+	get_tree().quit()
+
+
+
 func _shot(dir: String, shot_name: String) -> void:
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png(dir.path_join(shot_name + ".png"))

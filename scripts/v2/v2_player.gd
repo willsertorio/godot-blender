@@ -57,6 +57,7 @@ var hurt_flash := 0.0               # 1 when hit, fades: the HUD's red flash
 var hurt_from := Vector3.ZERO       # where the round that hit came from (the HUD shows the side)
 var hit_confirm := 0.0              # > 0 just after one of the player's rounds hit a robot
 var shots_hit := 0
+var bot_aim := false                # the aim held by code (the checks)
 var bot_fire := false               # the trigger held by code (the game's bot and checks)
 var grab := true                    # a click captures the mouse when it is free (the lab); the game's menu does it itself
 var rules := false                  # the game: magazines run out, health does not come back by itself (the lab: neither)
@@ -95,7 +96,7 @@ var _air := false
 var _rounds := 0
 var _aimed := 0.0                   # 1 = the gun is up at the eye
 var last_aim := Vector3.FORWARD     # where the last round went (for the checks)
-var _shot_off := Vector3.FORWARD    # the pistol's aim (camera frame) when its trigger was pulled
+var _shot_dir := Vector3.FORWARD    # the pistol's aim (world) when its trigger was pulled
 var _settle := 0.0                  # the pistol's barrel is not yet back where its aim is measured from
 var aim_dot := Vector2(-1, -1)      # where the rounds will go, on the screen (the HUD's cursor); (-1, -1) = hidden
 var shot_times: Array[float] = []    # when each round left (seconds since start): for the gun check
@@ -229,7 +230,7 @@ func set_crouch(on: bool) -> void:
 
 
 func aiming() -> bool:
-	return Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) or Input.is_key_pressed(KEY_C)
+	return bot_aim or Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) or Input.is_key_pressed(KEY_C)
 
 
 ## A round from a robot.
@@ -378,7 +379,9 @@ func act(clip: String) -> void:
 	if busy != "" and not (again or from_aim or from_sprint):
 		return
 	if clip in ["Fire", "ADSFire"] and not (weapon in AUTO):
-		_shot_off = _pistol_off()
+		# (in the world's frame: by the time the clip's flash comes the camera itself has kicked up with the recoil,
+		# and an aimed round went a degree or two over what the cursor was on)
+		_shot_dir = (cam.global_basis * _pistol_off()).normalized()
 	busy = clip
 	ap.play(clip, 0.06 if from_aim else (0.12 if from_sprint else -1.0))
 	ap.seek(0.0, true)
@@ -693,7 +696,7 @@ func _process(delta: float) -> void:
 		var from := (node as Node3D).global_position
 		# (the pistol's round leaves as the barrel stood when the trigger was pulled: by the time the clip's flash
 		# comes round, a frame or two later, the muzzle is already on its way up)
-		var aim := aim_dir() if weapon in AUTO else (cam.global_basis * _shot_off).normalized()
+		var aim := aim_dir() if weapon in AUTO else _shot_dir
 		last_aim = aim
 		var to := cam.global_position + aim * 60.0
 		var q := PhysicsRayQueryParameters3D.create(cam.global_position, to)

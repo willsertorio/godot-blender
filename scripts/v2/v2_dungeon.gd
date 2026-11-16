@@ -63,6 +63,8 @@ const TANKS := [Color(0.2, 0.62, 0.68), Color(0.25, 0.68, 0.4), Color(0.75, 0.55
 var gen: DungeonGen
 var areas: Array = []                 # {room: bool, id, rect: Rect2 (world x z), node, layer, lights: Array}
 var area_of: Dictionary = {}          # cell -> index into areas
+var locked_room := -1                 # set before `build`: every doorway of this room gets a door, shut and locked (the training)
+var keep_clear: Array = []            # set before `build`: [place, radius, its whole cell too?]: nothing is stood there
 var doors: Array = []                 # {a: cell (room), b: cell (corridor), at: Vector3, dir: Vector2i, door: bool, open: bool, leaves, lamps}
 var _door_at: Dictionary = {}         # [cell, cell] -> index into doors (both orders)
 var _kit: Dictionary = {}             # piece name -> [[Mesh, Transform3D, material name], ...]
@@ -126,6 +128,9 @@ func build(layout: DungeonGen) -> void:
 		_lights(i)
 	for dw in gen.doorways:
 		_doorway(dw)
+	for k in keep_clear:
+		if k[2]:
+			_taken[cell_of(k[0])] = true
 	for d in gen.deco_spawns:
 		_deco(d, rng)
 	_furnish(rng)
@@ -423,7 +428,9 @@ func _doorway(dw: Dictionary) -> void:
 	var b: Vector2i = dw.corr_cell
 	var d: Vector2i = b - a
 	var edge := center(a) + Vector3(d.x, 0, d.y) * (CELL / 2.0)
-	var rec := {"a": a, "b": b, "at": edge, "dir": d, "door": bool(dw.door), "open": not bool(dw.door), "leaves": [], "lamps": []}
+	var locked := locked_room >= 0 and gen.room_at(a) == locked_room
+	var has_door := bool(dw.door) or locked
+	var rec := {"a": a, "b": b, "at": edge, "dir": d, "door": has_door, "open": not has_door, "locked": locked, "leaves": [], "lamps": []}
 	_door_at[[a, b]] = doors.size()
 	_door_at[[b, a]] = doors.size()
 	doors.append(rec)
@@ -469,9 +476,14 @@ func door_near(p: Vector3, reach: float) -> int:
 	return best
 
 
+func unlock() -> void:
+	for d in doors:
+		d.locked = false
+
+
 func open_door(i: int) -> void:
 	var d: Dictionary = doors[i]
-	if d.open:
+	if d.open or d.locked:
 		return
 	d.open = true
 	V2Sfx.play("door", (d.at as Vector3) + Vector3(0, 1.3, 0))
@@ -553,6 +565,8 @@ func _furnish(rng: RandomNumberGenerator) -> void:
 					continue
 				var at := Vector3(x * CELL, 0, y * CELL)
 				if r.id == gen.exit_room and at.distance_to(gen.exit_pos) < 3.6:
+					continue
+				if keep_clear.any(func(k: Array) -> bool: return at.distance_to(k[0]) < float(k[1])):
 					continue
 				var by_door := false                           # (the cells round a doorway stay open)
 				for dc in r.doorway_cells:

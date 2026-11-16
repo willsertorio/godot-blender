@@ -48,6 +48,7 @@ func _ready() -> void:
 	V2Fx.reset()
 	V2Sfx.root = self
 	V2Sfx.enabled = not ("--no-sound" in args)
+	V2Music.stop(1.0)                                      # (the menu's music does not follow into play)
 	_low = "--quality=low" in args                 # (before the environment is built: it reads this)
 	_concept = "--concept" in args
 	_environment()

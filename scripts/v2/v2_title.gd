@@ -10,9 +10,11 @@ extends V2World
 const LAB := "res://scenes/v2_lab.tscn"
 const GAME := "res://scenes/v2_game.tscn"
 const LAB_ARGS := ["--lab", "--enemy-test", "--gun-test", "--input-test", "--perf", "--preview", "--concept", "--doors", "--quick"]
-const GAME_ARGS := ["--play", "--game-test"]
+const GAME_ARGS := ["--play", "--game-test", "--training", "--no-training", "--training-test"]
 
 var _press: Label
+var _note: Label                    # which of the music's candidates plays (M)
+var _note_t := 0.0
 var _t := 0.0
 
 
@@ -35,7 +37,8 @@ func _ready() -> void:
 	V2Sfx.enabled = not ("--no-sound" in args)
 	_render_setup()
 	_page()
-	V2Sfx.ambience("room_tone")
+	V2Music.enabled = V2Sfx.enabled
+	V2Music.start(get_tree())                              # (the menu has music; the game only its own sounds)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	for a in args:
 		if a.begins_with("--title-capture="):
@@ -78,6 +81,9 @@ func _page() -> void:
 	_press.anchor_bottom = 1.0
 	_press.offset_top = -112.0 - 20.0
 	_press.offset_bottom = -112.0
+	_note = V2Ui.text(ui, "", "medium", 12, UIPalette.GRAPHITE_SECONDARY, 0.12)
+	V2Ui.at(_note, 0.0, 1.0, 32.0, -28.0)
+	_note.modulate.a = 0.0
 
 
 func _process(delta: float) -> void:
@@ -86,6 +92,8 @@ func _process(delta: float) -> void:
 	_t += delta
 	# 1.0 -> 0.25 -> 1.0 over 1.8 s, eased in and out
 	_press.modulate.a = 0.625 + 0.375 * cos(_t * TAU / 1.8)
+	_note_t -= delta
+	_note.modulate.a = clampf(_note_t, 0.0, 1.0)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -93,13 +101,21 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_L:
+			V2Music.stop()
 			get_tree().change_scene_to_file(LAB)
+		elif event.keycode == KEY_M:                       # the next of the music's candidates (until one is chosen)
+			_note.text = V2Music.next(get_tree())
+			_note_t = 4.0
 		elif not (event.keycode in [KEY_ESCAPE, KEY_F3, KEY_F4, KEY_META, KEY_CTRL, KEY_ALT, KEY_SHIFT]):
-			V2Sfx.play("ui")
-			get_tree().change_scene_to_file(GAME)
+			_start()
 	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		V2Sfx.play("ui")
-		get_tree().change_scene_to_file(GAME)
+		_start()
+
+
+func _start() -> void:
+	V2Sfx.play("ui")
+	V2Music.stop()
+	get_tree().change_scene_to_file(GAME)
 
 
 func _shot(path: String) -> void:

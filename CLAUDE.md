@@ -300,7 +300,7 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
 - Learned: "hidden by scale 0" breaks Godot's glTF import (node comes in at scale 1): export hides at 0.001.
   A fine weave seen at arm's length beats against the pixel grid even with mipmaps: the glove fabrics are sampled
   with a mip bias. A directional light with shadows on came out about half as bright again as without.
-- Not done yet: a browser build of V2; music (the user: not now); V1 (its Quaternius art, enemies and UI) still runs with `-- --v1`;
+- Not done yet: a browser build of V2; music in the game itself (the user wants it in the menu only); V1 (its Quaternius art, enemies and UI) still runs with `-- --v1`;
   its generator is what the V2 game builds on.
   User decisions: realistic recorded sound, CC0, one consistent line, no music for now; no browser build of V2 for now (`tools/export_web.sh` is untested with V2);
   studio rooms in the lab; the game has PLAY and LAB and is the generated dungeon of the GDD in a new modular kit (the concept room is not in it);
@@ -469,7 +469,8 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
     HOSTILES / ROOMS, THREAT nn -> nn, ENTER DATASPACE nn / STOP HERE) and Signal lost (the view blurred 4.5 and
     washed, dark edges, an orange band, scan lines; RE-ASSEMBLE = a new dungeon at the same threat / STOP HERE).
     Enter = the first button. Signal lost comes after the fall and the robots gathering, as before.
-  - Title (`v2_title.gd`): the white page, PROJECT / FIREWALL, PRESS ENTER; any key or a click starts a run.
+  - Title (`v2_title.gd`): the white page, PROJECT / FIREWALL, PRESS ENTER; any key or a click starts a run
+    (M steps the music's candidates).
     **No menu: the lab is on L** (not shown), `--lab` as before. Esc in the game: a small glass card, RESUME /
     STOP HERE ("the run keeps going").
   - F3 (frame rate) sits under the room panel. Pictures of all of it: `--game-capture=DIR --part=ui` at
@@ -479,6 +480,37 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
     `set_anchors_and_offsets_preset` (everything pinned to the right or the bottom was off screen); the blur
     shader's `textureLod` on the screen texture works in Compatibility; a Button's own icon is drawn at the
     texture's size (the words and icon are children of the button); headless `--play` prints nothing useful.
+- **Training in the first room** (**user's five points**: a dummy target (a spider on a yellow-striped box); aim
+  with the pistol and shoot it; switch to the rifle, aim and shoot it; a med kit from a crate; E opens a door and
+  the game starts). `v2_game.gd`: `training` (the first run of a sitting: static `trained`; never for the bot, the
+  checks or the pictures; `-- --no-training` skips it, `-- --training` forces it), `train_step` 0..3,
+  `TRAIN_HITS` [3, 6]. Before `build`: `dungeon.locked_room` = the spawn room (**every doorway of it gets a door,
+  shut and locked**: `doors[i].locked`, `unlock()`; E there says "Locked · finish the training" and no prompt
+  offers it), `dungeon.keep_clear` (nothing is stood round the dummy), the room's crate is made to hold a kit.
+  `_training_spot` = a cell's middle 5 m or more from the player, rather ahead of them, off the doorways and the
+  crate; `_training_build` = a dark plinth with two `floor_hazard` tiles on it and the spider on top
+  (`V2Robot.dummy`: it stands in the preview's Idle, a hit jars it on its springs and emits `struck`, it is not
+  in `robots`, so no count, no score, no hostile line). A hit counts only **aimed** (`player._aimed` > 0.6) and
+  with the step's gun; otherwise a chip says why. The kit step ends when the player holds a kit, then the doors
+  unlock; a door of the room opening ends the training: the rounds fired are given back, the clock starts, and
+  **while it lasts the robots beyond hear nothing** (`_robots_tick`). HUD: a card top middle (`V2Hud._training`:
+  "TRAINING n / 4", the step with its key caps, the hit count; the room panel reads "Training room").
+  Check: `godot --headless --path . -- --training-test [--seed=N]`; pictures: `-- --training
+  --game-capture=DIR --part=train`. `V2Player.bot_aim` holds the aim for the checks.
+  Also fixed on the way: `keep_clear` holds the player's spawn point too (the middle of a room with an even
+  number of cells is a cell corner, where cover is stood: nothing guarded it); **the pistol's round goes where
+  the cursor was when the trigger was pulled, in the world's frame** (`_shot_dir`): taken in the camera's frame
+  it was turned up with the camera's own recoil by the time the flash came.
+- **Menu music** (**user: "we need to add some music in the menu; when game starts, we only hear the lab
+  sounds, no more music"**; this replaces "no music for now" for the menu only). `scripts/v2/v2_music.gd`
+  (`V2Music`): starts on the title, fades out when a run or the lab starts (the player node hangs from the tree's
+  root, so it fades across the change of scene); the game has the room tone as before, the title no longer has.
+  **Three CC0 candidates from opengameart.org, because nothing can be heard here**: `TRACKS[0]` Exploration Theme
+  (Cleyton Kauffman, 2:14, loops seamlessly), The Budding of Consciousness (Yoiyami, 3:44), Solar Sail (vitalezzz,
+  6:10); **M on the title steps through them** and names the one playing. When the user has chosen: keep that
+  one as `TRACKS[0]`, delete the other two files and their `licenses.csv` rows, and take the M key out.
+  `tools/build_v2_music.sh` (raw files in `assets_src/music_v2/`, URLs in the script) -> `assets/audio/v2/music/
+  *.ogg`, each at -23 LUFS; `loop=true` in their `.import`. Level `V2Music.LEVEL` (-5 dB).
 - Props (from the set): loot crates `loot_crate` (health), `loot_crate_olive` (ammunition), `loot_crate_green` (a
   med kit), lid under `Crate_Lid` (found with `find_child("Crate_Lid*")`: Blender numbers the duplicates), the
   lid's cyan lamp goes dark when opened; what a crate or a wreck leaves: `ammo_box`, `medkit_white` (health),

@@ -48,6 +48,12 @@ var _toast_text: Label
 var _toast_t := 0.0
 var _cross: Control
 var perf: Label
+var _train: PanelContainer           # the training's card: which step, what to do, how far along
+var _train_n: Label
+var _train_line: HBoxContainer
+var _train_count: Label
+var _train_shown := -1
+var _train_flash := 0.0
 
 var _shown_hp := 100.0              # what the bar showed last frame
 var _ghost_from := 0                # segments lost a moment ago: [_ghost_from, _ghost_to)
@@ -87,6 +93,7 @@ func setup(game_node: Node, fx_layer: CanvasLayer) -> void:
 	_build_weapons()
 	_build_prompt()
 	_build_toast()
+	_build_training()
 	perf = V2Ui.text(self, "", "medium", 13, UIPalette.ORANGE_PALE)
 	perf.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
 	perf.add_theme_constant_override("outline_size", 4)
@@ -230,6 +237,62 @@ func _build_toast() -> void:
 	_toast.modulate.a = 0.0
 
 
+## The training's card, top middle: "TRAINING 1 / 4", the step in words with its keys, and the count of hits.
+## (Not in the concept: the same glass, cyan edge and key caps as its interact prompt.)
+func _build_training() -> void:
+	_train = V2Ui.panel(self, UIPalette.hud_panel(true, UIPalette.CYAN), [18, 9, 20, 10])
+	V2Ui.at(_train, 0.5, 0.0, 0.0, EDGE.y)
+	var r := V2Ui.row(_train, 18)
+	var left := V2Ui.column(r, -4)
+	V2Ui.text(left, "TRAINING", "bold", 11, UIPalette.CYAN_LIGHT, 0.24)
+	_train_n = V2Ui.text(left, "1 / 4", "light", 26, UIPalette.TEXT)
+	V2Ui.rect(r, UIPalette.HUD_GLASS_BORDER, 1, 0)
+	_train_line = V2Ui.row(r, 9)
+	_train_count = V2Ui.text(r, "", "light", 26, UIPalette.CYAN)
+	_train.visible = false
+
+
+## A step's line: words and key caps in turn ("[C]" = a key cap).
+func _train_step(parts: Array) -> void:
+	for ch in _train_line.get_children():
+		ch.queue_free()
+	for part: String in parts:
+		if part.begins_with("["):
+			V2Ui.keycap(_train_line, part.trim_prefix("[").trim_suffix("]"))
+		else:
+			V2Ui.text(_train_line, part, "semibold", 16, UIPalette.TEXT)
+
+
+## A step was done: the card flashes.
+func train_done() -> void:
+	_train_flash = 1.0
+
+
+const TRAIN_STEPS := [
+	["[C]", "Hold to aim. Shoot the target with the pistol."],
+	["[2]", "Take the rifle.", "[C]", "Aim and shoot the target."],
+	["[E]", "Open the crate and take the health kit."],
+	["[E]", "Open a door. The run starts."],
+]
+
+
+func _training(delta: float) -> void:
+	var on: bool = game.training and game.state == game.PLAYING
+	_train.visible = on or _train_flash > 0.0
+	_train_flash = maxf(_train_flash - delta * 1.6, 0.0)
+	_train.modulate = Color(1, 1, 1, 1).lerp(Color(1.6, 1.6, 1.6, 1), _train_flash) if on else Color(1, 1, 1, _train_flash)
+	if not on:
+		return
+	var step: int = mini(game.train_step, TRAIN_STEPS.size() - 1)
+	if step != _train_shown:
+		_train_shown = step
+		_train_step(TRAIN_STEPS[step])
+		_train_n.text = "%d / %d" % [step + 1, TRAIN_STEPS.size()]
+	_train_count.visible = step < 2
+	if step < 2:
+		_train_count.text = "%d / %d" % [game.train_hits, game.TRAIN_HITS[step]]
+
+
 ## What was just picked up (or could not be): a chip at the foot of the screen for two seconds.
 func say(text: String, icon_name: String = "", warn: bool = false) -> void:
 	_toast_text.text = text.to_upper()
@@ -253,7 +316,11 @@ func update(delta: float) -> void:
 	var in_room: bool = here >= 0 and game.dungeon.areas[here].room
 	var place := "Room" if in_room else "Corridor"
 	var hostiles: int = game.alive_in(here)
-	if hostiles > 0:
+	if game.training:
+		_goal_icon.texture = V2Ui.icon_texture("hazard")
+		_goal_icon.modulate = UIPalette.CYAN
+		_goal.text = "Training room"
+	elif hostiles > 0:
 		var kind := "spider"
 		for r: V2Robot in game.robots:
 			if r.state != V2Robot.DEAD and r.room == here:
@@ -343,6 +410,7 @@ func update(delta: float) -> void:
 	_prompt.visible = what != ""
 	if what != "":
 		_prompt_text.text = "OPEN " + what.to_upper()
+	_training(delta)
 	# --- the chip
 	_toast_t -= delta
 	_toast.modulate.a = clampf(_toast_t * 2.0, 0.0, 1.0) if playing else 0.0

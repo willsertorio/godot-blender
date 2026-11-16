@@ -56,6 +56,7 @@ const RESPAWN := 6.0             # seconds a wreck lies before the robot is back
 const LOW := 1.7                  # a drone's height in a corridor or a doorway (they are lower than a room)
 
 signal destroyed(robot: V2Robot)
+signal struck                       # a training dummy was hit (`dummy`)
 signal arrived(robot: V2Robot)      # at the end of its way (`follow`), or stopped on it: the game gives it its new arena
 
 var kind := ""
@@ -67,6 +68,7 @@ var max_hp := 1.0
 var player: V2Player
 var active := false               # the player is in this robot's room
 var auto := true                  # preview: cycle through the clips
+var dummy := false                # a target to practise on: it stands (the preview's Idle), a hit jars it, nothing more
 var shots_fired := 0
 var travelled := 0.0
 var kills := 0                    # times it was destroyed
@@ -425,6 +427,17 @@ func flash_on() -> bool:
 
 ## A round from the player, flying along `dir`, that struck at `point` the part on `joint`.
 func hit(damage: float = 34.0, dir: Vector3 = Vector3.ZERO, point: Vector3 = Vector3.INF, joint: Node3D = null) -> void:
+	if dummy:
+		if dir == Vector3.ZERO:
+			dir = Vector3.FORWARD
+		if point == Vector3.INF:
+			point = hit_point()
+		_knock_joint(joint if joint != null else _hit_joint, point, dir, 0.5)
+		_push(dir, 0.7)
+		_shove = Vector3.ZERO                          # (it keeps its place on its pad)
+		V2Sfx.play("robot_hit", point)
+		struck.emit()
+		return
 	if state == PREVIEW:
 		if clip != "Death":
 			play("Death")
@@ -1138,6 +1151,9 @@ func _process(delta: float) -> void:
 				next()
 			else:
 				play(clip)
+		if dummy:
+			_label.visible = false
+			_springs(delta)
 		return
 	_label.text = kind.to_upper()
 	_label.visible = show_label
