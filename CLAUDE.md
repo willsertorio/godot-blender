@@ -494,6 +494,10 @@ kits, ammunition box).
   grime up to 0.3 m from the floor, `stripes` for the hazard paint); displays = `v2_screen.gdshader`; the portal's
   field = `v2_portal.gdshader`; the rest StandardMaterial3D. A material used for what is walked on is `floor` in
   the set's scripts (`EPaintFloor`): the same paint in Blender, a tone darker in the game.
+- Flicker test on the set (339 frames, seed 33): **no two surfaces fighting for a plane anywhere**. What the test
+  marks now: the wall displays (they are animated: the "after arriving" comparison), and edges and fine wear in
+  the "1 mm aside" comparison (1 mm at 1.5 m is half a pixel: every sharp edge changes; only patches count). The
+  hazard stripes were hard-edged and crawled from across a room: their edges are a pixel wide now (`fwidth`).
 - Learned bringing it in: vertex colours survive `SurfaceTool.append_from` (checked, when the props looked wrong:
   it was the light, see "Light of the dungeon"); look at a piece in the dungeon, not only alone on the kit sheet,
   whose sun lights every side; the capture tour takes 6 minutes, `--part=rooms --match=N` 40 seconds.

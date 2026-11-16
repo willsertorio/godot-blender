@@ -60,8 +60,11 @@ void fragment() {
 	vec3 p = tri_pos / tile;
 	vec3 base = tint;
 	if (stripes > 0.5) {
-		float s = fract(dot(obj_pos, vec3(1.0 / stripe_period)));
-		base = mix(vec3(0.6, 0.3, 0.0), vec3(0.03, 0.03, 0.032), step(0.5, s));
+		// (edges as wide as a pixel: from across a room the stripes are thinner than pixels and a hard edge crawled)
+		float sv = dot(obj_pos, vec3(1.0 / stripe_period));
+		float sw = clamp(fwidth(sv) * 1.5, 0.001, 0.5);
+		float s = smoothstep(0.5 - sw, 0.5 + sw, abs(fract(sv) * 2.0 - 1.0));
+		base = mix(vec3(0.6, 0.3, 0.0), vec3(0.03, 0.03, 0.032), s);
 	}
 	vec4 at = texture(tex_albedo, plane(p));
 	vec3 alb = pow(at.rgb, vec3(2.2)) * base;
@@ -74,7 +77,7 @@ void fragment() {
 
 	// paint off: the chamfered edges (broken up), a few chips, fine scratches
 	float wm = edge * smoothstep(0.25, 0.6, imp.b + imp_big.b * 0.5) * wear * 1.3;
-	wm += smoothstep(1.0 - chips * 1.6, 1.0 - chips * 1.6 + 0.04, imp_big.g * 0.6 + imp.b * 0.5);
+	wm += smoothstep(1.0 - chips * 1.6, 1.0 - chips * 1.6 + 0.1, imp_big.g * 0.6 + imp.b * 0.5);
 	wm += smoothstep(0.3, 0.75, imp.r) * 0.3 * wear;
 	wm = clamp(wm, 0.0, 1.0);
 
