@@ -1,6 +1,7 @@
 extends V2World
-## The title: PLAY starts the game's level (scenes/v2_game.tscn), LAB opens the test lab (scenes/v2_lab.tscn: the
-## three studio rooms with one robot each, for looking at the animations). Behind the menu: one room of the level.
+## The title: PLAY generates a dungeon and enters play (scenes/v2_game.tscn), LAB opens the test lab
+## (scenes/v2_lab.tscn: the three studio rooms with one robot each, for looking at the animations).
+## Behind the menu: the concept room of the Blender scene.
 ## Command-line options meant for the lab or the game skip the menu:
 ##   -- --lab, --enemy-test, --gun-test, --input-test, --capture=DIR, --perf, --preview, --concept   -> the lab
 ##   -- --play, --game-test, --bot[=N], --game-capture=DIR                                          -> the game
@@ -8,7 +9,7 @@ extends V2World
 const LAB := "res://scenes/v2_lab.tscn"
 const GAME := "res://scenes/v2_game.tscn"
 const LAB_ARGS := ["--lab", "--enemy-test", "--gun-test", "--input-test", "--perf", "--preview", "--concept", "--doors", "--quick"]
-const GAME_ARGS := ["--play", "--game-test", "--bot-diag"]
+const GAME_ARGS := ["--play", "--game-test"]
 
 var _cam: Camera3D
 var _t := 0.0
@@ -63,13 +64,13 @@ func _menu() -> void:
 	V2Ui.rect(ui, V2Ui.CYAN, 0.0, 0.0, 520.0, 0.0, 2.0, 4000.0)
 	V2Ui.label(ui, "PROJECT", 0.0, 0.0, 60.0, 90.0, 30, V2Ui.CYAN, true)
 	V2Ui.label(ui, "FIREWALL", 0.0, 0.0, 60.0, 124.0, 58, Color(0.95, 0.98, 1.0), true)
-	V2Ui.label(ui, "One level. Find the exit gate.", 0.0, 0.0, 62.0, 204.0, 17, Color(0.72, 0.8, 0.86))
+	V2Ui.label(ui, "A new dungeon every run. Find the exit portal.", 0.0, 0.0, 62.0, 204.0, 17, Color(0.72, 0.8, 0.86))
 	V2Ui.button(ui, "PLAY", 0.0, 0.0, 200.0, 270.0, func() -> void: get_tree().change_scene_to_file(GAME), 280.0)
 	V2Ui.button(ui, "LAB", 0.0, 0.0, 200.0, 334.0, func() -> void: get_tree().change_scene_to_file(LAB), 280.0)
 	V2Ui.button(ui, "QUIT", 0.0, 0.0, 200.0, 398.0, func() -> void: get_tree().quit(), 280.0)
-	V2Ui.label(ui, "PLAY: the level, four sectors, to the exit gate.\nLAB: three test rooms, one robot each, to try the guns and\nwatch the animations (M: clip preview, N: next clip).",
+	V2Ui.label(ui, "PLAY: eight to twelve rooms joined by corridors and doors,\nrobots, supply crates, one exit portal. Each mission completed\nmakes the next dungeon harder.\nLAB: three test rooms, one robot each, to try the guns and\nwatch the animations (M: clip preview, N: next clip).",
 		0.0, 0.0, 62.0, 470.0, 14, Color(0.62, 0.7, 0.76))
-	V2Ui.label(ui, "WASD move  ·  mouse look  ·  LMB fire  ·  C or RMB aim  ·  R reload\nQ or 1 / 2 switch gun  ·  E open  ·  H med kit  ·  Shift sprint\nX crouch  ·  Space jump  ·  Esc menu  ·  F3 frame rate",
+	V2Ui.label(ui, "WASD move  ·  mouse look  ·  LMB fire  ·  C or RMB aim  ·  R reload\nQ or 1 / 2 switch gun  ·  E open  ·  H med kit  ·  Tab map\nShift sprint  ·  X crouch  ·  Space jump  ·  Esc menu  ·  F3 frame rate",
 		0.0, 1.0, 62.0, -96.0, 14, Color(0.62, 0.7, 0.76))
 
 

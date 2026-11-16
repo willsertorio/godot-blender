@@ -53,16 +53,10 @@ const DIVE := 0.6                # the drone shot down: its Death clip's fall is
 const ROOM := Rect2(-3.6, -13.0, 9.0, 15.0)     # where a wreck may be shoved to and the falling drone may fly (room frame)
 const BLAST := [3.5, 40.0]                      # the drone's explosion: reach (m), damage at its centre
 const RESPAWN := 6.0             # seconds a wreck lies before the robot is back
-# The drone going from room to room (the game): it is 1.7 m across and a doorway 1.3, so it goes through on edge:
-# rolled onto its side, low, nose first. [height of its middle, roll in radians] of that attitude.
-const EDGE := [1.2, 1.45]
-# Its way through a room (room frame, x z), found by sweeping its box through the room's collision: from the hall
-# to the right door round the corner of the block beside it; from the left door into the hall through the gap
-# between the stairs and a post (1.4 m wide).
-const WAY := {"in": Vector2(2.2, -6.2), "gate": Vector2(3.8, -7.4), "right_pre": Vector2(4.6, -9.3), "right": Vector2(5.5, -10.2),
-	"left": Vector2(-3.9, -10.35), "gap": Vector2(-1.3, -10.45), "hall": Vector2(-1.3, -9.0)}
+const LOW := 1.7                  # a drone's height in a corridor or a doorway (they are lower than a room)
 
 signal destroyed(robot: V2Robot)
+signal arrived(robot: V2Robot)      # at the end of its way (`follow`), or stopped on it: the game gives it its new arena
 
 var kind := ""
 var ap: AnimationPlayer
@@ -86,10 +80,12 @@ var arena := Rect2()              # the part of its room's floor it may be in (r
 var rail := Vector2.ZERO          # turret: the z it may travel between along its ceiling rail (room frame); equal = fixed
 var show_label := true
 var alerted := false              # it has seen the player or been hit by them
-var world: V2World                # the game: the rooms, for a drone that goes from one to the next
-var room := 0                     # which room it is in
-var _route: Array = []            # travel: [{p: Vector2 (room frame), edge: bool, cross: int}, ...]
-var _roll := 0.0                  # drone: rolled onto its side (travel through a doorway)
+var room := 0                     # which room it is in (the game: the dungeon's area)
+var bounds := ROOM                # where a wreck may be shoved to and a falling drone may fly (its parent's frame)
+var grid := 0.0                   # > 0 (the game: the dungeon's cells, 4 m): it goes from the middle of a cell to the middle of
+#                                   another along the rows and columns, never across a cell's corner: columns and tanks stand there
+var others: Array = []            # the robots it shares its floor with: it keeps its firing position off theirs
+var _route: Array = []            # on its way somewhere (`follow`): [[point (its parent's frame), low: bool], ...]
 var _rail_dir := 1.0
 var _spec: Dictionary
 var _root: Node3D                 # the glb's <Kind>_Root joint, re-seated on this node
@@ -349,7 +345,7 @@ func place(at: Vector3, yaw_deg: float) -> void:
 
 ## Turret: a rail under the ceiling from z0 to z1 (room frame) that its pylon runs along, and the carriage it hangs
 ## from. Call before the room's render layer is set.
-func set_rail(z0: float, z1: float) -> void:
+func set_rail(z0: float, z1: float, layer: int = 0) -> void:
 	rail = Vector2(minf(z0, z1), maxf(z0, z1))
 	var top := _seat.y + 1.7                           # the ceiling: the pylon's upper end
 	for spec in [[Vector3(0.5, 0.05, rail.y - rail.x + 0.9), Vector3(_home.x, top - 0.025, (rail.x + rail.y) / 2.0), "DarkSteel", get_parent()],
@@ -363,6 +359,8 @@ func set_rail(z0: float, z1: float) -> void:
 		mi.material_override = V2Assets.material(spec[2])
 		(spec[3] as Node3D).add_child(mi)
 		mi.position = spec[1]
+		if layer != 0:
+			mi.layers = layer
 
 
 ## Everything this script adds to the clips back to nothing (aim, knock, tilt, the wreck's sink).
@@ -380,7 +378,6 @@ func _settle() -> void:
 	_exploded = true
 	_crashed = true
 	_route.clear()
-	_roll = 0.0
 	_seat.y = _seat_y
 	for j in _flop:
 		(j as Node3D).transform = _flop[j].base
@@ -655,6 +652,13 @@ func _local(p: Vector3) -> Vector3:
 	return p - (get_parent() as Node3D).global_position
 
 
+## A place to go to: inside its arena, and (with `grid`) the middle of the cell it falls in.
+func _spot(p: Vector3) -> Vector3:
+	if grid > 0.0:
+		p = Vector3((floorf(p.x / grid) + 0.5) * grid, 0.0, (floorf(p.z / grid) + 0.5) * grid)
+	return _clamp_arena(p)
+
+
 func _clamp_arena(p: Vector3) -> Vector3:
 	var a: Rect2 = arena
 	return Vector3(clampf(p.x, a.position.x, a.end.x), 0.0, clampf(p.z, a.position.y, a.end.y))
@@ -670,7 +674,7 @@ func _pick_roam() -> void:
 	var a: Rect2 = arena
 	var pl := _local(player.global_position)
 	for k in 10:
-		var c := Vector3(randf_range(a.position.x, a.end.x), 0.0, randf_range(a.position.y, a.end.y))
+		var c := _spot(Vector3(randf_range(a.position.x, a.end.x), 0.0, randf_range(a.position.y, a.end.y)))
 		if c.distance_to(position) > 1.5 and Vector2(c.x - pl.x, c.z - pl.z).length() > 3.6:
 			_target = c
 			return
@@ -687,9 +691,13 @@ func _engage() -> void:
 	var best_score := 1e9
 	for k in 14:
 		var ang := randf() * TAU
-		var c := _clamp_arena(pl + Vector3(cos(ang), 0.0, sin(ang)) * randf_range(_spec.keep[0], _spec.keep[1]))
+		var c := _spot(pl + Vector3(cos(ang), 0.0, sin(ang)) * randf_range(_spec.keep[0], _spec.keep[1]))
 		var d := c.distance_to(pl)
 		var score := maxf(_spec.keep[0] - d, 0.0) * 4.0 + absf(c.distance_to(position) - 2.5) * 0.5
+		for o in others:
+			if o != self and is_instance_valid(o) and (o as V2Robot).state != DEAD and (o as V2Robot).kind == kind \
+					and c.distance_to((o as V2Robot)._target) < 2.6:
+				score += 4.0
 		if score < best_score:
 			best_score = score
 			best = c
@@ -719,10 +727,13 @@ func _step_round(dir: Vector3, delta: float) -> float:
 func _move(delta: float, fast: bool, face_player: bool) -> bool:
 	var to := _target - position
 	to.y = 0.0
+	if grid > 0.0 and absf(to.x) > 0.35 and absf(to.z) > 0.35:
+		to = Vector3(to.x, 0.0, 0.0) if absf(fposmod(position.z, grid) - grid / 2.0) < absf(fposmod(position.x, grid) - grid / 2.0) \
+			else Vector3(0.0, 0.0, to.z)                   # (first along the row or the column it is on the middle of)
 	var dist := to.length()
 	var clips: Array = _spec.clips
 	_own_vel = Vector3.ZERO
-	if dist < 0.3:
+	if dist < 0.3 and (_target - position).length() < 0.45:
 		return true
 	var k := 1.0
 	if face_player:
@@ -741,9 +752,10 @@ func _move(delta: float, fast: bool, face_player: bool) -> bool:
 	if pl.length() < 3.0 and pl.dot(to) > 0.0:         # never into the player
 		k = 0.0
 	var speed: float = (_spec.run if fast else _spec.walk) * k
-	_own_vel = to / dist * speed
+	_own_vel = to / maxf(dist, 0.001) * speed
 	var step := minf(speed * delta, dist)
-	position = _clamp_arena(position + to / dist * step)
+	var moved := position + to / maxf(dist, 0.001) * step
+	position = Vector3(clampf(moved.x, arena.position.x, arena.end.x), 0.0, clampf(moved.z, arena.position.y, arena.end.y))
 	travelled += step
 	if k <= 0.0 and kind == "spider":
 		_rest_pose()                                   # (standing: no walking on the spot)
@@ -792,7 +804,6 @@ func _mobile(delta: float) -> void:
 		_travel(delta)
 		return
 	if kind == "drone":
-		_roll = move_toward(_roll, 0.0, 2.5 * delta)
 		_seat.y = move_toward(_seat.y, _seat_y, 1.5 * delta)
 	if state != ROAM and _unseen > 3.0:                # lost the player
 		state = ROAM
@@ -837,68 +848,33 @@ func _mobile(delta: float) -> void:
 				_engage()
 
 
-## The drone: go to the next room on the right (way = 1) or the left (-1), through the doorway, and take up the
-## fight there. `world` must be set (the game).
-func travel(way: int) -> void:
-	if kind != "drone" or world == null or state == DEAD or state == TRAVEL:
+## Go somewhere along a way of points (its parent's frame; `low` = a corridor or a doorway: a drone comes down for
+## it): after the player, through the dungeon's doorways (v2_game.gd finds the way). The turret stays where it hangs.
+func follow(points: Array) -> void:
+	if kind == "turret" or state == DEAD or state == PREVIEW or points.is_empty():
 		return
-	if room + way < 0 or room + way >= world.rooms.size():
-		return
-	var e := true
-	if way > 0:                                            # out by the right door, in by the next room's left door
-		_route = [{"p": WAY["in"], "edge": false, "cross": 0}, {"p": WAY.gate, "edge": false, "cross": 0},
-			{"p": WAY.right_pre, "edge": e, "cross": 0}, {"p": WAY.right, "edge": e, "cross": 0},
-			{"p": Vector2(V2World.XR + 0.3, V2World.DOOR_Z), "edge": e, "cross": 1},
-			{"p": WAY.left, "edge": e, "cross": 0}, {"p": WAY.gap, "edge": e, "cross": 0}, {"p": WAY.hall, "edge": e, "cross": 0}]
-	else:                                                  # out by the left door, in by the next room's right door
-		_route = [{"p": WAY["in"], "edge": false, "cross": 0}, {"p": WAY.hall, "edge": false, "cross": 0},
-			{"p": WAY.gap, "edge": e, "cross": 0}, {"p": WAY.left, "edge": e, "cross": 0},
-			{"p": Vector2(V2World.XL - 0.3, WAY.left.y), "edge": e, "cross": -1},
-			{"p": WAY.right, "edge": e, "cross": 0}, {"p": WAY.right_pre, "edge": e, "cross": 0}, {"p": WAY.gate, "edge": e, "cross": 0}]
-	_route.append({"p": WAY["in"], "edge": false, "cross": 0})
+	_route = points
+	arena = Rect2(-1e6, -1e6, 2e6, 2e6)                    # (no floor of its own on the way)
 	state = TRAVEL
 
 
 func _travel(delta: float) -> void:
-	if _route.is_empty():
-		arena = _spec.arena                                # (the whole of the new room's floor is its own now)
+	# the end of the way; or the player in sight close by: it stops and fights where it stands
+	var near := _sees and global_position.distance_to(player.global_position) < 11.0
+	if _route.is_empty() or near:
+		_route.clear()
 		state = ROAM
-		_pick_roam()
+		arrived.emit(self)
+		_target = position
+		if near:
+			_engage()
 		return
-	var wp: Dictionary = _route[0]
-	var to := Vector3(wp.p.x, 0.0, wp.p.y) - position
-	to.y = 0.0
-	var dist := to.length()
-	var edge: bool = wp.edge
-	# the attitude for this stretch first (on edge and low, or level at its flying height), then go, nose first
-	_roll = move_toward(_roll, EDGE[1] if edge else 0.0, 2.6 * delta)
-	_seat.y = move_toward(_seat.y, EDGE[0] if edge else _seat_y, 1.6 * delta)
-	var ready := absf(_roll - (EDGE[1] if edge else 0.0)) < 0.25 and absf(_seat.y - (EDGE[0] if edge else _seat_y)) < 0.2
-	if dist < 0.12:
+	var wp: Array = _route[0]
+	_target = Vector3((wp[0] as Vector3).x, 0.0, (wp[0] as Vector3).z)
+	if kind == "drone":
+		_seat.y = move_toward(_seat.y, LOW if bool(wp[1]) else _seat_y, 1.4 * delta)
+	if _move(delta, true, false):
 		_route.pop_front()
-		if int(wp.cross) != 0:
-			_cross(int(wp.cross))
-		return
-	var off := _face(to, _spec.turn, delta)
-	var speed: float = _spec.run * 0.85 if (off < deg_to_rad(20.0) and (ready or not edge)) else 0.0
-	var step := minf(speed * delta, dist)
-	position += to / dist * step
-	_own_vel = to / dist * speed
-	travelled += step
-	_play("Fly", 1.2)
-
-
-## Through the doorway: it belongs to the next room now (its frame, its render layer).
-func _cross(way: int) -> void:
-	var from := get_parent() as Node3D
-	var into := world.rooms[room + way]
-	var at := global_position
-	from.remove_child(self)
-	into.add_child(self)
-	global_position = at
-	room += way
-	world._set_layer(self, world._layer(room))
-	_home = Vector3(WAY["in"].x, 0.0, WAY["in"].y)
 
 
 # ---------------------------------------------------------------- turret
@@ -989,7 +965,7 @@ func _springs(delta: float) -> void:
 			node.transform = f2.mine
 	if kind != "turret" and _shove.length() > 0.01:
 		var p := position + _shove * delta
-		position = _clamp_arena(p) if state != DEAD else Vector3(clampf(p.x, ROOM.position.x, ROOM.end.x), 0.0, clampf(p.z, ROOM.position.y, ROOM.end.y))
+		position = _clamp_arena(p) if state != DEAD else Vector3(clampf(p.x, bounds.position.x, bounds.end.x), 0.0, clampf(p.z, bounds.position.y, bounds.end.y))
 		_shove *= exp(-delta * (5.0 if kind == "drone" else 9.0))
 	_flinch = maxf(_flinch - delta * 6.0, 0.0)         # and a short shake
 	_pose()
@@ -1006,7 +982,7 @@ func _pose() -> void:
 	_root.position = _seat + _knock + shake - Vector3(0.0, _sink, 0.0)
 	var tilt := Basis(_tilt.normalized(), _tilt.length()) if _tilt.length() > 0.0001 else Basis.IDENTITY
 	if kind == "drone":
-		_root.basis = tilt * Basis(Vector3.FORWARD, _roll) * Basis(Vector3.RIGHT, _apitch) * _base
+		_root.basis = tilt * Basis(Vector3.RIGHT, _apitch) * _base
 	else:
 		_root.basis = tilt * _base
 		for i in _aims.size():
@@ -1026,9 +1002,9 @@ func _spin_out(delta: float) -> void:
 	_apitch = move_toward(_apitch, 0.0, 3.0 * delta)
 	var p := position + _vel * delta
 	var struck := false
-	if p.x < ROOM.position.x or p.x > ROOM.end.x or p.z < ROOM.position.y or p.z > ROOM.end.y:
+	if p.x < bounds.position.x or p.x > bounds.end.x or p.z < bounds.position.y or p.z > bounds.end.y:
 		struck = true                                      # a wall
-		p = Vector3(clampf(p.x, ROOM.position.x, ROOM.end.x), 0.0, clampf(p.z, ROOM.position.y, ROOM.end.y))
+		p = Vector3(clampf(p.x, bounds.position.x, bounds.end.x), 0.0, clampf(p.z, bounds.position.y, bounds.end.y))
 	else:
 		var from := hit_point()                            # or anything that stands in the room
 		var q := PhysicsRayQueryParameters3D.create(from, from + _vel.normalized() * 0.75)

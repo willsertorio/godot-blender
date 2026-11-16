@@ -1,62 +1,53 @@
 extends V2World
-## The V2 game: one level. Four sectors (the concept room of the Blender scene, four times in a row) joined by
-## doors, the robots of the lab as its garrison, supply crates, an exit gate in the last sector.
-##   The player starts in sector A, opens the doors (E), and wins by walking into the exit gate in sector D.
-##   A sector's door onward is locked while one of its robots still works (its lamp: red = locked, amber = shut,
-##   green = open). Without that the level is a sprint: the doorways face each other under the mezzanine, and a
-##   player could run from door to door past every hall.
-##   Robots do not come back; a wreck stays where it fell. Spiders hold their hall; drones that have seen the
-##   player follow through open doors (on edge: a drone is wider than a doorway); a turret runs along its rail.
-##   Magazines run out (R reloads, an empty gun reloads by itself), the machine gun's rounds are finite, health
-##   does not come back by itself: crates (E) and some wrecks give ammunition, health cells and med kits (H).
-##   No pause, no prompts (the GDD's rules); Esc frees the mouse and offers the way back to the title.
-##   F3 shows the frame rate and what a frame costs to draw.
-##   godot --path . -- --play                 straight into the level
-##   godot --path . -- --game-test            checks by code, PASS / FAIL (headless: rules; with a display: the walk too)
-##   godot --path . -- --bot=5                the balance bot plays the level 5 times and prints how it went
-##   godot --path . -- --game-capture=DIR     screenshots of the level
+## The V2 game: the generated dungeon. Every run builds a fresh layout (`DungeonGen`: eight to twelve rooms joined
+## by corridors and doors, a tree from the room the player starts in) out of the V2 kit (`V2Dungeon`), scatters
+## robots, supply crates and one exit portal (in the deepest room) through it, and the player works toward the exit.
+##   1  the title's PLAY generates a dungeon and enters play
+##   2  rooms entered count against the total (ROOMS n / N)
+##   3  pistol (unlimited magazines) and machine gun (a finite reserve) against the robots; health does not come back
+##   4  crates (E) and some wrecks give health, med kits (H) and machine gun rounds
+##   5  E opens the doors; Tab shows the map: rooms seen, hostiles in them, doors, the exit once it is found
+##   6  into the exit portal = mission complete; health gone = mission failed
+##   7  the end screen: score, robots destroyed; AGAIN after a win is a harder dungeon (the threat level climbs
+##      with every mission completed: more robots, tougher robots, fewer med kits; a kill is worth more)
+## No pause and no prompts (the GDD's rules): Esc frees the mouse and offers the way back to the title. F3: frame rate.
+##   godot --path . -- --play [--seed=N] [--threat=N]   straight into a dungeon (a seed gives the same layout again)
+##   godot --headless --path . -- --game-test           checks by code, PASS / FAIL
+##   godot --headless --path . -- --bot=N [--threat=N]  the balance bot plays N dungeons
+##   godot --path . -- --game-capture=DIR               screenshots
 const TITLE := "res://scenes/v2_title.tscn"
+const KIND := {"turret": "turret", "brawler": "spider", "pursuer": "drone"}      # the generator's hostiles -> the V2 robots
 const SCORE := {"turret": 100, "drone": 150, "spider": 200}
-# What each sector holds (room frame, metres; yaw in degrees, 0 = facing -z, the back of the room).
-#   robots: [kind, x, z, yaw, arena or null (SPEC's)]   crates: [x, z, yaw (0 = its front toward +z), what is in it]
-#   tank = the liquid's colour
-const LEVEL := [
-	{"name": "A", "tank": Color(0.2, 0.62, 0.68), "robots": [], "crates": [[5.85, -8.4, -90.0, "ammo"]]},
-	{"name": "B", "tank": Color(0.25, 0.68, 0.4), "robots": [
-		["spider", 0.5, -5.0, -35.0, Rect2(-1.6, -6.8, 3.9, 3.9)], ["spider", 0.3, 0.3, -20.0, Rect2(-1.6, -2.1, 3.9, 4.1)]],
-		"crates": [[-4.02, 1.0, 90.0, "kit"], [5.85, -8.4, -90.0, "health"]]},
-	{"name": "C", "tank": Color(0.75, 0.55, 0.16), "robots": [
-		["drone", 2.0, -4.6, 160.0, Rect2(-2.3, -7.0, 5.0, 4.0)], ["drone", -0.8, -0.6, 200.0, Rect2(-2.3, -2.6, 5.0, 4.1)],
-		["turret", 0.0, 0.0, 0.0, null]],
-		"crates": [[-1.5, 2.65, 180.0, "ammo"], [1.0, -13.62, 0.0, "kit"]]},
-	{"name": "D", "tank": Color(0.5, 0.36, 0.85), "robots": [
-		["spider", 0.4, -4.4, -30.0, Rect2(-1.6, -6.8, 3.9, 4.6)], ["drone", 1.4, -0.4, 180.0, Rect2(-2.3, -2.2, 5.0, 3.4)],
-		["turret", 0.0, 0.0, 0.0, null]],
-		"crates": [[-4.02, 1.0, 90.0, "ammo"]], "exit": [1.0, 2.5]},
-]
 # The robots of the game against the lab's: [aim lag in seconds (the lab: 0.3), damage x, pauses between bursts /].
-# Tuned with the bot (tools/v2_bot.sh; CLAUDE.md, "V2 game", has the runs). The spider most of all: with the lab's
-# numbers, and with the drone's here, the two spiders of sector B never once hit a bot that keeps moving sideways.
 const TOUGH := {"spider": [0.09, 1.3, 1.3], "drone": [0.24, 1.15, 1.2], "turret": [0.24, 1.15, 1.2]}
+const HP_PER_THREAT := 0.2          # robots' health: + this per mission completed
+const SCORE_PER_THREAT := 0.25      # a kill's worth: + this per mission completed
 const DROP := 0.35                  # chance that a destroyed robot leaves something
-const DROPS := ["ammo", "ammo", "ammo", "health", "health", "kit"]
-const REACH := 2.3                  # how near a door or a crate must be for E
+const REACH := 2.4                  # how near a door or a crate must be for E
+const CHASE := 18                   # a robot follows the player at most this many cells
 
 enum { PLAYING, WON, LOST }
 
+static var missions := 0            # missions completed in this sitting: the threat level
+static var total_score := 0
+
+var gen: DungeonGen
+var dungeon: V2Dungeon
 var player: V2Player
 var robots: Array[V2Robot] = []
 var state := PLAYING
 var kills := 0
 var score := 0
 var elapsed := 0.0
-var current := 0                    # the sector the player is in
-var doors: Array = []               # between sector i and i + 1: {leaves, open, light, x}
+var here := -1                      # the area (room or corridor) the player is in
+var explored: Dictionary = {}       # room id -> true
+var walked: Dictionary = {}         # corridor id -> true
+var exit_found := false
 var crates: Array = []              # {node, lid, light, what, open}
-var pickups: Array = []             # {node, what, t}
+var pickups: Array = []             # {node, what, t, y}
+var seed_used := 0
 var _props: Node3D
-var _exit_at := Vector3.INF
-var _exit_hum: AudioStreamPlayer3D
+var _exit_xf := Transform3D.IDENTITY   # the gate's frame (world): the player is through it when inside its opening
 var _ui: CanvasLayer
 var _hp_fill: ColorRect
 var _hp_text: Label
@@ -66,21 +57,21 @@ var _ammo_text: Label
 var _goal_text: Label
 var _note_text: Label
 var _note_t := 0.0
+var _banner: Label
+var _banner_t := 0.0
 var _dot: ColorRect
 var _flash: ColorRect
 var _low_hp: ColorRect
-var _menu: Control
-var _end: Control
-var _chase_t := 0.0
-var _bot: Node
-var _seen: Dictionary = {}          # sectors the player has been in
-var _lamps: Dictionary = {}
-var _banner: Label
-var _from_bars: Array = []          # red bars at the screen's edges: the side a hit came from (top = ahead)
-var _perf: Label                    # F3: frame rate and what the frame costs to draw
+var _from_bars: Array = []
+var _perf: Label
 var _perf_t := 0.0
 var _perf_n := 0
-var _banner_t := 0.0
+var _menu: Control
+var _end: Control
+var _map: V2Map
+var _tick := 0.0
+var _bot: Node
+var _rng := RandomNumberGenerator.new()
 
 
 func _ready() -> void:
@@ -90,48 +81,55 @@ func _ready() -> void:
 	V2Sfx.root = self
 	V2Sfx.enabled = not ("--no-sound" in args)
 	_low = "--quality=low" in args
-	_concept = true
 	if _low:
 		get_viewport().msaa_3d = Viewport.MSAA_DISABLED
+	var capture := ""
+	var bot := 0
+	seed_used = int(Time.get_ticks_usec()) ^ (randi() << 8)
+	if "--game-test" in args:
+		seed_used = 7                                      # (the checks want the same dungeon every time)
+	for a in args:
+		if a.begins_with("--seed="):
+			seed_used = int(a.trim_prefix("--seed=")) + missions * 7919      # (the next mission of a seeded run is seeded too)
+		if a.begins_with("--threat=") and total_score == 0 and missions == 0:
+			missions = int(a.trim_prefix("--threat="))
+		if a.begins_with("--game-capture="):
+			capture = a.trim_prefix("--game-capture=")
+		if a.begins_with("--bot"):
+			bot = maxi(int(a.trim_prefix("--bot=")), 1) if a.contains("=") else 1
+	_rng.seed = hash(seed_used) + 5
 	_environment()
+	gen = DungeonGen.new().generate(seed_used, missions)
+	dungeon = V2Dungeon.new()
+	add_child(dungeon)
+	dungeon.build(gen)
 	_props = (load(V2Assets.DIR + "props.glb") as PackedScene).instantiate()
 	V2Assets.apply(_props)
-	for i in LEVEL.size():
-		_sector(i)
-	for i in LEVEL.size() - 1:
-		_door_lining(i)
-		_door(i)
-	_door_frame(rooms[0], XL - 0.3, XL + 0.16, _layer(0))                               # the outer doorways lead nowhere
-	_door_frame(rooms[LEVEL.size() - 1], XR - 0.16, XR + 0.3, _layer(LEVEL.size() - 1))
-	_door_plug(0, XL + 0.1)
-	_door_plug(LEVEL.size() - 1, XR - 0.1)
+	for l in gen.loot_spawns:
+		_crate(l)
+	_exit()
+	for e in gen.enemy_spawns:
+		_robot(e)
+	for r in robots:                                       # the robots of a room keep off each other's firing positions
+		r.others = robots.filter(func(o: V2Robot) -> bool: return o.room == r.room)
 	player = V2Player.new()
 	player.rules = true
-	player.grab = false                                # (a click does not take the mouse back: the menu's buttons must work)
+	player.grab = false                                    # (a click does not take the mouse back: the menu's buttons must work)
 	add_child(player)
-	player.global_position = rooms[0].position + Vector3(0.2, 0.02, 0.0)
+	player.global_position = gen.player_spawn + Vector3(0, 0.02, 0)
+	player._yaw = gen.player_yaw
 	player._pitch = deg_to_rad(-3.0)
-	player.died.connect(_on_died)
+	player.died.connect(func() -> void: finish(false))
 	player.interact.connect(interact)
 	for r in robots:
 		r.player = player
 	_hud()
-	_rooms_shown()
 	V2Sfx.ambience("room_tone")
-	var capture := ""
-	var bot := 0
-	for a in args:
-		if a.begins_with("--game-capture="):
-			capture = a.trim_prefix("--game-capture=")
-		if a.begins_with("--bot"):
-			bot = maxi(int(a.trim_prefix("--bot=")), 1) if a.contains("=") else 3
-	if "--game-test" in args or bot > 0 or capture != "" or "--bot-diag" in args:
+	if "--game-test" in args or bot > 0 or capture != "":
 		_bot = (load("res://scripts/v2/v2_game_bot.gd") as GDScript).new()
 		_bot.game = self
 		add_child(_bot)
-		if "--bot-diag" in args:
-			_bot.diag()
-		elif capture != "":
+		if capture != "":
 			_bot.capture(capture)
 		elif bot > 0:
 			_bot.play_runs(bot)
@@ -141,76 +139,56 @@ func _ready() -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
-# ---------------------------------------------------------------------------------------------- building the level
-func _sector(i: int) -> void:
-	var spec: Dictionary = LEVEL[i]
-	var room := _room_shell(i, "Sector_" + String(spec.name))
-	_tanks(room, spec.tank)
-	for k in spec.robots.size():
-		var rs: Array = spec.robots[k]
-		var robot := V2Robot.new()
-		room.add_child(robot)
-		robot.setup(rs[0])
-		robot.respawns = false
-		robot.aim_lag = TOUGH[rs[0]][0]
-		robot.damage_scale = TOUGH[rs[0]][1]
-		robot.haste = TOUGH[rs[0]][2]
-		robot.show_label = false
-		robot.world = self
-		robot.room = i
-		if rs[0] == "turret":
-			robot.set_rail(-4.9, -1.4)
-			hide_for_rail(room)
-		else:
-			robot.place(Vector3(rs[1], 0.0, rs[2]), rs[3])
-			if rs[0] == "spider":
-				robot._spec.keep = [3.8, 6.0]              # it closes in more than the lab's (5 to 7.5 m): its rounds scatter with its guns' recoil
-			if rs[4] != null:
-				robot.arena = rs[4]
-		robot.destroyed.connect(_on_destroyed)
-		robots.append(robot)
-	for cs in spec.crates:
-		_crate(room, Vector3(cs[0], 0.0, cs[1]), cs[2], cs[3])
-	if spec.has("exit"):
-		_exit(room, Vector3(spec.exit[0], 0.0, spec.exit[1]))
-	# the sector's letter by its doors
-	for side in [[XL + 0.03, 90.0], [XR - 0.03, -90.0]]:
-		var plate := Label3D.new()
-		plate.text = String(spec.name)
-		plate.font = V2Ui.heading()
-		plate.font_size = 150
-		plate.pixel_size = 0.004
-		plate.modulate = Color(0.1, 0.11, 0.13)
-		plate.outline_size = 0
-		plate.position = Vector3(side[0], 1.55, DOOR_Z + 1.45)
-		plate.rotation_degrees.y = side[1]
-		room.add_child(plate)
-	_set_layer(room, _layer(i))
-
-
-## Each sector's tanks hold a liquid of its own colour: the one thing that tells four copies of a room apart at once.
-func _tanks(room: Node3D, color: Color) -> void:
-	var liquid := (V2Assets.material("TankLiquid") as StandardMaterial3D).duplicate() as StandardMaterial3D
-	liquid.albedo_color = Color(color.r, color.g, color.b, 0.45)
-	liquid.emission = color * 0.8
-	for n in room.find_children("TankLiquid*", "MeshInstance3D", true, false):
-		var mi := n as MeshInstance3D
-		for s in mi.mesh.get_surface_count():
-			mi.set_surface_override_material(s, liquid)
-	for n in room.find_children("TankLights*", "MeshInstance3D", true, false):
-		var mi2 := n as MeshInstance3D
-		for s in mi2.mesh.get_surface_count():
-			var src := mi2.get_surface_override_material(s) as StandardMaterial3D
-			if src != null:
-				var lit := src.duplicate() as StandardMaterial3D
-				lit.emission = color.lerp(Color.WHITE, 0.35)
-				mi2.set_surface_override_material(s, lit)
-
-
+# ---------------------------------------------------------------------------------------------- what the dungeon holds
 func _prop(prop_name: String) -> Node3D:
 	var n := (_props.find_child(prop_name, true, false) as Node3D).duplicate() as Node3D
 	n.position = Vector3.ZERO
 	return n
+
+
+func _robot(e: Dictionary) -> void:
+	var kind: String = KIND[e.type]
+	var area := dungeon.area_at(e.pos)
+	var robot := V2Robot.new()
+	add_child(robot)
+	robot.setup(kind)
+	robot.respawns = false
+	robot.show_label = false
+	robot.aim_lag = TOUGH[kind][0]
+	robot.damage_scale = TOUGH[kind][1]
+	robot.haste = TOUGH[kind][2]
+	robot.max_hp *= 1.0 + HP_PER_THREAT * missions
+	robot.hp = robot.max_hp
+	robot.room = area
+	robot.bounds = dungeon.arena(area, 0.7)
+	# (spider and drone stand on and go between the middles of cells: columns and tanks stand at the cells' corners)
+	var floor_rect := dungeon.arena(area, 1.9)
+	var at: Vector3 = V2Dungeon.center(V2Dungeon.cell_of(e.pos)) if kind != "turret" else Vector3(clampf(e.pos.x, floor_rect.position.x + 0.4, floor_rect.end.x - 0.4), 0.0,
+		clampf(e.pos.z, floor_rect.position.y + 0.4, floor_rect.end.y - 0.4))
+	var mid: Vector2 = (dungeon.areas[area].rect as Rect2).get_center()
+	robot.place(at, rad_to_deg(atan2(-(mid.x - at.x), -(mid.y - at.z))) + _rng.randf_range(-40.0, 40.0))
+	if kind == "turret":                                   # it hangs from a carriage on a short rail under the ceiling
+		robot.set_rail(maxf(at.z - 2.4, floor_rect.position.y), minf(at.z + 2.4, floor_rect.end.y), dungeon.areas[area].layer)
+	else:
+		robot.arena = floor_rect
+		robot.grid = V2Dungeon.CELL
+		if kind == "spider":
+			robot._spec.keep = [3.8, 6.0]                  # it closes in more than the lab's (5 to 7.5 m): its rounds scatter with its guns' recoil
+	_set_layer(robot, dungeon.areas[area].layer)
+	robot.destroyed.connect(_on_destroyed)
+	robot.arrived.connect(_settle)
+	robots.append(robot)
+
+
+## A robot at the end of its way (or stopped on it): the area it stands in is its floor now.
+func _settle(robot: V2Robot) -> void:
+	var area := dungeon.area_at(robot.global_position)
+	if area < 0:
+		return
+	robot.room = area
+	robot.arena = dungeon.arena(area, 1.9)
+	robot.bounds = dungeon.arena(area, 0.7)
+	_set_layer(robot, dungeon.areas[area].layer)
 
 
 func _solid(parent: Node3D, size: Vector3, at: Vector3) -> void:
@@ -224,148 +202,87 @@ func _solid(parent: Node3D, size: Vector3, at: Vector3) -> void:
 	parent.add_child(body)
 
 
-func _crate(room: Node3D, at: Vector3, yaw: float, what: String) -> void:
+## A supply crate against a wall (the generator's place and what is in it), its front to the room.
+func _crate(l: Dictionary) -> void:
+	var out := Vector3(sin(float(l.yaw)), 0, cos(float(l.yaw)))          # toward the wall
 	var node := _prop("Crate")
-	room.add_child(node)
-	node.position = at
-	node.rotation_degrees.y = yaw
+	add_child(node)
+	node.position = (l.pos as Vector3) + out * 0.5
+	node.rotation.y = float(l.yaw) + PI
 	_solid(node, Vector3(0.9, 0.58, 0.56), Vector3(0, 0.29, 0))
+	_set_layer(node, dungeon.areas[dungeon.area_at(l.pos)].layer)
 	crates.append({"node": node, "lid": node.find_child("Crate_Lid", true, false), "light": node.find_child("Crate_Light", true, false),
-		"what": what, "open": false})
+		"what": String(l.payoff), "open": false})
 
 
-func _exit(room: Node3D, at: Vector3) -> void:
+## The exit portal: the gate in the middle of the deepest room, its front toward that room's doorway.
+func _exit() -> void:
+	var room: DungeonGen.Room = gen.rooms[gen.exit_room]
+	var to := (DungeonGen.cell_center(room.doorway_cells[0]) - gen.exit_pos) if not room.doorway_cells.is_empty() else Vector3(0, 0, 1)
+	var yaw := (PI / 2.0 if to.x > 0.0 else -PI / 2.0) if absf(to.x) > absf(to.z) else (0.0 if to.z > 0.0 else PI)
 	var gate := _prop("ExitGate")
-	room.add_child(gate)
-	gate.position = at
+	add_child(gate)
+	gate.position = gen.exit_pos
+	gate.rotation.y = yaw
 	for sx in [-1.0, 1.0]:
 		_solid(gate, Vector3(0.42, 2.8, 0.6), Vector3(sx * 1.06, 1.4, 0))
 	_solid(gate, Vector3(2.5, 0.42, 0.6), Vector3(0, 2.61, 0))
-	var spot := SpotLight3D.new()                          # the field lights the floor before it (a spot: the omnis are spoken for)
-	spot.light_color = V2Ui.VIOLET
-	spot.light_energy = 2.2
-	spot.spot_range = 5.0
-	spot.spot_angle = 70.0
-	spot.position = Vector3(0, 2.2, -0.3)
-	spot.rotation_degrees = Vector3(-60.0, 0, 0)
-	spot.light_cull_mask = _layer(rooms.size() - 1)
-	gate.add_child(spot)
-	for side in [-1.0, 1.0]:                               # its sign (not in the heading font: that one has no X)
-		var sign := Label3D.new()
+	var layer: int = dungeon.areas[dungeon.area_at(gen.exit_pos)].layer
+	for side in [-1.0, 1.0]:
+		var sign := Label3D.new()                          # (not in the heading font: that one has no X)
 		sign.text = "EXIT"
 		sign.font_size = 96
 		sign.pixel_size = 0.0022
-		sign.modulate = Color(0.1, 0.04, 0.22)                 # (dark on the lit strip behind it)
+		sign.modulate = Color(0.1, 0.04, 0.22)
 		sign.outline_size = 0
 		sign.position = Vector3(0, 2.61, side * 0.33)
 		sign.rotation_degrees.y = 0.0 if side > 0.0 else 180.0
 		gate.add_child(sign)
-	_exit_at = room.position + at
-	_exit_hum = V2Sfx.loop("exit_hum", gate)
-	V2Sfx.drive(_exit_hum, true)
-
-
-## The door between sector i and i + 1: two leaves in the passage that slide apart into the walls, a light over it.
-func _door(i: int) -> void:
-	var x := XR + 0.3
-	var leaves: Array = []
-	for side in [-1.0, 1.0]:
-		var leaf := Node3D.new()
-		leaf.position = Vector3(x, 0.0, DOOR_Z + side * DOOR_W / 4.0)
-		rooms[i].add_child(leaf)
-		var layer := _layer(i) | _layer(i + 1)
-		# (painted white like the robots' armour: bare steel under the mezzanine came out as a black hole)
-		_box(leaf, Vector3(-0.035, 0.01, -DOOR_W / 4.0), Vector3(0.035, DOOR_H - 0.02, DOOR_W / 4.0), "RArmor", layer)
-		_box(leaf, Vector3(-0.04, 1.5, -DOOR_W / 4.0 + 0.12), Vector3(0.04, 1.86, DOOR_W / 4.0 - 0.12), "DarkGlass", layer)
-		_box(leaf, Vector3(-0.045, 0.9, -DOOR_W / 4.0 + 0.04), Vector3(0.045, 1.02, DOOR_W / 4.0 - 0.04), "Hazard", layer)
-		_box(leaf, Vector3(-0.042, 0.01, side * DOOR_W / 4.0 - side * 0.05), Vector3(0.042, DOOR_H - 0.02, side * DOOR_W / 4.0), "DarkSteel", layer)
-		leaves.append(leaf)
-	var lights: Array = []
-	for dx in [-0.47, 0.47]:                                # one over the door on each side
-		var lamp := MeshInstance3D.new()
-		var box := BoxMesh.new()
-		box.size = Vector3(0.03, 0.06, 0.5)
-		lamp.mesh = box
-		lamp.material_override = _lamp(V2Ui.RED if not LEVEL[i].robots.is_empty() else Color(1.0, 0.6, 0.15))
-		lamp.position = Vector3(x + dx, DOOR_H + 0.18, DOOR_Z)
-		lamp.layers = _layer(i) | _layer(i + 1)
-		rooms[i].add_child(lamp)
-		lights.append(lamp)
-	doors.append({"leaves": leaves, "open": false, "lights": lights, "x": rooms[i].position.x + x, "locked": not LEVEL[i].robots.is_empty()})
-
-
-func _lamp(color: Color) -> StandardMaterial3D:
-	var key := color.to_html()
-	if not _lamps.has(key):
-		var m := StandardMaterial3D.new()
-		m.albedo_color = Color(0.02, 0.02, 0.02)
-		m.emission_enabled = true
-		m.emission = color
-		m.emission_energy_multiplier = 2.6
-		_lamps[key] = m
-	return _lamps[key]
-
-
-## The door out of sector i is locked while a robot of that sector still works.
-func _locks() -> void:
-	for i in doors.size():
-		var d: Dictionary = doors[i]
-		var locked := alive_in(i) > 0
-		if locked != bool(d.locked) and not d.open:
-			d.locked = locked
-			for lamp in d.lights:
-				(lamp as MeshInstance3D).material_override = _lamp(V2Ui.RED if locked else Color(1.0, 0.6, 0.15))
-			if not locked:
-				V2Sfx.play("ui", Vector3(d.x, 2.0, DOOR_Z), 6.0)
-				if i == current:
-					say("Sector %s clear: the door is unlocked" % LEVEL[i].name)
+		var spot := SpotLight3D.new()                      # the field lights the floor on both sides
+		spot.light_color = V2Ui.VIOLET
+		spot.light_energy = 2.0
+		spot.spot_range = 5.0
+		spot.spot_angle = 70.0
+		spot.position = Vector3(0, 2.2, side * 0.3)
+		spot.rotation_degrees = Vector3(-60.0, 0.0 if side < 0.0 else 180.0, 0)
+		spot.light_cull_mask = layer
+		gate.add_child(spot)
+	_set_layer(gate, layer)
+	_exit_xf = gate.global_transform
+	V2Sfx.drive(V2Sfx.loop("exit_hum", gate), true)
 
 
 # ---------------------------------------------------------------------------------------------- what the player does
-## E: the door or the crate within reach that the player is nearest to.
+## E: the shut door or the crate within reach that the player is nearest to.
 func interact() -> void:
 	if state != PLAYING:
 		return
-	var here := player.global_position
+	var at := player.global_position
+	var door := dungeon.door_near(at, REACH)
 	var best := REACH
-	var act := Callable()
-	for i in doors.size():
-		var d: Dictionary = doors[i]
-		var dist := Vector2(here.x - float(d.x), here.z - DOOR_Z).length()
-		if not d.open and dist < best:
-			best = dist
-			act = open_door.bind(i)
+	if door >= 0:
+		var d: Vector3 = dungeon.doors[door].at
+		best = Vector2(at.x - d.x, at.z - d.z).length()
+	var crate: Dictionary = {}
 	for c in crates:
-		var dist2 := here.distance_to((c.node as Node3D).global_position)
-		if not c.open and dist2 < best:
-			best = dist2
-			act = open_crate.bind(c)
-	if act.is_valid():
-		act.call()
+		var dist := at.distance_to((c.node as Node3D).global_position)
+		if not c.open and dist < best:
+			best = dist
+			crate = c
+	if not crate.is_empty():
+		open_crate(crate)
+	elif door >= 0:
+		open_door(door)
 
 
-func open_door(i: int, force: bool = false) -> void:
-	var d: Dictionary = doors[i]
-	if d.open:
+func open_door(i: int) -> void:
+	if dungeon.doors[i].open:
 		return
-	if alive_in(i) > 0 and not force:
-		V2Sfx.play("dry", Vector3(d.x, 1.2, DOOR_Z), 4.0)
-		say("Locked: %d hostile%s left in sector %s" % [alive_in(i), "" if alive_in(i) == 1 else "s", LEVEL[i].name])
-		return
-	d.open = true
-	V2Sfx.play("door", Vector3(d.x, 1.2, DOOR_Z))
-	for k in 2:
-		var leaf := d.leaves[k] as Node3D
-		var tw := create_tween()
-		tw.tween_interval(0.12)
-		tw.tween_property(leaf, "position:z", leaf.position.z + (-1.0 if k == 0 else 1.0) * (DOOR_W / 2.0 - 0.03), 0.55) \
-			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	for lamp in d.lights:
-		(lamp as MeshInstance3D).material_override = _lamp(V2Ui.GREEN)
-	for r in robots:                                       # the robots beyond it hear it open
-		if r.room == i + 1 and r.state != V2Robot.DEAD:
+	dungeon.open_door(i)
+	var at: Vector3 = dungeon.doors[i].at
+	for r in robots:                                       # the robots near it hear it open
+		if r.state != V2Robot.DEAD and r.global_position.distance_to(at) < 16.0:
 			r.alerted = true
-	_rooms_shown()
 
 
 func open_crate(c: Dictionary) -> void:
@@ -378,8 +295,7 @@ func open_crate(c: Dictionary) -> void:
 	tw.tween_property(c.lid as Node3D, "rotation_degrees:x", -105.0, 0.45).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	if c.light != null:
 		(c.light as MeshInstance3D).set_surface_override_material(0, V2Assets.material("RFrame"))
-	# what is in it rises out of it and is taken (or stays on the lid's edge if the player has no use for it)
-	drop(String(c.what), node.global_position + Vector3(0, 0.62, 0), 0.5)
+	drop(String(c.what), node.global_position + Vector3(0, 0.62, 0), 0.5)      # what is in it rises out of it
 
 
 ## A pickup at `at` (world), which the player takes by walking to it, after `delay` seconds.
@@ -387,7 +303,9 @@ func drop(what: String, at: Vector3, delay: float = 0.0) -> void:
 	var node := _prop({"ammo": "AmmoBox", "health": "HealthCell", "kit": "MedKit"}[what])
 	add_child(node)
 	node.global_position = at
-	_set_layer(node, _layer(_room_at(at.x)))
+	var area := dungeon.area_at(at)
+	if area >= 0:
+		_set_layer(node, dungeon.areas[area].layer)
 	pickups.append({"node": node, "what": what, "t": -delay, "y": at.y})
 
 
@@ -416,16 +334,21 @@ func say(text: String) -> void:
 		_note_t = 2.2
 
 
+## What a wreck leaves: med kits thin out as the threat level climbs (weight 4 falling to 1).
+func roll_payoff() -> String:
+	var weights := [maxi(1, 4 - missions), 4, 3]
+	var pick := _rng.randi_range(0, weights[0] + weights[1] + weights[2] - 1)
+	return "kit" if pick < weights[0] else ("ammo" if pick < weights[0] + weights[1] else "health")
+
+
 func _on_destroyed(robot: V2Robot) -> void:
 	kills += 1
-	score += SCORE[robot.kind]
-	if randf() < DROP:
+	score += int(round(SCORE[robot.kind] * (1.0 + SCORE_PER_THREAT * missions)))
+	if _rng.randf() < DROP:
 		var at := robot.global_position
-		drop(DROPS[randi() % DROPS.size()], Vector3(at.x + randf_range(-0.5, 0.5), 0.05, at.z + randf_range(-0.5, 0.5)), 2.5 if robot.kind == "drone" else 1.0)
-
-
-func _on_died() -> void:
-	finish(false)
+		var b := robot.bounds
+		drop(roll_payoff(), Vector3(clampf(at.x + _rng.randf_range(-0.5, 0.5), b.position.x, b.end.x), 0.05,
+			clampf(at.z + _rng.randf_range(-0.5, 0.5), b.position.y, b.end.y)), 2.5 if robot.kind == "drone" else 1.0)
 
 
 func finish(won: bool) -> void:
@@ -436,74 +359,80 @@ func finish(won: bool) -> void:
 		V2Sfx.play("exit")
 		player.invulnerable = true
 		score += maxi(0, 300 - int(elapsed))               # a bonus for speed
+		missions += 1
+	total_score += score
 	_end_screen()
 	if _bot == null:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	player.mouse_look = false
+	_map.visible = false
 
 
-func alive() -> int:
+func alive_in(area: int) -> int:
 	var n := 0
 	for r in robots:
-		if r.state != V2Robot.DEAD:
-			n += 1
-	return n
-
-
-func alive_in(sector: int) -> int:
-	var n := 0
-	for r in robots:
-		if r.state != V2Robot.DEAD and r.room == sector:
+		if r.state != V2Robot.DEAD and r.room == area:
 			n += 1
 	return n
 
 
 # ---------------------------------------------------------------------------------------------- every frame
-## Which rooms are drawn and whose robots are awake: the player's, and a neighbour whose door is open.
-func _rooms_shown() -> void:
-	for i in rooms.size():
-		var near := i == current or (absi(i - current) == 1 and bool(doors[mini(i, current)].open))
-		rooms[i].visible = near
-	for r in robots:
-		r.active = r.room == current or (absi(r.room - current) == 1 and bool(doors[mini(r.room, current)].open))
-
-
 func _process(delta: float) -> void:
 	if player == null:
 		return
-	var room := _room_at(player.global_position.x)
-	if room != current or not _seen.has(room):
-		current = room
-		if not _seen.has(room):                            # a sector entered for the first time is announced
-			_banner.text = "SECTOR %s" % LEVEL[room].name
-			_banner_t = 2.6
-		_seen[room] = true
-		_rooms_shown()
-	_gun_lights(current)
+	var at := player.global_position
+	var area := dungeon.area_at(at)
+	if area >= 0 and area != here:
+		here = area
+		var a: Dictionary = dungeon.areas[area]
+		if a.room:
+			if not explored.has(a.id):                     # a room entered for the first time counts
+				explored[a.id] = true
+				_banner.text = "ROOM %d OF %d" % [explored.size(), gen.rooms.size()]
+				_banner_t = 2.4
+			if int(a.id) == gen.exit_room:
+				exit_found = true
+		else:
+			walked[a.id] = true
+	dungeon.update(at, V2Player.GUN_LAYER)
 	if state == PLAYING:
 		elapsed += delta
-		if _exit_at != Vector3.INF:
-			var d := player.global_position - _exit_at
-			if absf(d.x) < 0.8 and absf(d.z) < 0.45:
-				finish(true)
-		_chase_t -= delta
-		if _chase_t <= 0.0:
-			_chase_t = 0.5
-			_rooms_shown()
-			_locks()
-			_chase()
+		var local := _exit_xf.affine_inverse() * at
+		if absf(local.x) < 0.8 and absf(local.z) < 0.45:
+			finish(true)
+		_tick -= delta
+		if _tick <= 0.0:
+			_tick = 0.4
+			_robots_tick()
 	_pickups(delta)
 	_hud_update(delta)
 
 
-## A drone that has seen the player and lost them goes after them into the next sector, if the door is open.
-func _chase() -> void:
+## Twice a second: which robots are awake and drawn, and which go after the player.
+func _robots_tick() -> void:
+	var at := player.global_position
+	var my_cell := V2Dungeon.cell_of(at)
 	for r in robots:
-		if r.kind != "drone" or r.state != V2Robot.ROAM or not r.alerted or r.room == current:
+		var d := r.global_position.distance_to(at)
+		var area := dungeon.area_at(r.global_position)
+		r.active = d < 34.0
+		r.visible = area < 0 or (dungeon.areas[area].node as Node3D).visible
+		r.set_process(d < 48.0 or r.state == V2Robot.TRAVEL or r.state == V2Robot.DEAD)
+		if r.state == V2Robot.DEAD or r.kind == "turret":
 			continue
-		var way := signi(current - r.room)
-		if bool(doors[mini(r.room, r.room + way)].open):
-			r.travel(way)
+		if r.state == V2Robot.TRAVEL:
+			if area >= 0 and area != r.room:               # (on its way through another area: lit by that one)
+				r.room = area
+				_set_layer(r, dungeon.areas[area].layer)
+			continue
+		# it has seen the player (or heard a door) and they are somewhere else now: after them, through open doorways
+		if r.state == V2Robot.ROAM and r.alerted and r._unseen > 2.5 and here >= 0 and area != here:
+			var cells := dungeon.path(V2Dungeon.cell_of(r.global_position), my_cell)
+			if cells.size() >= 2 and cells.size() <= CHASE:
+				var way: Array = []
+				for k in range(1, cells.size()):
+					way.append([V2Dungeon.center(cells[k]), dungeon.low_cell(cells[k])])
+				r.follow(way)
 
 
 func _pickups(delta: float) -> void:
@@ -517,17 +446,20 @@ func _pickups(delta: float) -> void:
 		node.rotation.y += delta * 1.4
 		node.position.y = float(p.y) + 0.08 + 0.05 * sin(float(p.t) * 3.0)
 		var flat := Vector2(player.global_position.x - node.global_position.x, player.global_position.z - node.global_position.z)
-		if state == PLAYING and flat.length() < 1.1 and float(p.t) > 0.25 and _take(p):
+		if state == PLAYING and flat.length() < 1.3 and float(p.t) > 0.25 and _take(p):
 			pickups.erase(p)
 			node.queue_free()
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F3:
-		_perf.visible = not _perf.visible
-		_perf.text = "measuring ..."
-		_perf_t = 0.0
-		_perf_n = 0
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_F3:
+			_perf.visible = not _perf.visible
+			_perf.text = "measuring ..."
+			_perf_t = 0.0
+			_perf_n = 0
+		elif event.keycode == KEY_TAB and state == PLAYING:
+			_map.visible = not _map.visible                # (the game goes on behind it)
 
 
 # ---------------------------------------------------------------------------------------------- HUD and screens
@@ -537,6 +469,8 @@ func _hud() -> void:
 	add_child(_ui)
 	_low_hp = V2Ui.full(_ui, Color(0.8, 0.05, 0.02, 0.0))
 	_flash = V2Ui.full(_ui, Color(1.0, 0.1, 0.05, 0.0))
+	for spec in [[-90.0, -150.0, 180.0, 6.0], [150.0, -90.0, 6.0, 180.0], [-90.0, 144.0, 180.0, 6.0], [-156.0, -90.0, 6.0, 180.0]]:
+		_from_bars.append(V2Ui.rect(_ui, Color(1.0, 0.2, 0.12, 0.0), 0.5, 0.5, spec[0], spec[1], spec[2], spec[3]))      # ahead, right, behind, left
 	_dot = V2Ui.rect(_ui, Color(1, 1, 1, 0.9), 0.0, 0.0, 0, 0, 4, 4)
 	V2Ui.label(_ui, "HEALTH", 0.0, 1.0, 26.0, -62.0, 13, Color(0.7, 0.8, 0.86))
 	V2Ui.rect(_ui, Color(0, 0, 0, 0.55), 0.0, 1.0, 24.0, -42.0, 244.0, 18.0)
@@ -546,14 +480,14 @@ func _hud() -> void:
 	_gun_text = V2Ui.label(_ui, "", 1.0, 1.0, -26.0, -88.0, 14, Color(0.7, 0.8, 0.86), false, HORIZONTAL_ALIGNMENT_RIGHT)
 	_ammo_text = V2Ui.label(_ui, "", 1.0, 1.0, -26.0, -66.0, 34, Color(0.95, 0.98, 1.0), false, HORIZONTAL_ALIGNMENT_RIGHT)
 	_goal_text = V2Ui.label(_ui, "", 0.0, 0.0, 26.0, 20.0, 15, V2Ui.CYAN)
-	_note_text = V2Ui.label(_ui, "", 0.5, 1.0, 0.0, -150.0, 17, Color(0.95, 0.98, 1.0), false, HORIZONTAL_ALIGNMENT_CENTER)
-	_banner = V2Ui.label(_ui, "", 0.5, 0.0, 0.0, 90.0, 40, Color(0.95, 0.98, 1.0), true, HORIZONTAL_ALIGNMENT_CENTER)
-	# where a hit came from: ahead, right, behind, left
-	for spec in [[0.5, 0.5, -90.0, -150.0, 180.0, 6.0], [0.5, 0.5, 150.0, -90.0, 6.0, 180.0], [0.5, 0.5, -90.0, 144.0, 180.0, 6.0], [0.5, 0.5, -156.0, -90.0, 6.0, 180.0]]:
-		var bar := V2Ui.rect(_ui, Color(1.0, 0.2, 0.12, 0.0), spec[0], spec[1], spec[2], spec[3], spec[4], spec[5])
-		_from_bars.append(bar)
 	_perf = V2Ui.label(_ui, "", 0.0, 0.0, 26.0, 46.0, 14, Color(1.0, 0.9, 0.5))
 	_perf.visible = false
+	_note_text = V2Ui.label(_ui, "", 0.5, 1.0, 0.0, -150.0, 17, Color(0.95, 0.98, 1.0), false, HORIZONTAL_ALIGNMENT_CENTER)
+	_banner = V2Ui.label(_ui, "", 0.5, 0.0, 0.0, 90.0, 40, Color(0.95, 0.98, 1.0), true, HORIZONTAL_ALIGNMENT_CENTER)
+	_map = V2Map.new()
+	_map.game = self
+	_map.visible = false
+	_ui.add_child(_map)
 	# Esc: the mouse is free; the way back
 	_menu = Control.new()
 	_menu.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -563,7 +497,13 @@ func _hud() -> void:
 	V2Ui.rect(_menu, Color(0.02, 0.03, 0.045, 0.8), 0.5, 0.5, -180.0, -110.0, 360.0, 200.0)
 	V2Ui.label(_menu, "The game goes on: there is no pause.", 0.5, 0.5, 0.0, -96.0, 13, Color(0.7, 0.78, 0.84), false, HORIZONTAL_ALIGNMENT_CENTER)
 	V2Ui.button(_menu, "RESUME", 0.5, 0.5, 0.0, -60.0, func() -> void: Input.mouse_mode = Input.MOUSE_MODE_CAPTURED)
-	V2Ui.button(_menu, "TITLE", 0.5, 0.5, 0.0, 4.0, func() -> void: get_tree().change_scene_to_file(TITLE))
+	V2Ui.button(_menu, "TITLE", 0.5, 0.5, 0.0, 4.0, to_title)
+
+
+func to_title() -> void:
+	missions = 0
+	total_score = 0
+	get_tree().change_scene_to_file(TITLE)
 
 
 func _hud_update(delta: float) -> void:
@@ -575,17 +515,28 @@ func _hud_update(delta: float) -> void:
 	_gun_text.text = "MACHINE GUN" if player.weapon == "rifle" else "PISTOL"
 	_ammo_text.text = ("%d / %d" % [player.mag.rifle, player.reserve]) if player.weapon == "rifle" else ("%d" % player.mag.pistol)
 	_ammo_text.add_theme_color_override("font_color", V2Ui.RED if player.mag[player.weapon] <= 3 else Color(0.95, 0.98, 1.0))
-	var here := alive_in(current)
-	_goal_text.text = "SECTOR %s   ·   %s   ·   find the exit gate" % [LEVEL[current].name, ("%d hostile%s" % [here, "" if here == 1 else "s"]) if here > 0 else "clear"]
+	var hostiles := alive_in(here)
+	_goal_text.text = "THREAT %d   ·   ROOMS %d / %d   ·   %s   ·   %s   ·   Tab: map" % [missions, explored.size(), gen.rooms.size(),
+		("%d hostile%s here" % [hostiles, "" if hostiles == 1 else "s"]) if hostiles > 0 else "clear here",
+		"the exit portal is in this room" if (exit_found and here >= 0 and dungeon.areas[here].room and int(dungeon.areas[here].id) == gen.exit_room)
+		else ("exit found: see the map" if exit_found else "find the exit portal")]
 	_note_t -= delta
-	_banner_t -= delta
-	_banner.modulate.a = clampf(_banner_t, 0.0, 1.0) * clampf((2.6 - _banner_t) * 4.0, 0.0, 1.0)
 	_note_text.modulate.a = clampf(_note_t, 0.0, 1.0)
+	_banner_t -= delta
+	_banner.modulate.a = clampf(_banner_t, 0.0, 1.0) * clampf((2.4 - _banner_t) * 4.0, 0.0, 1.0)
 	_flash.color.a = player.hurt_flash * 0.3
 	var to := player.hurt_from - player.global_position
 	var side := wrapi(int(round(angle_difference(player._yaw, atan2(-to.x, -to.z)) / (-PI / 2.0))), 0, 4)      # 0 ahead, 1 right, 2 behind, 3 left
 	for k in 4:
 		(_from_bars[k] as ColorRect).color.a = player.hurt_flash * 0.75 if (k == side and state == PLAYING) else 0.0
+	_low_hp.color.a = clampf((35.0 - player.hp) / 35.0, 0.0, 1.0) * (0.1 + 0.05 * sin(elapsed * 5.0)) if state == PLAYING else 0.0
+	var dot := player.aim_dot if player.weapon in V2Player.AUTO else size / 2.0
+	_dot.visible = state == PLAYING and dot.x >= 0.0 and not (player.busy in V2Player.NO_CURSOR) and not _map.visible
+	_dot.position = dot - Vector2(2, 2)
+	_dot.color = Color(1.0, 0.25, 0.15) if player.hit_confirm > 0.0 else Color(1, 1, 1, 0.9)
+	_menu.visible = state == PLAYING and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE and _bot == null
+	if _map.visible:
+		_map.queue_redraw()
 	if _perf.visible:
 		_perf_t += delta
 		_perf_n += 1
@@ -595,12 +546,6 @@ func _hud_update(delta: float) -> void:
 				Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0]
 			_perf_t = 0.0
 			_perf_n = 0
-	_low_hp.color.a = clampf((35.0 - player.hp) / 35.0, 0.0, 1.0) * (0.1 + 0.05 * sin(elapsed * 5.0)) if state == PLAYING else 0.0
-	var dot := player.aim_dot if player.weapon in V2Player.AUTO else size / 2.0
-	_dot.visible = state == PLAYING and dot.x >= 0.0 and not (player.busy in V2Player.NO_CURSOR)
-	_dot.position = dot - Vector2(2, 2)
-	_dot.color = Color(1.0, 0.25, 0.15) if player.hit_confirm > 0.0 else Color(1, 1, 1, 0.9)
-	_menu.visible = state == PLAYING and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE and _bot == null
 
 
 func _end_screen() -> void:
@@ -609,12 +554,14 @@ func _end_screen() -> void:
 	_end.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_ui.add_child(_end)
 	var won := state == WON
-	V2Ui.full(_end, Color(0.02, 0.03, 0.045, 0.78))
-	V2Ui.label(_end, "MISSION COMPLETE" if won else "MISSION FAILED", 0.5, 0.5, 0.0, -170.0, 44, V2Ui.VIOLET if won else V2Ui.RED, true, HORIZONTAL_ALIGNMENT_CENTER)
-	V2Ui.label(_end, "You reached the exit gate." if won else "You went down in sector %s." % LEVEL[current].name, 0.5, 0.5, 0.0, -108.0, 17,
-		Color(0.8, 0.86, 0.9), false, HORIZONTAL_ALIGNMENT_CENTER)
-	var lines := "Score  %d\nRobots destroyed  %d of %d\nSectors seen  %d of %d\nTime  %d:%02d" % [score, kills, robots.size(), _seen.size(), LEVEL.size(),
-		int(elapsed) / 60, int(elapsed) % 60]
-	V2Ui.label(_end, lines, 0.5, 0.5, 0.0, -66.0, 18, Color(0.95, 0.98, 1.0), false, HORIZONTAL_ALIGNMENT_CENTER)
-	V2Ui.button(_end, "AGAIN", 0.5, 0.5, -150.0, 70.0, func() -> void: get_tree().reload_current_scene())
-	V2Ui.button(_end, "TITLE", 0.5, 0.5, 150.0, 70.0, func() -> void: get_tree().change_scene_to_file(TITLE))
+	V2Ui.full(_end, Color(0.02, 0.03, 0.045, 0.8))
+	V2Ui.label(_end, "MISSION COMPLETE" if won else "MISSION FAILED", 0.5, 0.5, 0.0, -190.0, 44, V2Ui.VIOLET if won else V2Ui.RED, true, HORIZONTAL_ALIGNMENT_CENTER)
+	V2Ui.label(_end, "You reached the exit portal." if won else "You went down %s." % ("in a room" if here >= 0 and dungeon.areas[here].room else "in a corridor"),
+		0.5, 0.5, 0.0, -128.0, 17, Color(0.8, 0.86, 0.9), false, HORIZONTAL_ALIGNMENT_CENTER)
+	var lines := "Score  %d%s\nRobots destroyed  %d of %d\nRooms seen  %d of %d\nTime  %d:%02d\n%s" % [score,
+		("   (all missions  %d)" % total_score) if total_score != score else "", kills, robots.size(), explored.size(), gen.rooms.size(),
+		int(elapsed) / 60, int(elapsed) % 60,
+		("Next dungeon: threat level %d (more robots, tougher, fewer med kits)" % missions) if won else ("Threat level %d" % missions)]
+	V2Ui.label(_end, lines, 0.5, 0.5, 0.0, -88.0, 18, Color(0.95, 0.98, 1.0), false, HORIZONTAL_ALIGNMENT_CENTER)
+	V2Ui.button(_end, "AGAIN", 0.5, 0.5, -150.0, 80.0, func() -> void: get_tree().reload_current_scene())
+	V2Ui.button(_end, "TITLE", 0.5, 0.5, 150.0, 80.0, to_title)
