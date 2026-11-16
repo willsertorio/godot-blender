@@ -36,6 +36,12 @@ COLOURS = {  # what the .blend shows (base colour, emission strength); the game 
     "ScreenCyan": ((0.15, 0.85, 1.0), 5), "StatusOrange": ((1.0, 0.45, 0.1), 6), "SignGreen": ((0.2, 1.0, 0.45), 5),
     "TankLiquid": ((0.2, 0.62, 0.68), 1), "TankLight": ((0.75, 0.95, 1.0), 8), "RArmor": ((0.85, 0.86, 0.88), 0),
     "RFrame": ((0.03, 0.03, 0.035), 0), "Seam": ((0.06, 0.065, 0.07), 0),
+    # the second set of pieces (themes): accents of paint, what is stored, cables
+    "PaintBlue": ((0.1, 0.24, 0.5), 0), "PaintOrange": ((0.8, 0.33, 0.05), 0), "PaintGreen": ((0.12, 0.33, 0.2), 0),
+    "Cardboard": ((0.5, 0.38, 0.24), 0), "Cable": ((0.02, 0.02, 0.022), 0), "RRed": ((0.5, 0.03, 0.02), 0),
+    "RSteel": ((0.62, 0.63, 0.65), 0), "FloorPaint": ((0.75, 0.52, 0.03), 0), "DarkGlass": ((0.02, 0.03, 0.04), 0),
+    "RBrass": ((0.75, 0.55, 0.22), 0), "PaintGrey": ((0.5, 0.52, 0.55), 0),
+    "CoreGlow": ((0.35, 0.8, 1.0), 2),
 }
 MATS = {}
 for name, (col, emit) in COLOURS.items():
@@ -83,6 +89,42 @@ class Part:
             for i in range(seg):
                 a = math.tau * i / seg
                 self.verts.append((cx + r * math.cos(a), cy + r * math.sin(a), z))
+        for i in range(seg):
+            j = (i + 1) % seg
+            self.faces.append((n + i, n + j, n + seg + j, n + seg + i))
+        self.faces.append(tuple(n + i for i in reversed(range(seg))))
+        self.faces.append(tuple(n + seg + i for i in range(seg)))
+        return self
+
+    def cone(self, cx, cy, z0, z1, r0, r1, seg=16):
+        """A vertical cylinder whose radius goes from r0 (bottom) to r1 (top)."""
+        n = len(self.verts)
+        for z, r in ((z0, r0), (z1, r1)):
+            for i in range(seg):
+                a = math.tau * i / seg
+                self.verts.append((cx + r * math.cos(a), cy + r * math.sin(a), z))
+        for i in range(seg):
+            j = (i + 1) % seg
+            self.faces.append((n + i, n + j, n + seg + j, n + seg + i))
+        self.faces.append(tuple(n + i for i in reversed(range(seg))))
+        self.faces.append(tuple(n + seg + i for i in range(seg)))
+        return self
+
+    def tube(self, p0, p1, r, seg=12):
+        """A cylinder of radius r from p0 to p1, in any direction."""
+        ax = [p1[i] - p0[i] for i in range(3)]
+        ln = math.sqrt(sum(c * c for c in ax))
+        ax = [c / ln for c in ax]
+        ref = (0.0, 0.0, 1.0) if abs(ax[2]) < 0.9 else (1.0, 0.0, 0.0)
+        u = [ax[1] * ref[2] - ax[2] * ref[1], ax[2] * ref[0] - ax[0] * ref[2], ax[0] * ref[1] - ax[1] * ref[0]]
+        un = math.sqrt(sum(c * c for c in u))
+        u = [c / un for c in u]
+        v = [ax[1] * u[2] - ax[2] * u[1], ax[2] * u[0] - ax[0] * u[2], ax[0] * u[1] - ax[1] * u[0]]
+        n = len(self.verts)
+        for p in (p0, p1):
+            for i in range(seg):
+                a = math.tau * i / seg
+                self.verts.append(tuple(p[k] + r * (math.cos(a) * u[k] + math.sin(a) * v[k]) for k in range(3)))
         for i in range(seg):
             j = (i + 1) % seg
             self.faces.append((n + i, n + j, n + seg + j, n + seg + i))
@@ -265,6 +307,420 @@ for sx in (-1, 1):
         lk.box((sx * 0.3 - 0.16, -0.256, z), (sx * 0.3 + 0.16, -0.25, z + 0.03))         # vents
 lk.done()
 Part("Locker_Lamp", "SignGreen", p).box((0.38, -0.256, 1.98), (0.48, -0.25, 2.03)).done()
+
+
+# ====================================================================== the second set: variety (room themes)
+# Flat things on the floor lie between 0.008 and 0.012: clear of the tiles' joints (top at 0.004). Nothing lies in
+# the same plane as anything else of another material (that flickers). Wall pieces reach 0.12 m into the cell at most.
+
+# ------------------------------------------------------------------ more room walls
+w = wall_base("WallVent", H)                                        # a ventilation grille high up, a warning plate
+Part("WallVent_Frame", "DarkSteel", w, 0.006).box((-0.9, -0.06, 2.75), (0.9, 0, 3.75)).done()
+lv = Part("WallVent_Louvres", "PaintGrey", w)
+for i in range(8):
+    lv.box((-0.82, -0.085, 2.83 + i * 0.11), (0.82, -0.06, 2.88 + i * 0.11))
+lv.done()
+Part("WallVent_Plate", "Hazard", w).box((-0.35, -0.016, 1.5), (0.35, -0.01, 1.64)).done()
+
+w = wall_base("WallCables", H)                                      # cable runs, drops to a junction box
+cb = Part("WallCables_Cables", "Cable", w)
+for z in (2.62, 2.71, 2.8):
+    cb.box((-2, -0.055, z), (2, -0.02, z + 0.05))
+cb.box((-1.26, -0.05, 1.7), (-1.21, -0.02, 2.62)).box((-1.14, -0.05, 1.7), (-1.09, -0.02, 2.71))
+cb.done()
+cl = Part("WallCables_Clips", "PaintGrey", w)
+for x in (-1.7, -0.3, 1.2):
+    cl.box((x - 0.03, -0.065, 2.58), (x + 0.03, 0, 2.89))
+cl.done()
+Part("WallCables_Box", "DarkSteel", w, 0.006).box((-1.42, -0.1, 1.1), (-0.94, 0, 1.7)).done()
+Part("WallCables_Lamp", "SignGreen", w).box((-1.36, -0.106, 1.56), (-1.3, -0.1, 1.62)).done()
+Part("WallCables_Lamp2", "StatusOrange", w).box((-1.26, -0.106, 1.56), (-1.2, -0.1, 1.62)).done()
+
+w = wall_base("WallWindow", H)                                      # an observation window, dark behind
+Part("WallWindow_Frame", "DarkSteel", w, 0.008).box((-1.5, -0.07, 1.15), (1.5, 0, 2.35)).done()
+Part("WallWindow_Glass", "DarkGlass", w).box((-1.4, -0.078, 1.25), (1.4, -0.072, 2.25)).done()
+Part("WallWindow_Bars", "Steel", w).box((-0.48, -0.09, 1.25), (-0.44, -0.08, 2.25)).box((0.44, -0.09, 1.25), (0.48, -0.08, 2.25)).done()
+Part("WallWindow_Sill", "PaintGrey", w).box((-1.5, -0.11, 1.09), (1.5, 0, 1.15)).done()
+Part("WallWindow_Read", "ScreenCyan", w).box((-1.3, -0.0785, 1.3), (-0.95, -0.0782, 1.36)).box((-1.3, -0.0785, 1.4), (-1.1, -0.0782, 1.44)).done()
+
+w = wall_base("WallStripe", H)                                      # a painted band, a sign plate with a code of bars
+Part("WallStripe_Band", "FloorPaint", w).box((-2, -0.014, 0.98), (2, -0.008, 1.2)).done()
+Part("WallStripe_Sign", "DarkSteel", w, 0.004).box((0.45, -0.03, 2.6), (1.55, 0, 3.3)).done()
+sg = Part("WallStripe_Code", "RArmor", w)
+for k, wd in enumerate((0.34, 0.2, 0.28)):
+    sg.box((0.56, -0.036, 3.1 - k * 0.17), (0.56 + wd, -0.03, 3.2 - k * 0.17))
+sg.box((1.14, -0.036, 2.72), (1.44, -0.03, 3.2))
+sg.done()
+
+w = wall_base("WallPanels", H)                                      # two access hatches
+ht = Part("WallPanels_Hatch", "PaintGrey", w, 0.006)
+ht.box((-1.6, -0.04, 0.6), (-0.5, 0, 2.2)).box((0.5, -0.04, 0.6), (1.6, 0, 2.2))
+ht.done()
+hd = Part("WallPanels_Dark", "DarkSteel", w)
+for sx in (-1, 1):
+    hd.box((sx * 0.6 - 0.03, -0.075, 1.25), (sx * 0.6 + 0.03, -0.04, 1.6))                # handles
+    for z in (0.75, 2.0):
+        hd.box((sx * 1.56 - 0.03, -0.055, z), (sx * 1.56 + 0.03, -0.04, z + 0.14))        # hinges
+hd.done()
+hz = Part("WallPanels_Hazard", "Hazard", w)
+for sx in (-1, 1):
+    hz.box((sx * 1.05 - 0.5, -0.046, 0.64), (sx * 1.05 + 0.5, -0.04, 0.76))
+hz.done()
+Part("WallPanels_Lamp", "StatusOrange", w).box((-0.05, -0.012, 1.9), (0.05, -0.006, 2.0)).done()
+
+w = wall_base("WallPilaster", H)                                    # a buttress with a light strip up it
+Part("WallPilaster_Body", "WallPanel", w).box((-0.3, -0.12, 0.42), (0.3, 0, 4.42)).done()
+Part("WallPilaster_Dark", "DarkSteel", w).box((-0.33, -0.12, 0.0), (0.33, -0.03, 0.42)).box((-0.33, -0.12, 4.42), (0.33, -0.05, 4.5)).done()
+Part("WallPilaster_Strip", "LightStrip", w).box((-0.03, -0.126, 1.4), (0.03, -0.12, 3.6)).done()
+
+w = wall_base("WallValves", H)                                      # low pipes with valves, a gauge
+vp = Part("WallValves_Pipes", "PaintGrey", w)
+vp.tube((-2, -0.07, 0.74), (2, -0.07, 0.74), 0.045).tube((-2, -0.065, 0.93), (2, -0.065, 0.93), 0.032)
+vp.done()
+vb = Part("WallValves_Brackets", "DarkSteel", w)
+for x in (-1.5, 0.2, 1.6):
+    vb.box((x - 0.03, -0.12, 0.42), (x + 0.03, 0, 1.0))
+vb.box((1.08, -0.09, 1.2), (1.36, 0, 1.46))
+vb.done()
+Part("WallValves_Wheels", "RRed", w).tube((-0.6, -0.12, 0.74), (-0.6, -0.105, 0.74), 0.09, 10) \
+    .tube((0.9, -0.105, 0.93), (0.9, -0.09, 0.93), 0.07, 10).done()
+Part("WallValves_Dial", "RArmor", w).tube((1.22, -0.096, 1.33), (1.22, -0.09, 1.33), 0.09, 14).done()
+
+# ------------------------------------------------------------------ more corridor walls (each keeps the light strip)
+def cwall(name):
+    w = wall_base(name, HC, band=False)
+    Part(name + "_Strip", "LightStrip", w).box((-1.6, -0.02, 2.86), (1.6, 0, 2.9)).done()
+    Part(name + "_StripBack", "DarkSteel", w).box((-1.7, -0.012, 2.8), (1.7, 0, 2.96)).done()
+    return w
+
+
+w = cwall("CWallPipes")
+Part("CWallPipes_Pipes", "PaintGrey", w).tube((-2, -0.07, 2.3), (2, -0.07, 2.3), 0.045).tube((-2, -0.06, 2.48), (2, -0.06, 2.48), 0.03).done()
+cbk = Part("CWallPipes_Brackets", "DarkSteel", w)
+for x in (-1.3, 0.0, 1.3):
+    cbk.box((x - 0.025, -0.12, 2.2), (x + 0.025, 0, 2.56))
+cbk.done()
+Part("CWallPipes_Band", "Hazard", w).box((-2, -0.014, 0.98), (2, -0.008, 1.1)).done()
+
+w = cwall("CWallPanel")
+Part("CWallPanel_Hatch", "PaintGrey", w, 0.006).box((-0.7, -0.04, 0.6), (0.7, 0, 2.1)).done()
+Part("CWallPanel_Dark", "DarkSteel", w).box((0.5, -0.075, 1.2), (0.56, -0.04, 1.5)).box((-0.66, -0.055, 0.75), (-0.6, -0.04, 0.9)) \
+    .box((-0.66, -0.055, 1.85), (-0.6, -0.04, 2.0)).done()
+Part("CWallPanel_Hazard", "Hazard", w).box((-0.64, -0.046, 0.64), (0.64, -0.04, 0.74)).done()
+Part("CWallPanel_Lamp", "StatusOrange", w).box((-1.2, -0.012, 1.5), (-1.1, -0.006, 1.6)).done()
+
+w = cwall("CWallVent")
+Part("CWallVent_Frame", "DarkSteel", w, 0.006).box((-1.1, -0.06, 0.55), (1.1, 0, 1.25)).done()
+lv = Part("CWallVent_Louvres", "PaintGrey", w)
+for i in range(5):
+    lv.box((-1.02, -0.085, 0.62 + i * 0.12), (1.02, -0.06, 0.67 + i * 0.12))
+lv.done()
+Part("CWallVent_Rail", "Steel", w).box((-2, -0.05, 1.5), (2, -0.01, 1.56)).done()
+
+
+# ------------------------------------------------------------------ more floors
+def floor_base(name):
+    p = piece(name)
+    Part(name + "_Slab", "FloorTile", p).box((-2, -2, -0.2), (2, 2, 0)).done()
+    seam = Part(name + "_Seams", "Seam", p)
+    for v in (-2.0, 0.0):
+        seam.box((v - 0.018, -2, 0.0), (v + 0.018, 2, 0.004)).box((-2, v - 0.018, 0.0), (2, v + 0.018, 0.004))
+    seam.done()
+    return p
+
+
+p = floor_base("FloorHazard")                                       # a striped frame (in front of doors, round the exit)
+fh = Part("FloorHazard_Frame", "Hazard", p)
+fh.box((-1.7, -1.7, 0.008), (1.7, -1.52, 0.012)).box((-1.7, 1.52, 0.008), (1.7, 1.7, 0.012))
+fh.box((-1.7, -1.52, 0.008), (-1.52, 1.52, 0.012)).box((1.52, -1.52, 0.008), (1.7, 1.52, 0.012))
+fh.done()
+
+p = floor_base("FloorPlates")                                       # inspection plates let into two of the four tiles
+Part("FloorPlates_Grating", "Grating", p).box((-1.6, -1.6, 0.008), (-0.4, -0.4, 0.012)).done()
+fp = Part("FloorPlates_Frame", "DarkSteel", p)
+fp.box((-1.66, -1.66, 0.008), (-0.34, -1.6, 0.016)).box((-1.66, -0.4, 0.008), (-0.34, -0.34, 0.016))
+fp.box((-1.66, -1.6, 0.008), (-1.6, -0.4, 0.016)).box((-0.4, -1.6, 0.008), (-0.34, -0.4, 0.016))
+fp.done()
+Part("FloorPlates_Plate", "PaintGrey", p, 0.003).box((0.5, 0.5, 0.008), (1.5, 1.5, 0.016)).done()
+Part("FloorPlates_Bolts", "DarkSteel", p).box((0.56, 0.56, 0.016), (0.62, 0.62, 0.02)).box((1.38, 0.56, 0.016), (1.44, 0.62, 0.02)) \
+    .box((0.56, 1.38, 0.016), (0.62, 1.44, 0.02)).box((1.38, 1.38, 0.016), (1.44, 1.44, 0.02)).done()
+
+p = floor_base("FloorLines")                                        # painted lane lines
+Part("FloorLines_Paint", "FloorPaint", p).box((-1.36, -2, 0.008), (-1.24, 2, 0.011)).box((1.24, -2, 0.008), (1.36, 2, 0.011)).done()
+
+p = floor_base("FloorDrain")                                        # a drain in one tile
+Part("FloorDrain_Grate", "Grating", p).box((0.75, 0.75, 0.008), (1.25, 1.25, 0.012)).done()
+fd = Part("FloorDrain_Frame", "DarkSteel", p)
+fd.box((0.7, 0.7, 0.008), (1.3, 0.75, 0.016)).box((0.7, 1.25, 0.008), (1.3, 1.3, 0.016))
+fd.box((0.7, 0.75, 0.008), (0.75, 1.25, 0.016)).box((1.25, 0.75, 0.008), (1.3, 1.25, 0.016))
+fd.done()
+
+# ------------------------------------------------------------------ more ceilings (the cells between the lights)
+p = piece("CeilingDuct")                                            # a ventilation duct, down from the slab and back up
+Part("CeilingDuct_Slab", "Concrete", p).box((-2, -2, H), (2, 2, H + 0.2)).done()
+dc = Part("CeilingDuct_Duct", "PaintGrey", p, 0.01)
+dc.box((-1.5, -1.6, H - 0.56), (-0.8, 1.6, H - 0.14)).box((-1.45, -1.6, H - 0.14), (-0.85, -1.05, H)).box((-1.45, 1.05, H - 0.14), (-0.85, 1.6, H))
+dc.done()
+dd = Part("CeilingDuct_Dark", "DarkSteel", p)
+dd.box((-1.36, -0.45, H - 0.59), (-0.94, 0.45, H - 0.56))                                 # the outlet
+for y in (-0.6, 0.6):
+    dd.box((-1.54, y - 0.02, H - 0.6), (-1.5, y + 0.02, H)).box((-0.8, y - 0.02, H - 0.6), (-0.76, y + 0.02, H))
+    dd.box((-1.54, y - 0.02, H - 0.62), (-0.76, y + 0.02, H - 0.58))
+dd.done()
+Part("CeilingDuct_Beams", "DarkSteel", p).box((0.6, -2, H - 0.14), (0.78, 2, H)).done()
+
+p = piece("CeilingPipes")                                           # pipes along the cell, up into the slab at both ends
+Part("CeilingPipes_Slab", "Concrete", p).box((-2, -2, H), (2, 2, H + 0.2)).done()
+cp = Part("CeilingPipes_Pipes", "PaintGrey", p)
+for y, r in ((-1.25, 0.08), (-1.0, 0.05), (-0.82, 0.05)):
+    cp.tube((-1.7, y, H - 0.3), (1.7, y, H - 0.3), r).tube((-1.7, y, H - 0.3), (-1.7, y, H), r).tube((1.7, y, H - 0.3), (1.7, y, H), r)
+cp.done()
+ch = Part("CeilingPipes_Hangers", "DarkSteel", p)
+for x in (-0.9, 0.9):
+    ch.box((x - 0.025, -1.4, H - 0.42), (x + 0.025, -0.7, H - 0.39)).box((x - 0.02, -1.4, H - 0.42), (x + 0.02, -1.36, H)) \
+        .box((x - 0.02, -0.74, H - 0.42), (x + 0.02, -0.7, H))
+ch.box((-2, 0.9, H - 0.14), (2, 1.08, H))
+ch.done()
+Part("CeilingPipes_Band", "Hazard", p).tube((-0.3, -1.25, H - 0.3), (0.3, -1.25, H - 0.3), 0.084).done()
+
+p = piece("CeilingVent")                                            # a square extraction unit
+Part("CeilingVent_Slab", "Concrete", p).box((-2, -2, H), (2, 2, H + 0.2)).done()
+Part("CeilingVent_Housing", "DarkSteel", p, 0.01).box((-0.9, -0.9, H - 0.24), (0.9, 0.9, H)).done()
+vl = Part("CeilingVent_Louvres", "PaintGrey", p)
+for i in range(7):
+    vl.box((-0.78, -0.72 + i * 0.22, H - 0.27), (0.78, -0.62 + i * 0.22, H - 0.24))
+vl.done()
+Part("CeilingVent_Lamp", "StatusOrange", p).box((0.74, 0.74, H - 0.25), (0.84, 0.84, H - 0.24)).done()
+Part("CeilingVent_Beams", "DarkSteel", p).box((-2, -1.5, H - 0.12), (2, -1.36, H)).box((-2, 1.36, H - 0.12), (2, 1.5, H)).done()
+
+p = piece("CCeilingDuct")                                           # corridor: the light strip, and a duct down one side
+Part("CCeilingDuct_Slab", "Concrete", p).box((-2, -2, HC), (2, 2, HC + 0.2)).done()
+Part("CCeilingDuct_Light", "CeilingLight", p).box((-0.16, -1.3, HC - 0.03), (0.16, 1.3, HC - 0.005)).done()
+Part("CCeilingDuct_Frame", "DarkSteel", p).box((-0.22, -1.36, HC - 0.05), (-0.16, 1.36, HC)).box((0.16, -1.36, HC - 0.05), (0.22, 1.36, HC)) \
+    .box((-1.5, -2, HC - 0.12), (-1.3, 2, HC)).done()
+Part("CCeilingDuct_Duct", "PaintGrey", p, 0.008).box((1.1, -2, HC - 0.34), (1.62, 2, HC - 0.04)).done()
+Part("CCeilingDuct_Straps", "DarkSteel", p).box((1.08, -1.02, HC - 0.36), (1.64, -0.98, HC)).box((1.08, 0.98, HC - 0.36), (1.64, 1.02, HC)).done()
+
+
+# ------------------------------------------------------------------ more of what stands in the rooms
+def crate(body, frame, x0, y0, z0, x1, y1, z1):
+    """A plain equipment crate: shell, a rim round the foot and the top."""
+    body.box((x0 + 0.015, y0 + 0.015, z0 + 0.03), (x1 - 0.015, y1 - 0.015, z1 - 0.03))
+    frame.box((x0, y0, z0), (x1, y1, z0 + 0.05)).box((x0, y0, z1 - 0.05), (x1, y1, z1))
+
+
+p = piece("CrateStack")                                             # crates stacked: 1.4 x 1.4, 1.5 high (cover)
+cb_, cf_ = Part("CrateStack_Body", "RArmor", p, 0.01), Part("CrateStack_Frame", "RFrame", p, 0.006)
+crate(cb_, cf_, -0.7, -0.7, 0.0, 0.3, 0.3, 0.85)
+crate(cb_, cf_, -0.58, -0.58, 0.85, 0.12, 0.12, 1.5)
+crate(cb_, cf_, 0.34, -0.66, 0.0, 0.7, 0.2, 0.55)
+crate(cb_, cf_, -0.66, 0.34, 0.0, 0.1, 0.7, 0.45)
+cb_.done()
+cf_.done()
+Part("CrateStack_Band", "Hazard", p).box((-0.704, -0.704, 0.36), (0.304, 0.304, 0.5)).done()
+Part("CrateStack_Label", "StatusOrange", p).box((-0.4, -0.586, 1.2), (-0.1, -0.58, 1.3)).done()
+
+p = piece("Barrels")                                                # three drums: 1.3 x 1.2, 0.9 high (cover)
+DRUMS = ((-0.33, -0.28, "PaintBlue"), (0.33, -0.22, "PaintGrey"), (0.02, 0.32, "PaintOrange"))
+for i, (cx, cy, mat) in enumerate(DRUMS):
+    Part("Barrels_Drum%d" % i, mat, p).cyl(cx, cy, 0.02, 0.88, 0.29, 20).done()
+br_ = Part("Barrels_Rims", "DarkSteel", p)
+for cx, cy, _m in DRUMS:
+    for z in (0.0, 0.3, 0.6, 0.86):
+        br_.cyl(cx, cy, z, z + 0.04, 0.3, 20)
+    br_.cyl(cx + 0.14, cy, 0.9, 0.93, 0.045, 10)
+br_.done()
+Part("Barrels_Band", "Hazard", p).cyl(0.33, -0.22, 0.4, 0.54, 0.294, 20).done()
+
+p = piece("Pallet")                                                 # boxes on a pallet: 1.2 x 1.0, 1.0 high
+pl_ = Part("Pallet_Wood", "Cardboard", p)
+for y in (-0.45, 0.0, 0.45):
+    pl_.box((-0.6, y - 0.05, 0.0), (0.6, y + 0.05, 0.1))
+pl_.box((-0.6, -0.5, 0.1), (0.6, 0.5, 0.14))
+pl_.done()
+pbx = Part("Pallet_Boxes", "RArmor", p, 0.008)
+pbx.box((-0.56, -0.46, 0.14), (-0.02, 0.0, 0.58)).box((0.02, -0.46, 0.14), (0.56, 0.0, 0.58))
+pbx.box((-0.56, 0.02, 0.14), (0.0, 0.46, 0.58)).box((0.04, 0.02, 0.14), (0.56, 0.46, 0.5)).box((-0.4, -0.3, 0.58), (0.2, 0.2, 1.0))
+pbx.done()
+Part("Pallet_Straps", "DarkSteel", p).box((-0.57, -0.24, 0.14), (0.57, -0.2, 0.585)).box((-0.57, 0.22, 0.14), (0.57, 0.26, 0.585)).done()
+Part("Pallet_Label", "PaintBlue", p).box((-0.3, -0.306, 0.7), (0.1, -0.3, 0.9)).done()
+
+p = piece("Barrier")                                                # a steel barricade: 1.8 wide, 0.5 deep, 1.1 high (cover)
+Part("Barrier_Panel", "RArmor", p, 0.01).box((-0.9, -0.05, 0.14), (0.9, 0.05, 1.0)).done()
+bf_ = Part("Barrier_Frame", "RFrame", p, 0.006)
+bf_.box((-0.92, -0.07, 1.0), (0.92, 0.07, 1.1)).box((-0.92, -0.07, 0.1), (0.92, 0.07, 0.16))
+for sx in (-1, 1):
+    bf_.box((sx * 0.7 - 0.05, -0.25, 0.0), (sx * 0.7 + 0.05, 0.25, 0.1)).box((sx * 0.7 - 0.03, -0.2, 0.1), (sx * 0.7 + 0.03, 0.2, 0.4))
+bf_.done()
+Part("Barrier_Hazard", "Hazard", p).box((-0.86, -0.056, 0.52), (0.86, 0.056, 0.72)).done()
+Part("Barrier_Lamps", "StatusOrange", p).box((-0.8, -0.03, 1.1), (-0.66, 0.03, 1.15)).box((0.66, -0.03, 1.1), (0.8, 0.03, 1.15)).done()
+
+
+def rack(prefix, parent, x0):
+    """A server rack 0.7 wide (x0 .. x0 + 0.7), 0.9 deep, 2.15 high, front toward -y."""
+    Part(prefix + "_Body", "RFrame", parent, 0.008).box((x0, -0.45, 0.05), (x0 + 0.7, 0.45, 2.15)).done()
+    Part(prefix + "_Base", "DarkSteel", parent).box((x0 - 0.01, -0.46, 0.0), (x0 + 0.71, 0.46, 0.05)).done()
+    Part(prefix + "_Door", "DarkGlass", parent).box((x0 + 0.06, -0.462, 0.2), (x0 + 0.64, -0.456, 2.0)).done()
+    Part(prefix + "_Units", "Steel", parent).box((x0 + 0.1, -0.455, 0.3), (x0 + 0.6, -0.451, 1.9)).done()
+    g, c = Part(prefix + "_Green", "SignGreen", parent), Part(prefix + "_Cyan", "ScreenCyan", parent)
+    for i in range(9):
+        z = 0.38 + i * 0.17
+        g.box((x0 + 0.14, -0.468, z), (x0 + 0.17, -0.463, z + 0.03)).box((x0 + 0.2, -0.468, z), (x0 + 0.23, -0.463, z + 0.03))
+        if i % 3 != 1:
+            c.box((x0 + 0.32, -0.468, z), (x0 + 0.52, -0.463, z + 0.025))
+    g.done()
+    c.done()
+    Part(prefix + "_Top", "PaintGrey", parent).box((x0 + 0.1, -0.3, 2.15), (x0 + 0.6, 0.3, 2.19)).done()
+
+
+p = piece("ServerRack")                                             # one rack against a wall
+rack("ServerRack", p, -0.35)
+p = piece("RackPair")                                               # two side by side: 1.4 x 0.9, 2.2 high (cover)
+rack("RackPairA", p, -0.7)
+rack("RackPairB", p, 0.0)
+
+p = piece("Generator")                                              # a generator set: 1.7 wide, 0.8 deep, 1.35 high
+Part("Generator_Body", "RArmor", p, 0.012).box((-0.85, -0.38, 0.14), (0.85, 0.38, 1.3)).done()
+gf = Part("Generator_Frame", "DarkSteel", p, 0.006)
+gf.box((-0.88, -0.4, 0.0), (0.88, -0.28, 0.14)).box((-0.88, 0.28, 0.0), (0.88, 0.4, 0.14)).box((-0.88, -0.4, 1.3), (0.88, 0.4, 1.35))
+gf.box((0.3, -0.4, 0.5), (0.8, -0.38, 1.15))
+gf.done()
+gl = Part("Generator_Louvres", "PaintGrey", p)
+for i in range(6):
+    gl.box((-0.75, -0.4, 0.4 + i * 0.13), (0.15, -0.38, 0.46 + i * 0.13))
+gl.done()
+Part("Generator_Exhaust", "PaintGrey", p).tube((-0.55, 0.15, 1.35), (-0.55, 0.15, 2.3), 0.07).tube((-0.55, 0.15, 2.3), (-0.55, 0.4, 2.3), 0.07).done()
+Part("Generator_Screen", "ScreenCyan", p).box((0.36, -0.406, 0.88), (0.66, -0.4, 1.06)).done()
+Part("Generator_Lamp", "StatusOrange", p).box((0.36, -0.406, 0.62), (0.44, -0.4, 0.7)).done()
+Part("Generator_Button", "RRed", p).box((0.56, -0.416, 0.6), (0.66, -0.4, 0.7)).done()
+Part("Generator_Band", "Hazard", p).box((-0.854, -0.384, 0.16), (0.854, 0.384, 0.28)).done()
+
+p = piece("Shelf")                                                  # shelving with stores: 1.9 wide, 0.5 deep, 2.05 high
+sh = Part("Shelf_Frame", "PaintGrey", p)
+for sx in (-1, 1):
+    for sy in (-1, 1):
+        sh.box((sx * 0.93 - 0.025, sy * 0.23 - 0.025, 0.0), (sx * 0.93 + 0.025, sy * 0.23 + 0.025, 2.05))
+for z in (0.12, 0.72, 1.32, 1.92):
+    sh.box((-0.95, -0.25, z), (0.95, 0.25, z + 0.035))
+sh.done()
+sb = Part("Shelf_Boxes", "RArmor", p, 0.008)
+sb.box((-0.85, -0.2, 0.155), (-0.25, 0.2, 0.55)).box((0.1, -0.2, 0.155), (0.8, 0.2, 0.48)).box((-0.8, -0.2, 0.755), (-0.4, 0.2, 1.1))
+sb.box((0.3, -0.2, 1.355), (0.85, 0.2, 1.7))
+sb.done()
+Part("Shelf_Card", "Cardboard", p, 0.006).box((-0.3, -0.18, 0.755), (0.2, 0.18, 1.15)).box((-0.8, -0.18, 1.355), (-0.3, 0.18, 1.62)) \
+    .box((-0.2, -0.18, 1.355), (0.2, 0.18, 1.55)).done()
+Part("Shelf_Cans", "PaintBlue", p).cyl(0.45, 0.0, 0.755, 1.15, 0.11, 14).cyl(0.7, -0.05, 0.755, 1.15, 0.11, 14).done()
+Part("Shelf_Cans2", "PaintOrange", p).cyl(-0.6, 0.0, 1.955, 2.3, 0.1, 14).done()
+Part("Shelf_Caps", "DarkSteel", p).cyl(0.45, 0.0, 1.15, 1.19, 0.05, 10).cyl(0.7, -0.05, 1.15, 1.19, 0.05, 10).cyl(-0.6, 0.0, 2.3, 2.34, 0.05, 10).done()
+
+p = piece("Workbench")                                              # a bench with a tool board: 1.9 wide, 0.65 deep, 1.75 high
+Part("Workbench_Top", "PaintGrey", p, 0.006).box((-0.95, -0.32, 0.88), (0.95, 0.32, 0.94)).done()
+wb = Part("Workbench_Dark", "DarkSteel", p)
+for sx in (-1, 1):
+    wb.box((sx * 0.9 - 0.04, -0.28, 0.0), (sx * 0.9 + 0.04, 0.28, 0.88))
+wb.box((-0.95, 0.27, 0.94), (0.95, 0.32, 1.75)).box((-0.86, -0.26, 0.2), (0.86, 0.26, 0.24))
+wb.box((0.55, -0.2, 0.94), (0.8, 0.0, 1.1))                                               # the vice
+wb.done()
+Part("Workbench_Drawers", "RArmor", p, 0.008).box((-0.82, -0.3, 0.42), (-0.2, 0.26, 0.86)).done()
+wt = Part("Workbench_Tools", "PaintGrey", p)
+for k, (x, hgt) in enumerate(((-0.75, 0.35), (-0.6, 0.28), (-0.45, 0.4), (-0.3, 0.22), (0.1, 0.3), (0.25, 0.36))):
+    wt.box((x - 0.02, 0.255, 1.55 - hgt), (x + 0.02, 0.27, 1.55))
+wt.box((-0.76, -0.31, 0.6), (-0.26, -0.3, 0.63)).box((-0.76, -0.31, 0.75), (-0.26, -0.3, 0.78))
+wt.done()
+Part("Workbench_Lamp", "LightStrip", p).box((-0.5, 0.1, 1.62), (0.5, 0.2, 1.64)).done()
+Part("Workbench_LampArm", "DarkSteel", p).box((-0.52, 0.08, 1.64), (0.52, 0.27, 1.68)).done()
+Part("Workbench_Box", "RRed", p, 0.006).box((-0.1, -0.2, 0.94), (0.35, 0.02, 1.12)).done()
+Part("Workbench_Parts", "RBrass", p).cyl(-0.4, -0.1, 0.94, 1.0, 0.05, 10).cyl(-0.52, -0.02, 0.94, 0.98, 0.04, 10).done()
+
+p = piece("Cabinet")                                                # a tool cabinet: 1.0 wide, 0.5 deep, 1.25 high
+Part("Cabinet_Body", "RArmor", p, 0.01).box((-0.5, -0.25, 0.08), (0.5, 0.25, 1.2)).done()
+cbd = Part("Cabinet_Dark", "DarkSteel", p)
+cbd.box((-0.52, -0.27, 0.0), (0.52, 0.27, 0.08)).box((-0.52, -0.27, 1.2), (0.52, 0.27, 1.25))
+for z in (0.36, 0.62, 0.88):
+    cbd.box((-0.46, -0.256, z), (0.46, -0.25, z + 0.015)).box((-0.12, -0.275, z + 0.1), (0.12, -0.25, z + 0.13))
+cbd.done()
+Part("Cabinet_Band", "Hazard", p).box((-0.504, -0.254, 1.08), (0.504, 0.254, 1.16)).done()
+Part("Cabinet_Case", "PaintBlue", p, 0.006).box((-0.3, -0.14, 1.25), (0.2, 0.12, 1.43)).done()
+
+p = piece("ChargeDock")                                             # a charging dock: 1.3 wide, 0.6 deep, 2.3 high
+Part("ChargeDock_Base", "DarkSteel", p, 0.008).box((-0.65, -0.3, 0.0), (0.65, 0.3, 0.1)).done()
+Part("ChargeDock_Pad", "ScreenCyan", p).box((-0.4, -0.22, 0.1), (0.4, -0.16, 0.106)).box((-0.4, 0.04, 0.1), (0.4, 0.1, 0.106)).done()
+dkp = Part("ChargeDock_Posts", "RArmor", p, 0.01)
+for sx in (-1, 1):
+    dkp.box((sx * 0.56 - 0.07, 0.12, 0.1), (sx * 0.56 + 0.07, 0.28, 2.2))
+dkp.box((-0.63, 0.12, 2.1), (0.63, 0.28, 2.3))
+dkp.done()
+dka = Part("ChargeDock_Arms", "PaintGrey", p)
+for sx in (-1, 1):
+    dka.box((sx * 0.5 - 0.03, -0.2, 1.3), (sx * 0.5 + 0.03, 0.14, 1.36)).box((sx * 0.5 - 0.06, -0.26, 1.24), (sx * 0.5 + 0.06, -0.2, 1.42))
+dka.done()
+Part("ChargeDock_Cable", "Cable", p).tube((0.56, 0.2, 2.3), (0.56, 0.2, 2.7), 0.03).tube((0.56, 0.2, 2.7), (0.56, 0.32, 2.7), 0.03).done()
+Part("ChargeDock_Lamp", "SignGreen", p).box((-0.2, 0.114, 2.16), (0.2, 0.12, 2.22)).done()
+Part("ChargeDock_Strip", "ScreenCyan", p).box((-0.565, 0.114, 0.5), (-0.555, 0.12, 1.9)).box((0.555, 0.114, 0.5), (0.565, 0.12, 1.9)).done()
+
+p = piece("PipeRiser")                                              # pipes up the wall, floor to ceiling: 0.8 wide, 0.34 deep
+pr = Part("PipeRiser_Pipes", "PaintGrey", p)
+pr.tube((-0.18, 0.02, 0.0), (-0.18, 0.02, H), 0.12, 16).tube((0.2, 0.06, 0.0), (0.2, 0.06, H), 0.07, 14)
+pr.done()
+prd = Part("PipeRiser_Dark", "DarkSteel", p)
+for z in (1.25, 3.4):
+    prd.cyl(-0.18, 0.02, z, z + 0.06, 0.16, 16).cyl(0.2, 0.06, z + 0.3, z + 0.35, 0.1, 14)
+for z in (0.5, 2.4, 4.3):
+    prd.box((-0.38, 0.1, z), (0.36, 0.17, z + 0.06))
+prd.box((0.08, -0.12, 1.5), (0.34, -0.02, 1.76))
+prd.done()
+Part("PipeRiser_Wheel", "RRed", p).tube((-0.18, -0.16, 1.05), (-0.18, -0.13, 1.05), 0.12, 12).done()
+Part("PipeRiser_Stem", "Steel", p).tube((-0.18, -0.13, 1.05), (-0.18, -0.08, 1.05), 0.02, 8).done()
+Part("PipeRiser_Dial", "RArmor", p).tube((0.21, -0.126, 1.63), (0.21, -0.12, 1.63), 0.09, 14).done()
+Part("PipeRiser_Band", "Hazard", p).cyl(-0.18, 0.02, 1.9, 2.1, 0.124, 16).done()
+
+p = piece("CoreUnit")                                               # a power core in a cage: 1.3 across, 2.9 high (cover)
+Part("CoreUnit_Base", "DarkSteel", p).cyl(0, 0, 0.0, 0.42, 0.64, 8).cyl(0, 0, 2.2, 2.56, 0.58, 8).cyl(0, 0, 2.56, 2.9, 0.22, 12).done()
+Part("CoreUnit_Core", "CoreGlow", p).cyl(0, 0, 0.62, 2.0, 0.2, 20).done()
+Part("CoreUnit_Coils", "DarkSteel", p).cyl(0, 0, 0.8, 0.92, 0.25, 20).cyl(0, 0, 1.62, 1.74, 0.25, 20).done()
+Part("CoreUnit_Rings", "PaintGrey", p).cyl(0, 0, 0.42, 0.62, 0.36, 20).cyl(0, 0, 2.0, 2.2, 0.36, 20).cyl(0, 0, 1.24, 1.36, 0.3, 20).done()
+cs = Part("CoreUnit_Struts", "PaintGrey", p)
+for a in range(0, 360, 60):
+    cx, cy = 0.5 * math.cos(math.radians(a)), 0.5 * math.sin(math.radians(a))
+    cs.box((cx - 0.03, cy - 0.03, 0.42), (cx + 0.03, cy + 0.03, 2.2))
+cs.done()
+Part("CoreUnit_Band", "Hazard", p).cyl(0, 0, 0.08, 0.22, 0.646, 8).done()
+Part("CoreUnit_Lamp", "StatusOrange", p).cyl(0, 0, 2.9, 2.94, 0.1, 12).done()
+
+p = piece("Cart")                                                   # a trolley with canisters: 1.0 x 0.6, 1.0 high
+ct = Part("Cart_Frame", "PaintGrey", p)
+for sx in (-1, 1):
+    for sy in (-1, 1):
+        ct.box((sx * 0.46 - 0.02, sy * 0.26 - 0.02, 0.1), (sx * 0.46 + 0.02, sy * 0.26 + 0.02, 0.92))
+ct.box((-0.5, -0.3, 0.2), (0.5, 0.3, 0.24)).box((-0.5, -0.3, 0.7), (0.5, 0.3, 0.74)).box((0.48, -0.3, 0.92), (0.52, 0.3, 0.96))
+ct.done()
+cw = Part("Cart_Wheels", "DarkSteel", p)
+for sx in (-1, 1):
+    for sy in (-1, 1):
+        cw.tube((sx * 0.46, sy * 0.26 - 0.02, 0.06), (sx * 0.46, sy * 0.26 + 0.02, 0.06), 0.06, 10)
+cw.done()
+Part("Cart_Cans", "PaintGreen", p).cyl(-0.25, 0.0, 0.74, 1.14, 0.12, 14).cyl(0.05, 0.08, 0.74, 1.14, 0.12, 14).done()
+Part("Cart_Caps", "DarkSteel", p).cyl(-0.25, 0.0, 1.14, 1.19, 0.05, 10).cyl(0.05, 0.08, 1.14, 1.19, 0.05, 10).done()
+Part("Cart_Box", "RArmor", p, 0.006).box((-0.42, -0.24, 0.24), (0.1, 0.22, 0.56)).done()
+
+# small things beside the big ones (nothing stops at them)
+p = piece("Cone")
+Part("Cone_Body", "PaintOrange", p).cone(0, 0, 0.03, 0.5, 0.13, 0.03, 14).done()
+Part("Cone_Foot", "DarkSteel", p).box((-0.17, -0.17, 0.0), (0.17, 0.17, 0.03)).done()
+Part("Cone_Band", "RArmor", p).cone(0, 0, 0.26, 0.34, 0.085, 0.07, 14).done()
+
+p = piece("Toolbox")
+Part("Toolbox_Body", "RRed", p, 0.006).box((-0.24, -0.11, 0.0), (0.24, 0.11, 0.2)).done()
+Part("Toolbox_Dark", "DarkSteel", p).box((-0.25, -0.12, 0.13), (0.25, 0.12, 0.15)).box((-0.1, -0.015, 0.2), (0.1, 0.015, 0.25)).done()
+
+p = piece("Canisters")
+Part("Canisters_A", "PaintBlue", p).cyl(-0.14, 0.0, 0.0, 0.46, 0.11, 14).done()
+Part("Canisters_B", "PaintGrey", p).cyl(0.13, 0.06, 0.0, 0.46, 0.11, 14).cyl(0.02, -0.2, 0.0, 0.34, 0.09, 14).done()
+Part("Canisters_Caps", "DarkSteel", p).cyl(-0.14, 0.0, 0.46, 0.5, 0.05, 10).cyl(0.13, 0.06, 0.46, 0.5, 0.05, 10).cyl(0.02, -0.2, 0.34, 0.38, 0.04, 10).done()
+
+p = piece("CableReel")
+Part("CableReel_Drum", "Cable", p).tube((0, -0.14, 0.34), (0, 0.14, 0.34), 0.24, 16).done()
+Part("CableReel_Sides", "Cardboard", p).tube((0, -0.17, 0.34), (0, -0.14, 0.34), 0.34, 18).tube((0, 0.14, 0.34), (0, 0.17, 0.34), 0.34, 18).done()
 
 for ob in bpy.context.scene.objects:
     ob.select_set(True)

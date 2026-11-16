@@ -716,6 +716,8 @@ func capture(dir: String) -> void:
 		_look_at(c, room.center() + Vector3(0, 1.4, 0))
 		await _wait(2.5)
 		await _shot(dir, "08_room_%d_robots" % (k + 1))
+		print("[capture] room %d (%s): %d draw calls, %dk triangles" % [room.id, dungeon.themes[room.id],
+			Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1000.0])
 	var victim: V2Robot = null
 	for r in game.robots:
 		if r.state != V2Robot.DEAD and r.kind == "spider" and victim == null:

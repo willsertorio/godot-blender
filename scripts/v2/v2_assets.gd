@@ -14,6 +14,13 @@ const SPECIAL := {  # materials that are procedural in Blender
 	"StudioLight": {"color": Color(1, 1, 1), "rough": 0.5, "emit": Color(0.97, 0.98, 1.0), "energy": 2.6},
 	# the game's props (v2/scripts/build_props.py): the exit gate's light strips; its field is v2_field.gdshader
 	"Seam": {"color": Color(0.085, 0.09, 0.1), "rough": 0.92},        # the floor tiles' joints (build_kit.py)
+	# the kit's second set (themes): paint, stores
+	"CoreGlow": {"color": Color(0.05, 0.1, 0.13), "rough": 0.3, "emit": Color(0.3, 0.75, 1.0), "energy": 1.5},      # the power core
+	"PaintGrey": {"color": Color(0.6, 0.62, 0.66), "rough": 0.5},      # (ducts, hatches, shelving: bare metal that size comes out black indoors)
+	"PaintBlue": {"color": Color(0.16, 0.33, 0.6), "rough": 0.55},
+	"PaintOrange": {"color": Color(0.85, 0.42, 0.1), "rough": 0.55},
+	"PaintGreen": {"color": Color(0.2, 0.42, 0.28), "rough": 0.55},
+	"Cardboard": {"color": Color(0.62, 0.5, 0.36), "rough": 0.9},
 	"ExitLight": {"color": Color(0.05, 0.03, 0.08), "rough": 0.5, "emit": Color(0.71, 0.55, 1.0), "energy": 3.0},
 }
 

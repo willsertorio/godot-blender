@@ -17,13 +17,35 @@ const HC := 3.4
 const T := 0.3                        # wall thickness, outward from the cell's edge
 const DOOR_HALF := 1.2
 const DOOR_H := 2.6
-const WALLS := ["Wall", "Wall", "Wall", "Wall", "WallScreen", "WallPipes", "WallPipes"]      # a room wall is one of these
-# what the generator calls its decor -> [the kit's piece, half its depth (m)]
-const DECO := {"crate3": ["Block", 0.29], "barrel_large": ["Tank", 0.5], "barrel": ["Tank", 0.5], "computer": ["Console", 0.3],
-	"locker": ["Locker", 0.27], "shelves": ["Locker", 0.27]}
+const CWALLS := ["CWall", "CWall", "CWallPipes", "CWallPanel", "CWallVent"]      # a corridor wall is one of these
+const CCEILINGS := ["CCeiling", "CCeiling", "CCeilingDuct"]
+# A room's theme: its walls, the fittings of the ceiling cells between the lights, the floor's accents, what stands
+# at the corners of the cells inside it (cover: the robots keep to the cells' middles and pass between), what
+# stands along its walls, and the small things put beside those (nothing stops at them).
+const THEMES := {
+	"lab": {"walls": ["Wall", "Wall", "WallScreen", "WallWindow", "WallPipes", "WallPilaster"], "ceilings": ["CeilingBeams", "CeilingDuct"],
+		"floors": ["FloorPlates", "FloorDrain"], "stand": ["Tank", "Tank", "Column"],
+		"along": ["Console", "Console", "Locker", "Tank", "Cabinet", "ChargeDock"], "small": ["Canisters", "Toolbox"]},
+	"storage": {"walls": ["Wall", "Wall", "WallStripe", "WallPanels", "WallPilaster", "WallVent"], "ceilings": ["CeilingBeams", "CeilingPipes"],
+		"floors": ["FloorLines", "FloorLines", "FloorDrain"], "stand": ["CrateStack", "CrateStack", "Pallet", "Barrels", "Column"],
+		"along": ["Shelf", "Shelf", "Pallet", "Barrels", "Locker", "Block", "CrateStack"], "small": ["Cone", "Canisters", "CableReel"]},
+	"server": {"walls": ["Wall", "WallCables", "WallCables", "WallVent", "WallScreen", "WallPilaster"], "ceilings": ["CeilingDuct", "CeilingBeams", "CeilingVent"],
+		"floors": ["FloorPlates", "FloorPlates"], "stand": ["RackPair", "RackPair", "Column"],
+		"along": ["ServerRack", "ServerRack", "ServerRack", "Console", "Cabinet", "Locker"], "small": ["CableReel", "Toolbox"]},
+	"power": {"walls": ["Wall", "WallValves", "WallValves", "WallPipes", "WallVent", "WallCables"], "ceilings": ["CeilingPipes", "CeilingDuct", "CeilingVent"],
+		"floors": ["FloorHazard", "FloorPlates", "FloorDrain"], "stand": ["CoreUnit", "CoreUnit", "Barrels", "Column"],
+		"along": ["Generator", "Generator", "PipeRiser", "PipeRiser", "Tank", "Cabinet", "Block"], "small": ["Cone", "Canisters", "Toolbox"]},
+	"workshop": {"walls": ["Wall", "WallPanels", "WallStripe", "WallCables", "WallPilaster", "WallValves"], "ceilings": ["CeilingBeams", "CeilingVent", "CeilingPipes"],
+		"floors": ["FloorLines", "FloorDrain"], "stand": ["Barrier", "CrateStack", "Cart", "Column", "Barrier"],
+		"along": ["Workbench", "Workbench", "Cabinet", "Shelf", "ChargeDock", "Locker", "Cart"], "small": ["Toolbox", "Cone", "Canisters", "CableReel"]},
+}
+# the boxes that stop the player, the robots' rounds and the player's: width, height, depth
 const DECO_BOX := {"Block": Vector3(1.8, 1.15, 0.5), "Tank": Vector3(0.9, 2.7, 0.9), "Console": Vector3(1.4, 1.42, 0.56), "Locker": Vector3(1.1, 2.1, 0.5),
-	"Column": Vector3(0.86, 5.2, 0.86)}
-const MORE := ["Tank", "Console", "Locker", "Tank", "Block"]      # what else stands along a room's walls
+	"Column": Vector3(0.86, 5.2, 0.86), "CrateStack": Vector3(1.4, 1.5, 1.4), "Barrels": Vector3(1.25, 0.92, 1.2), "Pallet": Vector3(1.2, 1.0, 1.0),
+	"Barrier": Vector3(1.84, 1.1, 0.5), "ServerRack": Vector3(0.72, 2.19, 0.92), "RackPair": Vector3(1.42, 2.19, 0.92), "Generator": Vector3(1.76, 1.35, 0.8),
+	"Shelf": Vector3(1.9, 2.05, 0.5), "Workbench": Vector3(1.9, 0.94, 0.64), "Cabinet": Vector3(1.04, 1.25, 0.54), "ChargeDock": Vector3(1.3, 2.3, 0.6),
+	"PipeRiser": Vector3(0.8, 5.2, 0.34), "CoreUnit": Vector3(1.2, 2.6, 1.2), "Cart": Vector3(1.04, 0.96, 0.6)}
+const FILL := 0.6                     # of a room's free wall cells, this share gets something standing there
 const TANKS := [Color(0.2, 0.62, 0.68), Color(0.25, 0.68, 0.4), Color(0.75, 0.55, 0.16), Color(0.5, 0.36, 0.85), Color(0.7, 0.3, 0.3)]
 
 var gen: DungeonGen
@@ -37,6 +59,8 @@ var _headless := false
 var _lamps: Dictionary = {}
 var _gun_area := -1
 var _taken: Dictionary = {}           # room cells that hold something against a wall already
+var themes: Dictionary = {}           # room id -> its theme (a key of THEMES)
+var _plain: Dictionary = {}           # cells whose ceiling stays clear (a turret's rail may run under it)
 
 
 static func cell_of(p: Vector3) -> Vector2i:
@@ -60,6 +84,21 @@ func build(layout: DungeonGen) -> void:
 		_kit[String(piece.name)] = parts
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash(gen.seed_value) + 77
+	var names: Array = THEMES.keys()                       # every theme comes up before one comes again
+	var deck: Array = []
+	for r in gen.rooms:
+		if deck.is_empty():
+			deck = names.duplicate()
+			for k in range(deck.size() - 1, 0, -1):
+				var o := rng.randi() % (k + 1)
+				var t: String = deck[k]
+				deck[k] = deck[o]
+				deck[o] = t
+		themes[r.id] = deck.pop_back()
+	for e in gen.enemy_spawns:
+		if e.type == "turret":
+			for dz in [-1, 0, 1]:
+				_plain[cell_of(e.pos) + Vector2i(0, dz)] = true
 	for r in gen.rooms:
 		var rect := Rect2(r.rect.position.x * CELL, r.rect.position.y * CELL, r.rect.size.x * CELL, r.rect.size.y * CELL)
 		_area(true, r.id, rect, _cells_of(r.rect), rng)
@@ -76,8 +115,10 @@ func build(layout: DungeonGen) -> void:
 	for dw in gen.doorways:
 		_doorway(dw)
 	for d in gen.deco_spawns:
-		_deco(d)
+		_deco(d, rng)
 	_furnish(rng)
+	for i in areas.size():
+		_meshes(i)
 	_kit_scene.queue_free()
 
 
@@ -99,26 +140,41 @@ func _area(is_room: bool, id: int, rect: Rect2, cells: Array, rng: RandomNumberG
 	node.name = ("Room%d" if is_room else "Corridor%d") % id
 	add_child(node)
 	var index := areas.size()
-	areas.append({"room": is_room, "id": id, "rect": rect, "node": node, "layer": 2, "lights": [], "cells": cells})
-	var placed: Array = []                                 # [piece name, Transform3D]
+	var placed: Array = []                                 # the shell: [piece name, Transform3D]
+	areas.append({"room": is_room, "id": id, "rect": rect, "node": node, "layer": 2, "lights": [], "cells": cells, "placed": placed, "props": []})
 	var height := H if is_room else HC
 	var along_x := not is_room and cells.size() > 1 and (cells[0] as Vector2i).y == (cells[1] as Vector2i).y
-	for c in cells:
+	var theme: Dictionary = THEMES[themes[id]] if is_room else {}
+	for c: Vector2i in cells:
 		area_of[c] = index
 		var at := center(c)
 		if is_room:
-			placed.append(["Floor", Transform3D(Basis.IDENTITY, at)])
-			placed.append(["Ceiling" if posmod(c.x + c.y, 2) == 0 else "CeilingBeams", Transform3D(Basis.IDENTITY, at)])
+			# the floor: a striped frame in front of a doorway and under the exit, here and there one of the theme's accents
+			var floor_piece := "Floor"
+			var at_door := false
+			for d in DungeonGen.DIRS:
+				if gen.is_floor(c + d) and gen.cells[c + d].t == DungeonGen.T_CORRIDOR:
+					at_door = true
+			if at_door or (id == gen.exit_room and at.distance_to(gen.exit_pos) < 1.0):
+				floor_piece = "FloorHazard"
+			elif rng.randf() < 0.16:
+				floor_piece = theme.floors[rng.randi() % theme.floors.size()]
+			placed.append([floor_piece, Transform3D(Basis(Vector3.UP, (rng.randi() % 4) * PI / 2.0), at)])
+			# the ceiling: a light on every other cell, between them one of the theme's fittings
+			var ceiling := "Ceiling"
+			if posmod(c.x + c.y, 2) == 1:
+				ceiling = "CeilingBeams" if _plain.has(c) else theme.ceilings[rng.randi() % theme.ceilings.size()]
+			placed.append([ceiling, Transform3D(Basis(Vector3.UP, (rng.randi() % 2) * PI) if ceiling != "Ceiling" else Basis.IDENTITY, at)])
 		else:
 			var turn := Basis(Vector3.UP, PI / 2.0) if along_x else Basis.IDENTITY
 			placed.append(["CFloor", Transform3D(turn, at)])
-			placed.append(["CCeiling", Transform3D(turn, at)])
+			placed.append([CCEILINGS[rng.randi() % CCEILINGS.size()], Transform3D(turn * Basis(Vector3.UP, (rng.randi() % 2) * PI), at)])
 		for d in DungeonGen.DIRS:
 			var n: Vector2i = c + d
 			var edge := at + Vector3(d.x, 0, d.y) * (CELL / 2.0)
 			var xf := Transform3D(Basis(Vector3.UP, _yaw(-d)), edge)
 			if not gen.is_floor(n):
-				placed.append([WALLS[rng.randi() % WALLS.size()] if is_room else "CWall", xf])
+				placed.append([theme.walls[rng.randi() % theme.walls.size()] if is_room else CWALLS[rng.randi() % CWALLS.size()], xf])
 				_wall_box(node, edge, d, -2.3, 2.3, 0.0, height)
 			elif is_room and gen.cells[n].t == DungeonGen.T_CORRIDOR:
 				placed.append(["WallDoor", xf])                # a doorway: built from the room's side
@@ -128,26 +184,52 @@ func _area(is_room: bool, id: int, rect: Rect2, cells: Array, rng: RandomNumberG
 	# floor and ceiling: one box each
 	_solid(node, Vector3(rect.size.x, 1.0, rect.size.y), Vector3(rect.get_center().x, -0.5, rect.get_center().y))
 	_solid(node, Vector3(rect.size.x, 0.4, rect.size.y), Vector3(rect.get_center().x, height + 0.2, rect.get_center().y))
+
+
+## An area's meshes: its shell (floor, walls, ceiling) merged into one mesh per material, and what stands in it
+## into a second one (that one casts shadows). Two meshes an area, whatever is in it: a room with thirty things
+## in it costs the draw calls of an empty one.
+func _meshes(i: int) -> void:
 	if _headless:
 		return
-	# the pieces, merged into one mesh per material
-	var tools: Dictionary = {}
-	for p in placed:
-		for part in _kit[p[0]]:
-			if not tools.has(part[2]):
-				tools[part[2]] = SurfaceTool.new()
-			(tools[part[2]] as SurfaceTool).append_from(part[0], 0, (p[1] as Transform3D) * (part[1] as Transform3D))
-	var mesh := ArrayMesh.new()
-	var mi := MeshInstance3D.new()
-	for mat_name in tools:
-		(tools[mat_name] as SurfaceTool).commit(mesh)
-	mi.mesh = mesh
-	var s := 0
-	for mat_name in tools:
-		mi.set_surface_override_material(s, V2Assets.material(mat_name))
-		s += 1
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF      # (the shell casts none: what stands in it does)
-	node.add_child(mi)
+	var a: Dictionary = areas[i]
+	for group in [[a.placed, false], [a.props, true]]:
+		var list: Array = group[0]
+		if list.is_empty():
+			continue
+		var tools: Dictionary = {}
+		for p in list:
+			for part in _kit[p[0]]:
+				var key: String = part[2]
+				if key == "TankLiquid":                    # (each room's tanks hold a liquid of its own colour)
+					key = "TankLiquid#%d" % (int(a.id) % TANKS.size())
+				if not tools.has(key):
+					tools[key] = SurfaceTool.new()
+				(tools[key] as SurfaceTool).append_from(part[0], 0, (p[1] as Transform3D) * (part[1] as Transform3D))
+		var mesh := ArrayMesh.new()
+		var mi := MeshInstance3D.new()
+		for key in tools:
+			(tools[key] as SurfaceTool).commit(mesh)
+		mi.mesh = mesh
+		var s := 0
+		for key: String in tools:
+			mi.set_surface_override_material(s, _liquid(int(key.get_slice("#", 1))) if key.begins_with("TankLiquid#") else V2Assets.material(key))
+			s += 1
+		# (the shell casts no shadow: what stands in it does)
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if group[1] else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.layers = a.layer
+		(a.node as Node3D).add_child(mi)
+
+
+func _liquid(k: int) -> StandardMaterial3D:
+	var key := "liquid%d" % k
+	if not _lamps.has(key):
+		var color: Color = TANKS[k]
+		var liquid := (V2Assets.material("TankLiquid") as StandardMaterial3D).duplicate() as StandardMaterial3D
+		liquid.albedo_color = Color(color.r, color.g, color.b, 0.45)
+		liquid.emission = color * 0.8
+		_lamps[key] = liquid
+	return _lamps[key]
 
 
 func _solid(parent: Node3D, size: Vector3, at: Vector3, yaw: float = 0.0) -> StaticBody3D:
@@ -306,30 +388,76 @@ func open_door(i: int) -> void:
 		(lamp as MeshInstance3D).material_override = _lamp(Color(0.224, 1.0, 0.533))
 
 
-## What stands against a room's wall (the generator's decor in the kit's pieces): its node, a box to stop the player.
-func _deco(d: Dictionary) -> void:
-	var spec: Array = DECO[d.kind]
+## What the generator stands against a room's wall: something of the room's theme there.
+func _deco(d: Dictionary, rng: RandomNumberGenerator) -> void:
 	var out := Vector3(sin(float(d.yaw)), 0, cos(float(d.yaw)))          # toward the wall (the generator's yaw faces the room)
-	var wall := (d.pos as Vector3) + out * (0.5 + float(DungeonGen.DECO_KINDS[d.kind]))
-	_taken[cell_of(d.pos)] = true
-	_stand(spec[0], wall - out * (0.16 + float(spec[1])), float(d.yaw) + PI, int(d.room))      # (the kit's props face +Z)
+	var c := cell_of(d.pos)
+	if _taken.has(c):
+		return
+	var side := Vector2i.ZERO                              # the wall of its cell that lies that way
+	for dir in DungeonGen.DIRS:
+		if not gen.is_floor(c + dir) and (side == Vector2i.ZERO or Vector2(dir).dot(Vector2(out.x, out.z)) > Vector2(side).dot(Vector2(out.x, out.z))):
+			side = dir
+	if side == Vector2i.ZERO:
+		return
+	_taken[c] = true
+	var along: Array = THEMES[themes[int(d.room)]].along
+	_against(along[rng.randi() % along.size()], c, side, int(d.room), rng)
 
 
-## The rooms furnished beyond the generator's one to three things: columns or tanks at the corners of the cells
-## inside the bigger rooms (cover; the robots keep to the cells' middles, so they pass between them), and more
-## equipment along the walls, on cells that hold nothing yet and are not at a doorway.
+## `what` against the wall of cell `c` on its side `d`, somewhere along it; now and then a small thing beside it.
+func _against(what: String, c: Vector2i, d: Vector2i, room_id: int, rng: RandomNumberGenerator) -> void:
+	var out := Vector3(d.x, 0, d.y)
+	var side := Vector3(-d.y, 0, d.x)
+	var box: Vector3 = DECO_BOX[what]
+	var yaw := atan2(-out.x, -out.z)
+	var reach := CELL / 2.0 - 0.16 - box.z / 2.0           # (0.16: clear of what is on the wall)
+	if what == "ServerRack":                               # racks stand in a row
+		var n := 2 + rng.randi() % 2
+		for k in n:
+			_stand(what, center(c) + out * reach + side * ((k - (n - 1) / 2.0) * 0.76), yaw, room_id)
+		return
+	var room_for := maxf((CELL - box.x) / 2.0 - 0.25, 0.0)
+	var off := rng.randf_range(-room_for, room_for)
+	_stand(what, center(c) + out * reach + side * off, yaw, room_id)
+	var small: Array = THEMES[themes[room_id]].small
+	var beside := off + (box.x / 2.0 + 0.36) * (1.0 if off < 0.0 else -1.0)
+	if rng.randf() < 0.55 and absf(beside) < CELL / 2.0 - 0.3:
+		_stand(small[rng.randi() % small.size()], center(c) + out * (CELL / 2.0 - 0.5) + side * beside, rng.randf() * TAU, room_id)
+
+
+## The rooms furnished: cover at the corners of the cells inside them (the robots keep to the cells' middles, so
+## they pass between), and the theme's equipment along the walls, on cells that hold nothing yet and are not at a
+## doorway or by the exit.
 func _furnish(rng: RandomNumberGenerator) -> void:
 	for l in gen.loot_spawns:
 		_taken[cell_of(l.pos)] = true
 	for r in gen.rooms:
 		var rc := r.rect
-		if rc.size.x >= 4 and rc.size.y >= 4:
-			var what := "Column" if rng.randf() < 0.55 else "Tank"
-			for v in [rc.position + Vector2i(1, 1), Vector2i(rc.end.x - 1, rc.position.y + 1), Vector2i(rc.position.x + 1, rc.end.y - 1), rc.end - Vector2i(1, 1)]:
-				var at := Vector3(v.x * CELL, 0, v.y * CELL)
-				if r.id == gen.exit_room and at.distance_to(gen.exit_pos) < 3.0:
+		var theme: Dictionary = THEMES[themes[r.id]]
+		# --- cover: a pattern over the inner corners
+		var pattern := rng.randi() % 3                         # 0 the four outer ones, 1 every second, 2 scattered
+		for x in range(rc.position.x + 1, rc.end.x):
+			for y in range(rc.position.y + 1, rc.end.y):
+				var ix := x - rc.position.x
+				var iy := y - rc.position.y
+				var outer := (ix == 1 or ix == rc.size.x - 1) and (iy == 1 or iy == rc.size.y - 1)
+				var want := outer if pattern == 0 else ((ix % 2 == 1 and iy % 2 == 1) if pattern == 1 else rng.randf() < 0.45)
+				if rc.size.x < 4 or rc.size.y < 4:
+					want = rng.randf() < 0.4                       # (a small room: one or two)
+				if not want:
 					continue
-				_stand(what, at, 0.0, r.id)
+				var at := Vector3(x * CELL, 0, y * CELL)
+				if r.id == gen.exit_room and at.distance_to(gen.exit_pos) < 3.2:
+					continue
+				var by_door := false                           # (the cells round a doorway stay open)
+				for dc in r.doorway_cells:
+					if absi(dc.x * 2 + 1 - x * 2) <= 1 and absi(dc.y * 2 + 1 - y * 2) <= 1:
+						by_door = true
+				if by_door:
+					continue
+				_stand(theme.stand[rng.randi() % theme.stand.size()], at, (rng.randi() % 4) * PI / 2.0, r.id)
+		# --- along the walls
 		var spots: Array = []
 		for c in _cells_of(rc):
 			if _taken.has(c):
@@ -340,40 +468,27 @@ func _furnish(rng: RandomNumberGenerator) -> void:
 					near_door = true
 			if near_door or (r.id == gen.exit_room and center(c).distance_to(gen.exit_pos) < CELL * 1.2):
 				continue
+			var sides: Array = []
 			for d in DungeonGen.DIRS:
 				if not gen.is_floor(c + d):
-					spots.append([c, d])
-		for k in 1 + (rc.size.x + rc.size.y) / 3:
-			if spots.is_empty():
-				break
-			var pick: Array = spots[rng.randi() % spots.size()]
-			spots = spots.filter(func(sp: Array) -> bool: return sp[0] != pick[0])
-			var what2: String = MORE[rng.randi() % MORE.size()]
-			var out := Vector3(pick[1].x, 0, pick[1].y)
-			var along := Vector3(-pick[1].y, 0, pick[1].x) * rng.randf_range(-0.8, 0.8)
-			var depth: float = (DECO_BOX[what2] as Vector3).z / 2.0
-			_stand(what2, center(pick[0]) + out * (CELL / 2.0 - 0.16 - depth) + along, atan2(-out.x, -out.z), r.id)
+					sides.append(d)
+			if not sides.is_empty():
+				spots.append([c, sides[rng.randi() % sides.size()]])
+		for k in int(round(spots.size() * FILL)):
+			var at_i := rng.randi() % spots.size()
+			var pick: Array = spots[at_i]
+			spots.remove_at(at_i)
+			_taken[pick[0]] = true
+			_against(theme.along[rng.randi() % theme.along.size()], pick[0], pick[1], r.id, rng)
 
 
-## One of the kit's props at `at`, turned by `yaw`: its node, a box to stop the player and rounds.
+## One of the kit's pieces standing at `at`, turned by `yaw`: into the room's merged mesh, and a box that stops
+## the player and rounds (the small things have none).
 func _stand(what: String, at: Vector3, yaw: float, room_id: int) -> void:
 	var area: Dictionary = areas[area_of[gen.rooms[room_id].rect.position]]
-	_solid(area.node, DECO_BOX[what], at + Vector3(0, (DECO_BOX[what] as Vector3).y / 2.0, 0), yaw)
-	if _headless:
-		return
-	var node := (_kit_scene.find_child(what, true, false) as Node3D).duplicate() as Node3D
-	(area.node as Node3D).add_child(node)
-	node.position = at
-	node.rotation.y = yaw
-	V2Assets.apply(node)
-	if what == "Tank":                                     # each room's tanks hold a liquid of its own colour
-		var color: Color = TANKS[room_id % TANKS.size()]
-		var liquid := (V2Assets.material("TankLiquid") as StandardMaterial3D).duplicate() as StandardMaterial3D
-		liquid.albedo_color = Color(color.r, color.g, color.b, 0.45)
-		liquid.emission = color * 0.8
-		(node.find_child("Tank_Liquid", true, false) as MeshInstance3D).set_surface_override_material(0, liquid)
-	for n in node.find_children("*", "VisualInstance3D", true, false):
-		(n as VisualInstance3D).layers = area.layer
+	if DECO_BOX.has(what):
+		_solid(area.node, DECO_BOX[what], at + Vector3(0, (DECO_BOX[what] as Vector3).y / 2.0, 0), yaw)
+	(area.props as Array).append([what, Transform3D(Basis(Vector3.UP, yaw), at)])
 
 
 # ---------------------------------------------------------------------------------------------- questions
