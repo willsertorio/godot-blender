@@ -24,6 +24,47 @@ const SPECIAL := {  # materials that are procedural in Blender
 	"ExitLight": {"color": Color(0.05, 0.03, 0.08), "rough": 0.5, "emit": Color(0.71, 0.55, 1.0), "energy": 3.0},
 }
 
+# The environment set (v2/scripts/setlib.py, export_set.py): its painted materials are v2_set.gdshader, which
+# reads the wear from the meshes' vertex colours. [tint, wear colour (both linear, the Blender numbers), smudge, chips]
+const SET_PAINT := {
+	"EPaint": [Vector3(0.76, 0.77, 0.76), Vector3(0.17, 0.17, 0.18), 0.75, 0.05],
+	"EPaintFloor": [Vector3(0.4, 0.41, 0.42), Vector3(0.2, 0.2, 0.21), 0.7, 0.04],     # the floor tiles: the walls' paint under the lamps bleached
+	"EPaintGrey": [Vector3(0.15, 0.16, 0.17), Vector3(0.42, 0.42, 0.42), 0.4, 0.05],
+	"EPaintDark": [Vector3(0.07, 0.075, 0.082), Vector3(0.5, 0.5, 0.5), 0.3, 0.05],
+	"EPaintBlueGrey": [Vector3(0.36, 0.41, 0.44), Vector3(0.2, 0.2, 0.21), 0.5, 0.05],
+	"EPaintRed": [Vector3(0.5, 0.035, 0.025), Vector3(0.45, 0.45, 0.45), 0.35, 0.16],
+	"EPaintOlive": [Vector3(0.3, 0.3, 0.12), Vector3(0.5, 0.5, 0.5), 0.75, 0.2],
+	"EPaintGreen": [Vector3(0.16, 0.22, 0.13), Vector3(0.5, 0.5, 0.5), 0.75, 0.2],
+	"EPaintBand": [Vector3(0.5, 0.08, 0.05), Vector3(0.17, 0.17, 0.18), 0.2, 0.25],
+	"EPipe": [Vector3(0.62, 0.64, 0.65), Vector3(0.28, 0.28, 0.29), 0.45, 0.05],
+	"EHazard": [Vector3(1, 1, 1), Vector3(0.3, 0.3, 0.31), 0.4, 0.14],
+}
+# its other materials: colour (as it should look), roughness, metallic; emit + energy for what glows
+const SET_PLAIN := {
+	"ESteel": {"color": Color(0.5, 0.51, 0.53), "rough": 0.42, "metal": 0.55},
+	"EDarkSteel": {"color": Color(0.13, 0.135, 0.15), "rough": 0.5, "metal": 0.4},
+	"ERubber": {"color": Color(0.035, 0.035, 0.04), "rough": 0.85},
+	"ECable": {"color": Color(0.04, 0.04, 0.045), "rough": 0.6},
+	"ECableRed": {"color": Color(0.5, 0.08, 0.06), "rough": 0.6},
+	"ECableTan": {"color": Color(0.62, 0.48, 0.3), "rough": 0.6},
+	"EGlass": {"color": Color(0.06, 0.1, 0.1), "rough": 0.08, "metal": 0.3},
+	"ETankGlass": {"color": Color(0.8, 0.95, 0.93, 0.2), "rough": 0.03},
+	"ELiquid": {"color": Color(0.16, 0.3, 0.28), "rough": 0.15, "emit": Color(0.2, 0.5, 0.46), "energy": 0.5},
+	"EMesh": {"color": Color(0.09, 0.09, 0.1), "rough": 0.55, "metal": 0.3},
+	"ECard": {"color": Color(0.5, 0.39, 0.25), "rough": 0.9},
+	"EBrass": {"color": Color(0.8, 0.6, 0.25), "rough": 0.3, "metal": 0.6},
+	"ECopper": {"color": Color(0.75, 0.4, 0.22), "rough": 0.3, "metal": 0.6},
+	"EInk": {"color": Color(0.1, 0.09, 0.08), "rough": 0.8},
+	"ECross": {"color": Color(0.9, 0.9, 0.88), "rough": 0.5},
+	"ECyan": {"color": Color(0.0, 0.05, 0.06), "rough": 0.4, "emit": Color(0.15, 0.95, 0.9), "energy": 2.6},
+	"EOrange": {"color": Color(0.06, 0.02, 0.0), "rough": 0.4, "emit": Color(1.0, 0.42, 0.08), "energy": 2.6},
+	"ELedGreen": {"color": Color(0.0, 0.06, 0.02), "rough": 0.4, "emit": Color(0.2, 1.0, 0.4), "energy": 2.4},
+	"ELedRed": {"color": Color(0.06, 0.0, 0.0), "rough": 0.4, "emit": Color(1.0, 0.1, 0.06), "energy": 2.4},
+	"ELedBlue": {"color": Color(0.0, 0.0, 0.06), "rough": 0.4, "emit": Color(0.2, 0.45, 1.0), "energy": 2.4},
+	"ELight": {"color": Color(1, 1, 1), "rough": 0.5, "emit": Color(0.9, 0.97, 1.0), "energy": 2.8},
+	"ECoreGlow": {"color": Color(0.03, 0.08, 0.1), "rough": 0.3, "emit": Color(0.3, 0.9, 0.95), "energy": 2.2},
+}
+
 # Surfaces that sparkle in the game as the Blender numbers have them (a polished, strongly normal-mapped metal
 # throws single bright pixels that crawl as the player walks: the walkway grating did, and it read as a flickering
 # light under the doors): [metallic, roughness (x the map), normal strength] used instead.
@@ -111,7 +152,52 @@ static func _glove(mesh_key: String, sleeve: bool) -> ShaderMaterial:
 
 ## The Godot material for a Blender material name (cached; gloves are per mesh: they carry their box; worn paint
 ## is per asset: it reads that asset's mask).
+static func _set_material(mat_name: String) -> Material:
+	if SET_PAINT.has(mat_name):
+		var sp: Array = SET_PAINT[mat_name]
+		var m := ShaderMaterial.new()
+		m.shader = load("res://assets/shaders/v2_set.gdshader")
+		m.set_shader_parameter("tex_albedo", _tex("PaintedPlaster017", "color"))
+		m.set_shader_parameter("tex_normal", _tex("PaintedPlaster017", "normal"))
+		m.set_shader_parameter("tex_rough", _tex("PaintedPlaster017", "rough"))
+		m.set_shader_parameter("tex_imperfections", load("res://assets/textures/military/_detail/imperfections.png"))
+		m.set_shader_parameter("tint", sp[0])
+		m.set_shader_parameter("wear_color", sp[1])
+		m.set_shader_parameter("smudge", sp[2])
+		m.set_shader_parameter("chips", sp[3])
+		m.set_shader_parameter("stripes", 1.0 if mat_name == "EHazard" else 0.0)
+		return m
+	if mat_name == "EScreen" or mat_name == "EPanelScreen":
+		var sm := ShaderMaterial.new()
+		sm.shader = load("res://assets/shaders/v2_screen.gdshader")
+		if mat_name == "EPanelScreen":                     # the wall panel's: big, dim, greener
+			sm.set_shader_parameter("tint", Vector3(0.3, 0.6, 0.52))
+			sm.set_shader_parameter("cells", 4.0)
+			sm.set_shader_parameter("strength", 0.45)
+		return sm
+	if mat_name == "EPortal":
+		var pm := ShaderMaterial.new()
+		pm.shader = load("res://assets/shaders/v2_portal.gdshader")
+		return pm
+	var d: Dictionary = SET_PLAIN[mat_name]
+	var s := StandardMaterial3D.new()
+	s.albedo_color = d.color
+	s.roughness = d.rough
+	s.metallic = d.get("metal", 0.0)
+	if d.color.a < 1.0:
+		s.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	if d.has("emit"):
+		s.emission_enabled = true
+		s.emission = d.emit
+		s.emission_energy_multiplier = d.energy
+	return s
+
+
 static func material(mat_name: String, mesh_key: String = "", asset: String = "") -> Material:
+	if SET_PAINT.has(mat_name) or SET_PLAIN.has(mat_name) or mat_name in ["EScreen", "EPanelScreen", "EPortal"]:
+		if not _mats.has(mat_name):
+			_mats[mat_name] = _set_material(mat_name)
+		return _mats[mat_name]
 	if WEAR.has(mat_name) and asset != "" and ResourceLoader.exists(DIR + asset + "_mask.png"):
 		var wkey := mat_name + "@" + asset
 		if not _mats.has(wkey):

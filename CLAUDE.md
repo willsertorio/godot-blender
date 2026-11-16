@@ -299,7 +299,8 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
   wrecks are electrical (no fire); the pistol wears the machine gun's colours; footsteps quiet and dull, in step
   with the walk; a drone shot down goes down in a straight line; the dead turret is heavy; no reload at a run;
   going down = a fall onto the side, the gun on the floor, the robots coming to look, then the options;
-  the map's detail is modelled in Blender (not ready-made packs); robots tougher and more aggressive from the start;
+  the map's detail is modelled in Blender from the user's 24 reference sheets (the environment set, approved and in the game);
+  robots tougher and more aggressive from the start;
   no notes on the interface for now; "the gameplay feels really good".
 
 ## V2 game: the generated dungeon (`scripts/v2/v2_game.gd`)
@@ -313,31 +314,35 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   rooms 3..6 cells a side; corridors 1 cell wide; a tree from the spawn room; the exit in the deepest room; doors on
   about half the doorways; `enemy_spawns` turret / brawler / pursuer = our turret / spider / drone; `loot_spawns`;
   `deco_spawns`). `-- --seed=N` gives the same dungeon again; `-- --threat=N` starts at that threat level.
-- Kit: `v2/scripts/build_kit.py` -> `v2/kit.blend` + `assets/models/v2/kit.glb`, 51 pieces. The first set: `Floor`,
-  `CFloor`, `Ceiling`, `CeilingBeams`, `CCeiling`, `Wall`, `WallScreen`, `WallPipes`, `CWall`, `WallDoor`, `Tank`,
-  `Console`, `Block`, `Locker`, `Column`. The second set (**user: the map was too simple and empty; modelled in
-  Blender, not ready-made packs**): room walls `WallVent` `WallCables` `WallWindow` `WallStripe` `WallPanels`
-  `WallPilaster` `WallValves`; corridor walls `CWallPipes` `CWallPanel` `CWallVent`; floors `FloorHazard`
-  `FloorPlates` `FloorLines` `FloorDrain`; ceilings `CeilingDuct` `CeilingPipes` `CeilingVent` `CCeilingDuct`; what
-  stands in rooms `CrateStack` `Barrels` `Pallet` `Barrier` `ServerRack` `RackPair` `Generator` `Shelf` `Workbench`
-  `Cabinet` `ChargeDock` `PipeRiser` `CoreUnit` `Cart`; small things `Cone` `Toolbox` `Canisters` `CableReel`.
+- Kit: **the environment set** (`assets/models/v2/set.glb`, 41 pieces; see "The environment set" below). The kit
+  before it (`v2/scripts/build_kit.py` -> `kit.glb`, 51 pieces, and `build_props.py` -> `props.glb`) is no longer
+  loaded by the game: the user found its pieces poorly designed. Its files stay in the repository.
   Rooms 5.2 m high (the turret's pylon ends there), corridors 3.4 m, doorways 2.4 x 2.6 m (every robot fits).
-  Materials by name: the concept room's and the robots', plus `V2Assets.SPECIAL` paints (`PaintGrey`, `PaintBlue`,
-  `PaintOrange`, `PaintGreen`, `Cardboard`, `CoreGlow`, `Seam`). `Part.tube` / `Part.cone` for pipes and cones.
-  `xvfb-run -a godot --rendering-driver opengl3 --resolution 480x360 --path . -s tools/v2_kit_sheet.gd -- DIR [skip]`
+  `xvfb-run -a godot --rendering-driver opengl3 --resolution 480x360 --path . -s tools/v2_kit_sheet.gd -- DIR 0 set.glb`
   = a picture of every piece in the game's materials (look at new pieces there before placing them).
-- `scripts/v2/v2_dungeon.gd` (`V2Dungeon`): an area per room and per corridor. **Themes** (`THEMES`: lab, storage,
-  server, power, workshop; dealt so that all five come up before one repeats): a room's theme picks its walls, the
-  fittings of the ceiling cells between the lights, floor accents, the cover at the inner corners of its cells
-  (one of three patterns) and the equipment along `FILL` (60 %) of its free wall cells, with small things beside
-  some; a striped frame on the floor in front of every doorway and under the exit; a turret's cells keep a plain
-  ceiling. Each area is **two merged meshes** (`_meshes`: the shell, and what stands in it, which casts shadows),
-  one surface per material, so furniture costs no draw calls. Lights: their cull mask = the area's render layer;
-  areas within 13 m of each other get different layers, 9 of them (a mesh takes 8 lights). **Collision as boxes
-  made from the layout** (walls, doorway sides and lintels, floors, ceilings, `DECO_BOX` per standing piece): it
-  exists headless, so every check and the bot run headless. Doors (leaves slide into the lining, lamp amber ->
-  green). `path(a, b)` = cells through open doorways; `arena(area, margin)`; `update()` hides areas more than 34 m
-  away and lets the player's area's lights reach the gun.
+- `scripts/v2/v2_dungeon.gd` (`V2Dungeon`): an area per room and per corridor, built from the set. A room cell =
+  eight floor tiles (1 x 2 m: `floor_plain`, now and then `floor_grating`, `floor_hazard` in front of every doorway
+  and under the exit) and four ceiling panels (2 x 2 m: `ceiling_plain`, one `ceiling_light` on a lit cell, now and
+  then `ceiling_services`; a turret's cells stay plain). A wall edge = two columns of `wall_plinth` (0.4 m) + a
+  3 m panel (`wall_plain` / `wall_screen` / `wall_service`, dealt by the theme) + `wall_upper` (1.8 m), set back by
+  `FACE`. A doorway = `door_frame` + `door_surround` on each side of the wall, two `wall_upper` above, the leaves
+  `door_leaf_l` / `door_leaf_r` as nodes (they slide by `LEAF_SLIDE`; lamp amber -> green). A corridor cell = one
+  `corridor` section, shortened where it meets a room's wall. **Themes** (`THEMES`: lab, storage, server, power,
+  workshop; dealt so that all five come up before one repeats): a room's theme picks its wall panels, how often
+  the ceiling carries services, what stands at the inner corners of its cells (`stand`) and the equipment along
+  `FILL` (60 %) of its free wall cells (`along`); a tank's liquid has the room's colour (`TANKS`). Each area is
+  **two merged meshes** (`_meshes`: the shell, and what stands in it, which casts shadows), one surface per
+  material, so furniture costs no draw calls. Lights: their cull mask = the area's render layer; areas within 13 m
+  of each other get different layers, 9 of them (a mesh takes 8 lights). **Collision as boxes made from the
+  layout** (walls, doorway sides and lintels, floors, ceilings, `DECO_BOX` per standing piece): it exists headless,
+  so every check and the bot run headless. `path(a, b)` = cells through open doorways; `arena(area, margin)`;
+  `update()` hides areas more than `SEEN` (28 m) away and lets the player's area's lights reach the gun.
+  `V2_TRIS=1` in the environment prints each area's triangles and pieces.
+- Light of the dungeon (`v2_game.gd`: `_environment(0.38, 0.25, 22.0)` = ambient, the light straight down, how far
+  it casts shadows; room lamps 0.25): **more even light than the lab's**. With the lab's numbers a prop's side
+  turned away from the two or three lamps of its room was nearly black (white drums looked dark grey: it read as
+  wrong materials, and it was the light), and the floor under the lamps bleached, so what is walked on has its own
+  paint a tone under the walls' (`EPaintFloor`).
 - Robots (all children of the game node: world frame): placed on the middle of a cell; **spider and drone go from
   cell middle to cell middle along rows and columns** (`V2Robot.grid`, `_spot`: columns and tanks stand at the cells'
   corners, so they are never walked through). One that has seen the player (or heard a door open within 16 m) and
@@ -386,8 +391,11 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   believing a loss. And 6 to 8 runs a level are noise (the same settings gave 6 of 8 and 3 of 8).
   The bot clears every room (a player may walk past rooms), aims better than a trackpad allows and uses no cover:
   read its numbers as how the threat levels compare, not as how hard it feels.
-- Cost of a room view (the capture prints it): 410 to 570 draw calls, 270 to 310 thousand triangles (two merged
-  meshes an area; the robots, doors and crates are the rest). Frame rate on a real GPU: not measured (F3 in the game).
+- Cost of a room view (the capture prints it; `--part=rooms` prints it for every room): 300 to 850 thousand
+  triangles, 100 to 620 draw calls (the old kit: 270 to 310 thousand). A room's shell is 110 to 290 thousand
+  triangles (225 floor tiles of 292, service wall panels of 4,900), what stands in it 16 to 136 thousand; all of an
+  area is drawn as soon as a corner of it is in view. Frame rate on a real GPU: **not measured** (F3 in the game);
+  if it is too low: fewer service panels, tiles of 2 x 2 m, `SEEN` lower.
 - Map (`scripts/v2/v2_map.gd`, Tab; the game goes on): rooms entered, robots still working in each (red number),
   corridors walked, doorways (amber shut / green open / grey no door), the exit once its room was entered, the
   player. Scaled to the whole dungeon, so the empty part of the panel says how much is left.
@@ -395,8 +403,11 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   line (THREAT, ROOMS n / N, hostiles here, the exit), "ROOM n OF N" on entering a new room, a note line, cursor,
   hurt flash with a bar on the side the hit came from, F3 = frame rate. No prompts, no pause: Esc frees the mouse
   and shows RESUME / TITLE. End screen: score, robots destroyed, rooms seen, time, the next threat level; AGAIN / TITLE.
-- Props: `v2/scripts/build_props.py` -> `props.glb` (crate with `Crate_Lid`, `AmmoBox`, `HealthCell`, `MedKit` (one green cross on each face: user),
-  `ExitGate`: the exit portal, standing free in the middle of the deepest room; its field is `v2_field.gdshader`).
+- Props (from the set): loot crates `loot_crate` (health), `loot_crate_olive` (ammunition), `loot_crate_green` (a
+  med kit), lid under `Crate_Lid` (found with `find_child("Crate_Lid*")`: Blender numbers the duplicates), the
+  lid's cyan lamp goes dark when opened; what a crate or a wreck leaves: `ammo_box`, `medkit_white` (health),
+  `medkit` (a med kit: red case, white cross, as in the user's reference); `exit_portal`, standing free in the
+  middle of the deepest room, its field `v2_portal.gdshader`.
 - Checks, bot, pictures (`scripts/v2/v2_game_bot.gd`), all headless except the pictures:
   `godot --headless --path . -- --game-test` (seed 7): the generator over 40 seeds (8-12 rooms, every cell reachable,
   exit deepest, more robots at threat 3), walls stop rays, magazines, a crate, a med kit, no regeneration, a door
@@ -405,7 +416,8 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   fall and the dropped gun, the robots coming to look without firing, sounds;
   `tools/v2_bot.sh [N] [threat] [seed]`; `xvfb-run -a godot --rendering-driver opengl3 --path . --
   --game-capture=DIR [--seed=N]`; `... -- --title-capture=FILE.png`. With `--part=NAME` the capture is one of:
-  `death` (frames of going down), `marks` (bullet holes on a wall and the floor), `flicker` (at every doorway and
+  `rooms` (every room, or `--match=2,5`, from two corners without gun or HUD: 40 s for two rooms; the quick look
+  at the set and the light), `death` (frames of going down), `marks` (bullet holes on a wall and the floor), `flicker` (at every doorway and
   in every room three frames: on arriving, 8 frames later, 1 mm aside; `python3 -I tools/flicker_diff.py DIR`
   lists the views where most pixels changed and writes them with those pixels marked; ~10 minutes; robots and the
   exit's field show up in the first comparison, edges of thin lines in the second: look at the marked pictures).
@@ -442,7 +454,7 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
 - Static state survives a scene change (`V2Fx._marks`, `V2Sfx.root`, the game's `missions`): every scene's `_ready`
   sets the roots and calls `V2Fx.reset()`.
 
-## The environment set (waiting for the user's approval; not in the game yet)
+## The environment set (approved by the user; it is what the game is built from)
 
 **User, after the themed kit: "the elements in the map are poorly designed", go back to Blender, more realistic,
 from references.** The 24 reference sheets are in `v2/reference/set/` (01 to 24: three wall panels, the doorway,
@@ -464,10 +476,27 @@ kits, ammunition box).
   every vertex is a corner); two bars laid over each other in one plane render black where they meet (a cross is
   one outline); a concave outline as one face can fill wrongly (arches are bands of quads); a part seen from below
   needs the studio's lights below, one seen from above needs less light or its colours bleach.
-- Sizes chosen for the sheet (to settle when the set goes into the game's 4 m grid): wall panel 2 x 3 m, floor tile
-  1 x 2 m, ceiling panel 2 x 2 m, corridor section 4 x 3.4 x 4 m, doorway opening 2.4 x 2.6 m, column 3.4 m high
-  (its height is a parameter). The med kit follows the reference (red case, white cross), not the green cross of
-  the round before: ask.
+- Sizes: wall panel 2 x 3 m, floor tile 1 x 2 m, ceiling panel 2 x 2 m, corridor section 4 x 3.4 x 4 m, doorway
+  opening 2.4 x 2.6 m, column 3.4 m high (`column_tall`: 5.2 m, the rooms' height). The med kit follows the
+  reference (red case, white cross), not the green cross of the round before (the user approved the sheet).
+- **Into the game**: `blender -b -P v2/scripts/export_set.py [-- --no-ao] [--only=a,b]` (45 s; `--only` writes
+  `set_test.glb`; `SET_PARTS=1` prints the triangles of every part) -> `assets/models/v2/set.glb`, then
+  `godot --headless --import`. What the export does: builds the assets with `setlib.GAME[0]` set (round things
+  with half the sides, coarser pipes and cables, the tiling pieces without notches, clips and brackets); bevel
+  modifiers become one chamfer; **the wear goes into the vertex colour** (R = ambient occlusion baked with Cycles
+  to the face corners, forced to 1 on faces over 0.02 m2, where it smeared; G = 1 on the chamfer faces); one mesh
+  per material per asset (`<asset>__<material>`), a loot crate's lid under `Crate_Lid`; no images.
+  Game-only pieces (`@asset(..., game=True)`, the end of `set_structure.py`): `wall_upper`, `wall_plinth`,
+  `ceiling_plain`, `door_frame`, `door_leaf_l`, `door_leaf_r`, `door_surround`, `column_tall`.
+- Materials in the game (`V2Assets.SET_PAINT`, `SET_PLAIN`, `_set_material`): painted ones = `v2_set.gdshader`
+  (the painted-plaster set, **one projection per triangle** chosen in the vertex shader (`flat` varying), paint
+  worn off where the vertex colour's G says, dirt where R is low, smudges and streaks from the imperfections map,
+  grime up to 0.3 m from the floor, `stripes` for the hazard paint); displays = `v2_screen.gdshader`; the portal's
+  field = `v2_portal.gdshader`; the rest StandardMaterial3D. A material used for what is walked on is `floor` in
+  the set's scripts (`EPaintFloor`): the same paint in Blender, a tone darker in the game.
+- Learned bringing it in: vertex colours survive `SurfaceTool.append_from` (checked, when the props looked wrong:
+  it was the light, see "Light of the dungeon"); look at a piece in the dungeon, not only alone on the kit sheet,
+  whose sun lights every side; the capture tour takes 6 minutes, `--part=rooms --match=N` 40 seconds.
 
 ## Conventions (fixed on day one; do not drift)
 

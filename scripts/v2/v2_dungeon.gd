@@ -1,7 +1,7 @@
 class_name V2Dungeon
 extends Node3D
 ## The generated dungeon in the V2 look: a layout of `DungeonGen` (rooms joined by corridors, a tree from the spawn
-## room; 4 m cells) built from the modular kit (v2/scripts/build_kit.py -> assets/models/v2/kit.glb).
+## room; 4 m cells) built from the environment set (v2/scripts/export_set.py -> assets/models/v2/set.glb).
 ##   areas     one per room and per corridor: its pieces merged into one mesh per material (few draw calls, and a
 ##             mesh takes only 8 lights in the Compatibility renderer), its lights, its render layer
 ##   collision boxes, made from the layout (not from the meshes): walls, doorway sides and lintels, floors,
@@ -17,35 +17,41 @@ const HC := 3.4
 const T := 0.3                        # wall thickness, outward from the cell's edge
 const DOOR_HALF := 1.2
 const DOOR_H := 2.6
-const CWALLS := ["CWall", "CWall", "CWallPipes", "CWallPanel", "CWallVent"]      # a corridor wall is one of these
-const CCEILINGS := ["CCeiling", "CCeiling", "CCeilingDuct"]
-# A room's theme: its walls, the fittings of the ceiling cells between the lights, the floor's accents, what stands
-# at the corners of the cells inside it (cover: the robots keep to the cells' middles and pass between), what
-# stands along its walls, and the small things put beside those (nothing stops at them).
+# A room's theme: how its wall panels are dealt (plain / with a display / with services), how often a ceiling cell
+# carries services, what stands at the inner corners of its cells (cover: the robots keep to the cells' middles and
+# pass between) and what stands along its walls. All pieces of assets/models/v2/set.glb (v2/scripts/set_*.py).
 const THEMES := {
-	"lab": {"walls": ["Wall", "Wall", "WallScreen", "WallWindow", "WallPipes", "WallPilaster"], "ceilings": ["CeilingBeams", "CeilingDuct"],
-		"floors": ["FloorPlates", "FloorDrain"], "stand": ["Tank", "Tank", "Column"],
-		"along": ["Console", "Console", "Locker", "Tank", "Cabinet", "ChargeDock"], "small": ["Canisters", "Toolbox"]},
-	"storage": {"walls": ["Wall", "Wall", "WallStripe", "WallPanels", "WallPilaster", "WallVent"], "ceilings": ["CeilingBeams", "CeilingPipes"],
-		"floors": ["FloorLines", "FloorLines", "FloorDrain"], "stand": ["CrateStack", "CrateStack", "Pallet", "Barrels", "Column"],
-		"along": ["Shelf", "Shelf", "Pallet", "Barrels", "Locker", "Block", "CrateStack"], "small": ["Cone", "Canisters", "CableReel"]},
-	"server": {"walls": ["Wall", "WallCables", "WallCables", "WallVent", "WallScreen", "WallPilaster"], "ceilings": ["CeilingDuct", "CeilingBeams", "CeilingVent"],
-		"floors": ["FloorPlates", "FloorPlates"], "stand": ["RackPair", "RackPair", "Column"],
-		"along": ["ServerRack", "ServerRack", "ServerRack", "Console", "Cabinet", "Locker"], "small": ["CableReel", "Toolbox"]},
-	"power": {"walls": ["Wall", "WallValves", "WallValves", "WallPipes", "WallVent", "WallCables"], "ceilings": ["CeilingPipes", "CeilingDuct", "CeilingVent"],
-		"floors": ["FloorHazard", "FloorPlates", "FloorDrain"], "stand": ["CoreUnit", "CoreUnit", "Barrels", "Column"],
-		"along": ["Generator", "Generator", "PipeRiser", "PipeRiser", "Tank", "Cabinet", "Block"], "small": ["Cone", "Canisters", "Toolbox"]},
-	"workshop": {"walls": ["Wall", "WallPanels", "WallStripe", "WallCables", "WallPilaster", "WallValves"], "ceilings": ["CeilingBeams", "CeilingVent", "CeilingPipes"],
-		"floors": ["FloorLines", "FloorDrain"], "stand": ["Barrier", "CrateStack", "Cart", "Column", "Barrier"],
-		"along": ["Workbench", "Workbench", "Cabinet", "Shelf", "ChargeDock", "Locker", "Cart"], "small": ["Toolbox", "Cone", "Canisters", "CableReel"]},
+	"lab": {"walls": ["wall_plain", "wall_plain", "wall_plain", "wall_plain", "wall_screen", "wall_screen", "wall_service"], "services": 0.15,
+		"stand": ["tank", "tank", "column_tall"], "along": ["console", "console", "locker", "tank", "charging_dock", "shelving"]},
+	"storage": {"walls": ["wall_plain", "wall_plain", "wall_plain", "wall_plain", "wall_plain", "wall_service"], "services": 0.1,
+		"stand": ["crate_stack", "crate_stack", "drum_stack", "barrier", "column_tall"], "along": ["shelving", "shelving", "crate_stack", "drum_stack", "locker", "crate", "drum"]},
+	"server": {"walls": ["wall_plain", "wall_plain", "wall_plain", "wall_plain", "wall_screen", "wall_screen", "wall_screen", "wall_service"], "services": 0.35,
+		"stand": ["server_rack", "server_rack", "column_tall"], "along": ["server_rack", "server_rack", "server_rack", "console", "locker", "charging_dock"]},
+	"power": {"walls": ["wall_plain", "wall_plain", "wall_plain", "wall_plain", "wall_plain", "wall_service", "wall_service"], "services": 0.35,
+		"stand": ["power_core", "power_core", "drum_stack", "column_tall"], "along": ["pipe_riser", "pipe_riser", "charging_dock", "tank", "locker", "drum"]},
+	"workshop": {"walls": ["wall_plain", "wall_plain", "wall_plain", "wall_plain", "wall_plain", "wall_service", "wall_screen"], "services": 0.2,
+		"stand": ["barrier", "crate_stack", "barrier", "column_tall", "drum"], "along": ["workbench", "workbench", "shelving", "charging_dock", "locker", "crate"]},
 }
-# the boxes that stop the player, the robots' rounds and the player's: width, height, depth
-const DECO_BOX := {"Block": Vector3(1.8, 1.15, 0.5), "Tank": Vector3(0.9, 2.7, 0.9), "Console": Vector3(1.4, 1.42, 0.56), "Locker": Vector3(1.1, 2.1, 0.5),
-	"Column": Vector3(0.86, 5.2, 0.86), "CrateStack": Vector3(1.4, 1.5, 1.4), "Barrels": Vector3(1.25, 0.92, 1.2), "Pallet": Vector3(1.2, 1.0, 1.0),
-	"Barrier": Vector3(1.84, 1.1, 0.5), "ServerRack": Vector3(0.72, 2.19, 0.92), "RackPair": Vector3(1.42, 2.19, 0.92), "Generator": Vector3(1.76, 1.35, 0.8),
-	"Shelf": Vector3(1.9, 2.05, 0.5), "Workbench": Vector3(1.9, 0.94, 0.64), "Cabinet": Vector3(1.04, 1.25, 0.54), "ChargeDock": Vector3(1.3, 2.3, 0.6),
-	"PipeRiser": Vector3(0.8, 5.2, 0.34), "CoreUnit": Vector3(1.2, 2.6, 1.2), "Cart": Vector3(1.04, 0.96, 0.6)}
+# What stands in rooms: the box that stops the player and rounds [width, height, depth], where its middle is from
+# the piece's origin (the piece's frame: +z toward the room), and how far the piece reaches behind its origin
+# (toward the wall it stands against).
+const DECO_BOX := {
+	"crate": [Vector3(1.08, 0.62, 0.66), Vector3.ZERO, 0.34], "crate_stack": [Vector3(2.14, 1.26, 0.7), Vector3.ZERO, 0.36],
+	"drum": [Vector3(0.66, 0.92, 0.66), Vector3.ZERO, 0.36], "drum_stack": [Vector3(1.84, 1.86, 1.3), Vector3(0.21, 0, 0.065), 0.6],
+	"barrier": [Vector3(1.94, 1.25, 0.5), Vector3.ZERO, 0.46], "tank": [Vector3(1.3, 2.3, 1.5), Vector3(0, 0, -0.1), 0.96],
+	"server_rack": [Vector3(1.06, 2.15, 1.16), Vector3(0, 0, -0.02), 0.62], "power_core": [Vector3(1.4, 2.2, 1.4), Vector3.ZERO, 0.75],
+	"console": [Vector3(1.34, 1.5, 0.94), Vector3(0, 0, 0.06), 0.48], "locker": [Vector3(1.2, 2.15, 0.98), Vector3(0, 0, -0.02), 0.62],
+	"shelving": [Vector3(2.16, 2.1, 0.72), Vector3.ZERO, 0.36], "workbench": [Vector3(2.32, 1.0, 1.0), Vector3(0, 0, -0.02), 0.68],
+	"charging_dock": [Vector3(1.4, 1.95, 1.1), Vector3(0, 0, -0.1), 0.72], "pipe_riser": [Vector3(0.5, 2.74, 0.6), Vector3(0, 0, -0.1), 0.42],
+	"column_tall": [Vector3(0.92, 5.2, 0.92), Vector3.ZERO, 0.76],
+}
 const FILL := 0.6                     # of a room's free wall cells, this share gets something standing there
+const FACE := 0.045                   # a wall panel's fields stand this far in front of its origin: the panels are set back by it,
+                                      # so that the fields' face is the wall's plane (where rounds strike and leave their marks)
+const SEEN := 28.0                    # areas further than this from the player are not drawn
+const FLOOR_TOP := 0.068              # a floor tile's fields above its origin; the corridor section's floor plates: 0.012
+const CEIL_FACE := 0.052              # a ceiling panel's plates below its origin
+const LEAF_SLIDE := {"door_leaf_l": -1.66, "door_leaf_r": 0.8}       # how far each leaf goes into the wall
 const TANKS := [Color(0.2, 0.62, 0.68), Color(0.25, 0.68, 0.4), Color(0.75, 0.55, 0.16), Color(0.5, 0.36, 0.85), Color(0.7, 0.3, 0.3)]
 
 var gen: DungeonGen
@@ -74,7 +80,7 @@ static func center(c: Vector2i) -> Vector3:
 func build(layout: DungeonGen) -> void:
 	gen = layout
 	_headless = DisplayServer.get_name() == "headless"
-	_kit_scene = (load(V2Assets.DIR + "kit.glb") as PackedScene).instantiate()
+	_kit_scene = (load(V2Assets.DIR + "set.glb") as PackedScene).instantiate()
 	for piece in _kit_scene.get_children():
 		var parts: Array = []
 		for n in piece.find_children("*", "MeshInstance3D", true, false):
@@ -148,55 +154,95 @@ func _area(is_room: bool, id: int, rect: Rect2, cells: Array, rng: RandomNumberG
 	for c: Vector2i in cells:
 		area_of[c] = index
 		var at := center(c)
-		if is_room:
-			# the floor: a striped frame in front of a doorway and under the exit, here and there one of the theme's accents
-			var floor_piece := "Floor"
-			var at_door := false
-			for d in DungeonGen.DIRS:
-				if gen.is_floor(c + d) and gen.cells[c + d].t == DungeonGen.T_CORRIDOR:
-					at_door = true
-			if at_door or (id == gen.exit_room and at.distance_to(gen.exit_pos) < 1.0):
-				floor_piece = "FloorHazard"
-			elif rng.randf() < 0.16:
-				floor_piece = theme.floors[rng.randi() % theme.floors.size()]
-			placed.append([floor_piece, Transform3D(Basis(Vector3.UP, (rng.randi() % 4) * PI / 2.0), at)])
-			# the ceiling: a light on every other cell, between them one of the theme's fittings
-			var ceiling := "Ceiling"
-			if posmod(c.x + c.y, 2) == 1:
-				ceiling = "CeilingBeams" if _plain.has(c) else theme.ceilings[rng.randi() % theme.ceilings.size()]
-			placed.append([ceiling, Transform3D(Basis(Vector3.UP, (rng.randi() % 2) * PI) if ceiling != "Ceiling" else Basis.IDENTITY, at)])
-		else:
-			var turn := Basis(Vector3.UP, PI / 2.0) if along_x else Basis.IDENTITY
-			placed.append(["CFloor", Transform3D(turn, at)])
-			placed.append([CCEILINGS[rng.randi() % CCEILINGS.size()], Transform3D(turn * Basis(Vector3.UP, (rng.randi() % 2) * PI), at)])
+		if not is_room:
+			_corridor_cell(placed, node, c, along_x)
+			continue
+		# --- the floor: eight tiles of 1 x 2 m; in front of a doorway they lie along the way through it and the four
+		# nearest are striped; under the exit all are; here and there two are gratings
+		var door_dir := Vector2i.ZERO
+		for d in DungeonGen.DIRS:
+			if gen.is_floor(c + d) and gen.cells[c + d].t == DungeonGen.T_CORRIDOR:
+				door_dir = d
+		var turn := Basis(Vector3.UP, PI / 2.0) if door_dir.x != 0 else Basis.IDENTITY       # (a tile's length is along its z)
+		var exit_here := id == gen.exit_room and at.distance_to(gen.exit_pos) < 1.0
+		var grates := rng.randf() < 0.14 and door_dir == Vector2i.ZERO and not exit_here
+		var g0 := rng.randi() % 4
+		for ix in 4:
+			for iz in 2:
+				var local := Vector3(-1.5 + ix, -FLOOR_TOP, -1.0 + iz * 2.0)
+				var piece := "floor_plain"
+				if exit_here:
+					piece = "floor_hazard"
+				elif door_dir != Vector2i.ZERO:
+					var toward := (turn * local).dot(Vector3(door_dir.x, 0, door_dir.y))
+					if toward > 0.0:
+						piece = "floor_hazard"
+				elif grates and ix == g0 and iz == 0:
+					piece = "floor_grating"
+				placed.append([piece, Transform3D(turn, at + turn * local)])
+		# --- the ceiling: four panels of 2 x 2 m; lamps on every other cell (two of the four), between them plain
+		# panels, now and then one carrying services (not where a turret's rail may run)
+		var lit := posmod(c.x + c.y, 2) == 0
+		var serv := -1 if (lit or _plain.has(c) or rng.randf() > float(theme.services)) else rng.randi() % 4
+		for k in 4:
+			var cx := -1.0 if k % 2 == 0 else 1.0
+			var cz := -1.0 if k < 2 else 1.0
+			var piece := "ceiling_plain"
+			if lit and k == (posmod(c.x, 4)):                  # (one lamp to a lit cell, not always in the same quarter)
+				piece = "ceiling_light"
+			elif k == serv:
+				piece = "ceiling_services"
+			placed.append([piece, Transform3D(Basis(Vector3.UP, (rng.randi() % 4) * PI / 2.0), at + Vector3(cx, H + CEIL_FACE, cz))])
+		# --- the walls
 		for d in DungeonGen.DIRS:
 			var n: Vector2i = c + d
 			var edge := at + Vector3(d.x, 0, d.y) * (CELL / 2.0)
-			var xf := Transform3D(Basis(Vector3.UP, _yaw(-d)), edge)
+			var out := Vector3(d.x, 0, d.y)
+			var basis := Basis(Vector3.UP, _yaw(-d))
 			if not gen.is_floor(n):
-				if not is_room:
-					# A corridor's side wall stops at the back of the room wall it runs into: run to the end of its
-					# cell, its end face lay in the plane of the room wall's face, a strip 0.3 m wide beside every
-					# doorway where two meshes lit by different areas' lights fought for the pixels (it flickered).
-					var lx := xf.basis.x                       # the wall's length, in the world
-					var cut := 0.0
-					var shift := 0.0
-					for sgn in [-1.0, 1.0]:
-						var nb: Vector2i = c + Vector2i(roundi(lx.x * sgn), roundi(lx.z * sgn))
-						if gen.is_floor(nb) and gen.cells[nb].t != DungeonGen.T_CORRIDOR:
-							cut += T
-							shift -= sgn * T / 2.0
-					xf = Transform3D(xf.basis * Basis.from_scale(Vector3((CELL - cut) / CELL, 1.0, 1.0)), edge + lx * shift)
-				placed.append([theme.walls[rng.randi() % theme.walls.size()] if is_room else CWALLS[rng.randi() % CWALLS.size()], xf])
+				# a plinth, a row of two panels (the theme deals them), a second row of plain ones up to the ceiling
+				for side in [-1.0, 1.0]:
+					var o: Vector3 = edge + out * FACE + basis.x * float(side)
+					placed.append(["wall_plinth", Transform3D(basis, o)])
+					placed.append([theme.walls[rng.randi() % theme.walls.size()], Transform3D(basis, o + Vector3(0, 0.4, 0))])
+					placed.append(["wall_upper", Transform3D(basis, o + Vector3(0, 3.4, 0))])
 				_wall_box(node, edge, d, -2.3, 2.3, 0.0, height)
-			elif is_room and gen.cells[n].t == DungeonGen.T_CORRIDOR:
-				placed.append(["WallDoor", xf])                # a doorway: built from the room's side
+			elif gen.cells[n].t == DungeonGen.T_CORRIDOR:
+				# a doorway: a door frame facing the room and one facing the corridor, back to back in the wall's
+				# thickness, each with its surround; over it the second row of panels
+				var back := Basis(Vector3.UP, _yaw(d))
+				for piece in ["door_frame", "door_surround"]:
+					placed.append([piece, Transform3D(basis, edge)])
+					placed.append([piece, Transform3D(back, edge + out * T)])
+				for side in [-1.0, 1.0]:
+					placed.append(["wall_upper", Transform3D(basis, edge + out * FACE + basis.x * float(side) + Vector3(0, 3.4, 0))])
 				_wall_box(node, edge, d, -2.3, -DOOR_HALF, 0.0, H)
 				_wall_box(node, edge, d, DOOR_HALF, 2.3, 0.0, H)
 				_wall_box(node, edge, d, -DOOR_HALF, DOOR_HALF, DOOR_H, H)
 	# floor and ceiling: one box each
 	_solid(node, Vector3(rect.size.x, 1.0, rect.size.y), Vector3(rect.get_center().x, -0.5, rect.get_center().y))
 	_solid(node, Vector3(rect.size.x, 0.4, rect.size.y), Vector3(rect.get_center().x, height + 0.2, rect.get_center().y))
+
+
+## A corridor's cell: one section of corridor (floor, walls with their ribs, ceiling), turned along the corridor.
+## Where the corridor runs into a room the section is shortened by the room wall's thickness: run to the end of its
+## cell, its faces would lie in the planes of the door frame's (two meshes lit by different areas' lights, fighting
+## for the pixels: the flicker beside the doorways of the first kit).
+func _corridor_cell(placed: Array, node: Node3D, c: Vector2i, along_x: bool) -> void:
+	var at := center(c)
+	var basis := Basis(Vector3.UP, PI / 2.0) if along_x else Basis.IDENTITY          # (the section's length is along its z)
+	var lz := basis.z
+	var cut := 0.0
+	var shift := 0.0
+	for sgn in [-1.0, 1.0]:
+		var nb: Vector2i = c + Vector2i(roundi(lz.x * sgn), roundi(lz.z * sgn))
+		if gen.is_floor(nb) and gen.cells[nb].t != DungeonGen.T_CORRIDOR:
+			cut += T
+			shift -= sgn * T / 2.0
+	placed.append(["corridor", Transform3D(basis * Basis.from_scale(Vector3(1.0, 1.0, (CELL - cut) / CELL)), at + lz * shift + Vector3(0, -0.012, 0))])
+	for d in DungeonGen.DIRS:
+		if not gen.is_floor(c + d):
+			_wall_box(node, at + Vector3(d.x, 0, d.y) * (CELL / 2.0), d, -2.3, 2.3, 0.0, HC)
 
 
 ## An area's meshes: its shell (floor, walls, ceiling) merged into one mesh per material, and what stands in it
@@ -214,8 +260,8 @@ func _meshes(i: int) -> void:
 		for p in list:
 			for part in _kit[p[0]]:
 				var key: String = part[2]
-				if key == "TankLiquid":                    # (each room's tanks hold a liquid of its own colour)
-					key = "TankLiquid#%d" % (int(a.id) % TANKS.size())
+				if key == "ELiquid":                       # (each room's tanks hold a liquid of its own colour)
+					key = "ELiquid#%d" % (int(a.id) % TANKS.size())
 				if not tools.has(key):
 					tools[key] = SurfaceTool.new()
 				(tools[key] as SurfaceTool).append_from(part[0], 0, (p[1] as Transform3D) * (part[1] as Transform3D))
@@ -224,9 +270,17 @@ func _meshes(i: int) -> void:
 		for key in tools:
 			(tools[key] as SurfaceTool).commit(mesh)
 		mi.mesh = mesh
+		if OS.has_environment("V2_TRIS"):
+			var tr := 0
+			for k in mesh.get_surface_count():
+				tr += mesh.surface_get_array_index_len(k) / 3
+			var per := {}
+			for p in list:
+				per[p[0]] = per.get(p[0], 0) + 1
+			print("[tris] area %d (%s %s) %s: %dk  %s" % [i, "room" if a.room else "corridor", str(a.rect.size), "props" if group[1] else "shell", tr / 1000, str(per)])
 		var s := 0
 		for key: String in tools:
-			mi.set_surface_override_material(s, _liquid(int(key.get_slice("#", 1))) if key.begins_with("TankLiquid#") else V2Assets.material(key))
+			mi.set_surface_override_material(s, _liquid(int(key.get_slice("#", 1))) if key.begins_with("ELiquid#") else V2Assets.material(key))
 			s += 1
 		# (the shell casts no shadow: what stands in it does)
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if group[1] else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -238,9 +292,15 @@ func _liquid(k: int) -> StandardMaterial3D:
 	var key := "liquid%d" % k
 	if not _lamps.has(key):
 		var color: Color = TANKS[k]
-		var liquid := (V2Assets.material("TankLiquid") as StandardMaterial3D).duplicate() as StandardMaterial3D
-		liquid.albedo_color = Color(color.r, color.g, color.b, 0.45)
-		liquid.emission = color * 0.8
+		var liquid := (V2Assets.material("ELiquid") as StandardMaterial3D).duplicate() as StandardMaterial3D
+		# (dark and deep, a faint glow of its own: at the full colour it was a flat bright slab behind the glass)
+		liquid.albedo_color = Color(color.r * 0.22, color.g * 0.22, color.b * 0.22)
+		liquid.emission = color
+		liquid.emission_energy_multiplier = 0.16
+		liquid.roughness = 0.08
+		liquid.rim_enabled = true                          # lighter toward its outline: it reads as a round column
+		liquid.rim = 0.55
+		liquid.rim_tint = 0.6
 		_lamps[key] = liquid
 	return _lamps[key]
 
@@ -307,7 +367,7 @@ func _lights(i: int) -> void:
 		var l := OmniLight3D.new()
 		l.position = at
 		l.light_color = Color(0.97, 0.98, 1.0)
-		l.light_energy = (0.3 * clampf(rect.get_area() / (spots.size() * 40.0), 0.8, 1.7)) if a.room else 0.24
+		l.light_energy = (0.25 * clampf(rect.get_area() / (spots.size() * 40.0), 0.8, 1.7)) if a.room else 0.24
 		l.omni_range = 12.0 if a.room else 7.5
 		l.omni_attenuation = 0.8
 		l.light_cull_mask = a.layer
@@ -354,22 +414,30 @@ func _doorway(dw: Dictionary) -> void:
 	doors.append(rec)
 	if not rec.door:
 		return
+	# The leaves: the wide one and the narrow one of the set's door, standing in the middle of the wall between
+	# the two door frames; each slides into the wall on its own side. (No shadow: the light comes straight down,
+	# and a leaf inside the wall would throw a band of it onto the panels beside the doorway.)
 	var layer: int = areas[area_of[a]].layer | areas[area_of[b]].layer
-	var frame := Node3D.new()                              # +Z toward the room, +X along the wall, in the wall's middle
-	frame.transform = Transform3D(Basis(Vector3.UP, _yaw(-d)), edge + Vector3(d.x, 0, d.y) * (T / 2.0))
+	var frame := Node3D.new()                              # the room-side door frame's place: +Z toward the room, +X along the wall
+	frame.transform = Transform3D(Basis(Vector3.UP, _yaw(-d)), edge)
 	add_child(frame)
-	for side in [-1.0, 1.0]:
+	for piece in ["door_leaf_l", "door_leaf_r"]:
 		var leaf := Node3D.new()
-		leaf.position = Vector3(side * DOOR_HALF / 2.0, 0.0, 0.0)
+		leaf.name = piece
 		frame.add_child(leaf)
-		_box_mesh(leaf, Vector3(DOOR_HALF, DOOR_H - 0.03, 0.07), Vector3(0, DOOR_H / 2.0, 0), V2Assets.material("RArmor"), layer)
-		_box_mesh(leaf, Vector3(DOOR_HALF - 0.3, 0.42, 0.08), Vector3(0, 1.7, 0), V2Assets.material("DarkGlass"), layer)
-		_box_mesh(leaf, Vector3(DOOR_HALF - 0.1, 0.12, 0.09), Vector3(0, 0.96, 0), V2Assets.material("Hazard"), layer)
-		_box_mesh(leaf, Vector3(0.06, DOOR_H - 0.03, 0.09), Vector3(-side * (DOOR_HALF / 2.0 - 0.03), DOOR_H / 2.0, 0), V2Assets.material("DarkSteel"), layer)
-		_solid(leaf, Vector3(DOOR_HALF, DOOR_H, 0.2), Vector3(0, DOOR_H / 2.0, 0))
+		if not _headless:
+			for part in _kit[piece]:
+				var mi := MeshInstance3D.new()
+				mi.mesh = part[0]
+				mi.transform = part[1]
+				mi.material_override = V2Assets.material(part[2])
+				mi.layers = layer
+				mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				leaf.add_child(mi)
+		var x0 := -DOOR_HALF if piece == "door_leaf_l" else 0.42
+		var x1 := 0.42 if piece == "door_leaf_l" else DOOR_HALF
+		_solid(leaf, Vector3(x1 - x0, DOOR_H, 0.2), Vector3((x0 + x1) / 2.0, DOOR_H / 2.0, -T / 2.0))
 		rec.leaves.append(leaf)
-	for z in [-(T / 2.0 + 0.1), T / 2.0 + 0.1]:           # a lamp over the door on each side: amber = shut, green = open
-		rec.lamps.append(_box_mesh(frame, Vector3(0.9, 0.08, 0.03), Vector3(0, DOOR_H + 0.35, z), _lamp(Color(1.0, 0.6, 0.15)), layer))
 
 
 func door_near(p: Vector3, reach: float) -> int:
@@ -392,16 +460,12 @@ func open_door(i: int) -> void:
 		return
 	d.open = true
 	V2Sfx.play("door", (d.at as Vector3) + Vector3(0, 1.3, 0))
-	# (the leaves go all the way into the doorway's lining: left 4 cm proud of it, the end of a leaf showed, and
-	# its two faces in one plane, the armour's and the edge strip's, flickered)
-	for k in 2:
-		var leaf := d.leaves[k] as Node3D
+	# (each leaf goes all the way into the wall on its side, behind the door frame and the panels beyond it)
+	for leaf: Node3D in d.leaves:
 		var tw := create_tween()
 		tw.tween_interval(0.12)
-		tw.tween_property(leaf, "position:x", leaf.position.x + (-1.0 if k == 0 else 1.0) * (DOOR_HALF - 0.012), 0.6) \
+		tw.tween_property(leaf, "position:x", float(LEAF_SLIDE[String(leaf.name)]), 0.6 if leaf.name == &"door_leaf_r" else 0.9) \
 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	for lamp in d.lamps:
-		(lamp as MeshInstance3D).material_override = _lamp(Color(0.224, 1.0, 0.533))
 
 
 ## What the generator stands against a room's wall: something of the room's theme there.
@@ -421,25 +485,16 @@ func _deco(d: Dictionary, rng: RandomNumberGenerator) -> void:
 	_against(along[rng.randi() % along.size()], c, side, int(d.room), rng)
 
 
-## `what` against the wall of cell `c` on its side `d`, somewhere along it; now and then a small thing beside it.
+## `what` against the wall of cell `c` on its side `d`, somewhere along it, its back 0.24 m off the wall (clear of
+## the pipes of a service panel); a pipe riser stands on the wall itself.
 func _against(what: String, c: Vector2i, d: Vector2i, room_id: int, rng: RandomNumberGenerator) -> void:
 	var out := Vector3(d.x, 0, d.y)
 	var side := Vector3(-d.y, 0, d.x)
-	var box: Vector3 = DECO_BOX[what]
+	var spec: Array = DECO_BOX[what]
 	var yaw := atan2(-out.x, -out.z)
-	var reach := CELL / 2.0 - 0.16 - box.z / 2.0           # (0.16: clear of what is on the wall)
-	if what == "ServerRack":                               # racks stand in a row
-		var n := 2 + rng.randi() % 2
-		for k in n:
-			_stand(what, center(c) + out * reach + side * ((k - (n - 1) / 2.0) * 0.76), yaw, room_id)
-		return
-	var room_for := maxf((CELL - box.x) / 2.0 - 0.25, 0.0)
-	var off := rng.randf_range(-room_for, room_for)
-	_stand(what, center(c) + out * reach + side * off, yaw, room_id)
-	var small: Array = THEMES[themes[room_id]].small
-	var beside := off + (box.x / 2.0 + 0.36) * (1.0 if off < 0.0 else -1.0)
-	if rng.randf() < 0.55 and absf(beside) < CELL / 2.0 - 0.3:
-		_stand(small[rng.randi() % small.size()], center(c) + out * (CELL / 2.0 - 0.5) + side * beside, rng.randf() * TAU, room_id)
+	var reach := CELL / 2.0 - (0.0 if what == "pipe_riser" else 0.24) - float(spec[2])
+	var room_for := maxf((CELL - (spec[0] as Vector3).x) / 2.0 - 0.3, 0.0)
+	_stand(what, center(c) + out * reach + side * rng.randf_range(-room_for, room_for), yaw, room_id)
 
 
 ## The rooms furnished: cover at the corners of the cells inside them (the robots keep to the cells' middles, so
@@ -464,7 +519,7 @@ func _furnish(rng: RandomNumberGenerator) -> void:
 				if not want:
 					continue
 				var at := Vector3(x * CELL, 0, y * CELL)
-				if r.id == gen.exit_room and at.distance_to(gen.exit_pos) < 3.2:
+				if r.id == gen.exit_room and at.distance_to(gen.exit_pos) < 3.6:
 					continue
 				var by_door := false                           # (the cells round a doorway stay open)
 				for dc in r.doorway_cells:
@@ -498,13 +553,15 @@ func _furnish(rng: RandomNumberGenerator) -> void:
 			_against(theme.along[rng.randi() % theme.along.size()], pick[0], pick[1], r.id, rng)
 
 
-## One of the kit's pieces standing at `at`, turned by `yaw`: into the room's merged mesh, and a box that stops
-## the player and rounds (the small things have none).
+## One of the set's pieces standing at `at`, turned by `yaw`: into the room's merged mesh, and a box that stops
+## the player and rounds.
 func _stand(what: String, at: Vector3, yaw: float, room_id: int) -> void:
 	var area: Dictionary = areas[area_of[gen.rooms[room_id].rect.position]]
-	if DECO_BOX.has(what):
-		_solid(area.node, DECO_BOX[what], at + Vector3(0, (DECO_BOX[what] as Vector3).y / 2.0, 0), yaw)
-	(area.props as Array).append([what, Transform3D(Basis(Vector3.UP, yaw), at)])
+	var spec: Array = DECO_BOX[what]
+	var basis := Basis(Vector3.UP, yaw)
+	var size: Vector3 = spec[0]
+	_solid(area.node, size, at + basis * (spec[1] as Vector3) + Vector3(0, size.y / 2.0, 0), yaw)
+	(area.props as Array).append([what, Transform3D(basis, at)])
 
 
 # ---------------------------------------------------------------------------------------------- questions
@@ -578,7 +635,7 @@ func update(player_at: Vector3, gun_layer: int) -> void:
 	for i in areas.size():
 		var a: Dictionary = areas[i]
 		var r: Rect2 = a.rect
-		(a.node as Node3D).visible = i == here or r.grow(34.0).has_point(Vector2(player_at.x, player_at.z))
+		(a.node as Node3D).visible = i == here or r.grow(SEEN).has_point(Vector2(player_at.x, player_at.z))
 	if here != _gun_area and here >= 0:
 		_gun_area = here
 		for i in areas.size():

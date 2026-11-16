@@ -14,13 +14,17 @@ def wall_frame(inner=True, w=PW, h=PH):
     top and the bottom, a bolt in each corner."""
     hw = w / 2
     # the carrier: wider on the right, where it shows as a second strip
-    cf = Part("bluegrey", bevel=0.006, name="carrier")
-    cf.box((-hw - 0.03, 0.03, 0.0), (hw + 0.05, 0.11, h))
-    for sx in (-1, 1):
-        for z in (0.35, h * 0.5, h - 0.35):                 # brackets
-            cf.box((sx * (hw + 0.03) - 0.03, 0.0, z - 0.07), (sx * (hw + 0.03) + 0.03, 0.14, z + 0.07))
-    cf.done()
-    Part("dark", bevel=0.0, name="gap").box((-hw - 0.02, 0.02, 0.01), (hw + 0.04, 0.04, h - 0.01)).done()
+    game = S.GAME[0]                                        # (in the game the panels stand edge to edge: no brackets, a plain backing)
+    if game:
+        Part("bluegrey", bevel=0.0, name="carrier").box((-hw, 0.03, 0.0), (hw, 0.11, h)).done()
+    else:
+        cf = Part("bluegrey", bevel=0.006, name="carrier")
+        cf.box((-hw - 0.03, 0.03, 0.0), (hw + 0.05, 0.11, h))
+        for sx in (-1, 1):
+            for z in (0.35, h * 0.5, h - 0.35):             # brackets
+                cf.box((sx * (hw + 0.03) - 0.03, 0.0, z - 0.07), (sx * (hw + 0.03) + 0.03, 0.14, z + 0.07))
+        cf.done()
+        Part("dark", bevel=0.0, name="gap").box((-hw - 0.02, 0.02, 0.01), (hw + 0.04, 0.04, h - 0.01)).done()
     # the face: border
     face = Part("white", bevel=0.008, name="border")
     b = 0.11
@@ -45,14 +49,15 @@ def wall_frame(inner=True, w=PW, h=PH):
     for sx in (-1, 1):
         for z in (0.06, h - 0.06):
             bl.bolt((sx * (hw - 0.06), -0.03, z), r=0.014, h=0.008)
-        for z in (0.5, h * 0.5 + 0.1, h - 0.5):
+        for z in (() if game else (0.5, h * 0.5 + 0.1, h - 0.5)):
             bl.bolt((sx * (hw + 0.03), 0.0, z), r=0.011, h=0.008)
     bl.done()
-    mk = Part("dark", bevel=0.0, name="marks")              # the small slots stamped by the corners
-    for sx in (-1, 1):
-        for z in (0.2, h - 0.24):
-            mk.box((sx * (hw - 0.055) - 0.004, -0.0315, z), (sx * (hw - 0.055) + 0.004, -0.0295, z + 0.04))
-    mk.done()
+    if not game:
+        mk = Part("dark", bevel=0.0, name="marks")          # the small slots stamped by the corners
+        for sx in (-1, 1):
+            for z in (0.2, h - 0.24):
+                mk.box((sx * (hw - 0.055) - 0.004, -0.0315, z), (sx * (hw - 0.055) + 0.004, -0.0295, z + 0.04))
+        mk.done()
 
 
 @asset("wall_plain")
@@ -153,14 +158,26 @@ DW, DH = 1.2, 2.6
 
 
 @asset("door", views=[(-0.5, -1.0, 0.2), (1.0, -0.55, 0.12)])
-def door():
+def door(frame=True, leaves=("L", "R"), half=False):
+    """half (the game): the frame is as deep as half the wall, so that two stand back to back in a doorway, one
+    facing the room and one the corridor, with the leaves between them."""
     ow, oh = DW + 0.62, DH + 0.72                           # the carrier frame's half width, height
+    deep = 0.15 if half else 0.2
+    if frame:
+        door_frame(ow, oh, deep, half)
+    if leaves:
+        door_leaves(leaves, both_faces=half)
+
+
+def door_frame(ow, oh, deep, half):
     # the carrier: a flat frame the conduits run on
     cf = Part("white", bevel=0.01, name="carrier")
-    cf.box((-ow, 0.0, 0.0), (-DW - 0.02, 0.2, oh)).box((DW + 0.02, 0.0, 0.0), (ow, 0.2, oh)).box((-DW - 0.02, 0.0, DH + 0.02), (DW + 0.02, 0.2, oh))
+    cf.box((-ow, 0.0, 0.0), (-DW - 0.02, deep, oh)).box((DW + 0.02, 0.0, 0.0), (ow, deep, oh)).box((-DW - 0.02, 0.0, DH + 0.02), (DW + 0.02, deep, oh))
     cf.done()
-    Part("bluegrey", bevel=0.006, name="back").box((-ow - 0.04, 0.2, 0.0), (-DW, 0.3, oh + 0.02)).box((DW, 0.2, 0.0), (ow + 0.04, 0.3, oh + 0.02)) \
-        .box((-DW, 0.2, DH), (DW, 0.3, oh + 0.02)).done()
+    if not half:
+        Part("bluegrey", bevel=0.006, name="back").box((-ow - 0.04, 0.2, 0.0), (-DW, 0.3, oh + 0.02)).box((DW, 0.2, 0.0), (ow + 0.04, 0.3, oh + 0.02)) \
+            .box((-DW, 0.2, DH), (DW, 0.3, oh + 0.02)).done()
+    lind = deep if half else 0.26                           # how far back the opening's lining goes
     # the portal: the heavy inner frame, its top corners cut, standing proud of the carrier
     iw = DW + 0.3
     outer = chamfer(-iw, 0.0, iw, DH + 0.38, (0.0, 0.0, 0.2, 0.2))
@@ -178,10 +195,10 @@ def door():
     lin = Part("grey", bevel=0.006, name="lining")           # the dark lining inside the opening, its top corners cut too
     for sx in (-1, 1):
         x0, x1 = sorted((sx * (DW - 0.05), sx * DW))
-        lin.box((x0, -0.1, 0.0), (x1, 0.26, DH - 0.14))
+        lin.box((x0, -0.1, 0.0), (x1, lind, DH - 0.14))
         lin.plate_xz([(sx * (DW - 0.05), DH - 0.14), (sx * DW, DH - 0.14), (sx * DW, DH - 0.08), (sx * (DW - 0.14), DH + 0.02), (sx * (DW - 0.2), DH + 0.02),
-                      (sx * (DW - 0.2), DH - 0.03)][::sx], -0.1, 0.26)
-    lin.box((-DW + 0.2, -0.1, DH - 0.03), (DW - 0.2, 0.26, DH + 0.02))
+                      (sx * (DW - 0.2), DH - 0.03)][::sx], -0.1, lind)
+    lin.box((-DW + 0.2, -0.1, DH - 0.03), (DW - 0.2, lind, DH + 0.02))
     lin.done()
     # the lintel's box with the two status lights, a top cover
     Part("white", bevel=0.012, name="lintel box").box((-0.62, -0.17, DH + 0.1), (0.62, -0.13, DH + 0.3)).box((-0.55, -0.05, oh - 0.16), (0.55, 0.06, oh + 0.03)).done()
@@ -221,24 +238,34 @@ def door():
     Part("grey", bevel=0.006, name="keypad").box((iw - 0.2, -0.17, 1.02), (iw - 0.04, -0.14, 1.4)).done()
     Part("ledgreen", bevel=0.0, name="keypad led").box((iw - 0.17, -0.174, 1.3), (iw - 0.07, -0.17, 1.36)).done()
     Part("darksteel", bevel=0.002, name="keys").box((iw - 0.17, -0.176, 1.08), (iw - 0.07, -0.17, 1.26)).done()
-    # the door: a wide leaf and a narrow one (they part at the seam), each a frame with two fields
+    Part("dark", bevel=0.0, name="sill").box((-DW, -0.1, 0.0), (DW, lind, 0.02)).done()
+
+
+def door_leaves(which, both_faces=False):
+    """The door: a wide leaf (L) and a narrow one (R), which part at the seam; each a slab with two fields.
+    both_faces (the game): the fields are on the corridor's side too, and the leaves stand in the wall's middle."""
     split = 0.42
-    for x0, x1, name in ((-DW + 0.06, split - 0.006, "leaf L"), (split + 0.006, DW - 0.06, "leaf R")):
-        lf = Part("white", bevel=0.008, name=name)
-        lf.box((x0, 0.04, 0.02), (x1, 0.12, DH - 0.05))
+    y0, y1 = (0.11, 0.19) if both_faces else (0.04, 0.12)
+    for x0, x1, key in ((-DW + 0.06, split - 0.006, "L"), (split + 0.006, DW - 0.06, "R")):
+        if key not in which:
+            continue
+        lf = Part("white", bevel=0.008, name="leaf")
+        lf.box((x0, y0, 0.02), (x1, y1, DH - 0.05))
         seam = 0.95
-        lf.plate_xz(chamfer(x0 + 0.06, seam + 0.01, x1 - 0.06, DH - 0.14, 0.03), 0.012, 0.04)
-        lf.plate_xz(chamfer(x0 + 0.06, 0.1, x1 - 0.06, seam - 0.01, 0.03), 0.012, 0.04)
+        faces = ((y0 - 0.028, y0), (y1, y1 + 0.028)) if both_faces else ((y0 - 0.028, y0),)
+        for ya, yb in faces:
+            lf.plate_xz(chamfer(x0 + 0.06, seam + 0.01, x1 - 0.06, DH - 0.14, 0.03), ya, yb)
+            lf.plate_xz(chamfer(x0 + 0.06, 0.1, x1 - 0.06, seam - 0.01, 0.03), ya, yb)
         lf.done()
-    Part("white", bevel=0.006, name="door tab").plate_xz(chamfer(-DW + 0.5, DH - 0.25, split - 0.4, DH - 0.17, (0.03, 0.03, 0.0, 0.0)), 0.0, 0.012).done()
-    lk = Part("grey", bevel=0.006, name="lock")
-    lk.box((split + 0.04, -0.02, 1.2), (split + 0.3, 0.012, 1.48))
-    lk.box((-DW + 0.1, -0.01, 0.75), (-DW + 0.13, 0.012, 1.15))            # the pull on the wide leaf
-    lk.done()
-    Part("darksteel", bevel=0.003, name="lock handle").box((split + 0.1, -0.045, 1.25), (split + 0.16, -0.02, 1.42)).done()
-    Part("cyan", bevel=0.0, name="lamp").box((split + 0.06, -0.016, 1.52), (split + 0.14, -0.012, 1.545)).done()
-    Part("orange", bevel=0.0, name="lamp").box((split + 0.17, -0.016, 1.52), (split + 0.25, -0.012, 1.545)).done()
-    Part("dark", bevel=0.0, name="sill").box((-DW, -0.1, 0.0), (DW, 0.26, 0.02)).done()
+        ya = y0 - 0.028                                     # the fields' face, room side
+        if key == "L":
+            Part("white", bevel=0.006, name="door tab").plate_xz(chamfer(-DW + 0.5, DH - 0.25, split - 0.4, DH - 0.17, (0.03, 0.03, 0.0, 0.0)), ya - 0.012, ya).done()
+            Part("grey", bevel=0.006, name="pull").box((-DW + 0.1, ya - 0.022, 0.75), (-DW + 0.13, ya, 1.15)).done()
+        else:
+            Part("grey", bevel=0.006, name="lock").box((split + 0.04, ya - 0.032, 1.2), (split + 0.3, ya, 1.48)).done()
+            Part("darksteel", bevel=0.003, name="lock handle").box((split + 0.1, ya - 0.057, 1.25), (split + 0.16, ya - 0.032, 1.42)).done()
+            Part("cyan", bevel=0.0, name="lamp").box((split + 0.06, ya - 0.028, 1.52), (split + 0.14, ya - 0.024, 1.545)).done()
+            Part("orange", bevel=0.0, name="lamp").box((split + 0.17, ya - 0.028, 1.52), (split + 0.25, ya - 0.024, 1.545)).done()
 
 
 # ------------------------------------------------------------------ floor tiles (reference 05): 1 x 2 m, lying flat
@@ -251,7 +278,7 @@ def tile_frame(open_middle=False):
     hw, hl = TW / 2, TL / 2
     if open_middle:
         x0, y0, x1, y1 = -hw + 0.1, -hl + 0.12, hw - 0.1, hl - 0.12
-        fr = Part("white", bevel=0.006, name="frame")
+        fr = Part("floor", bevel=0.006, name="frame")
         fr.plate_xy(chamfer(-hw, -hl, hw, y0, (0.07, 0.07, 0.0, 0.0)), 0.0, 0.06).plate_xy(chamfer(-hw, y1, hw, hl, (0.0, 0.0, 0.07, 0.07)), 0.0, 0.06)
         fr.box((-hw, y0, 0.0), (x0, y1, 0.06)).box((x1, y0, 0.0), (hw, y1, 0.06))
         fr.done()
@@ -262,12 +289,20 @@ def tile_frame(open_middle=False):
                 bl.bolt((sx * (hw - 0.05), sy * (hl - 0.06), 0.06), axis=(0, 0, 1), r=0.014, h=0.006)
         bl.done()
         return x0, y0, x1, y1
+    if S.GAME[0]:                                           # (hundreds to a room: no notches, tray or clips, four bolts)
+        Part("floor", bevel=0.006, name="frame").plate_xy(chamfer(-hw, -hl, hw, hl, 0.07), 0.0, 0.06).done()
+        bl = Part("steel", bevel=0.0, name="bolts")
+        for sx in (-1, 1):
+            for sy in (-1, 1):
+                bl.bolt((sx * (hw - 0.06), sy * (hl - 0.06), 0.06), axis=(0, 0, 1), r=0.014, h=0.006)
+        bl.done()
+        return -hw + 0.1, -hl + 0.12, hw - 0.1, hl - 0.12
     n, nd = 0.2, 0.03                                       # the notches: half length, depth
     out = [(-hw + 0.07, -hl), (-0.22, -hl), (-0.19, -hl + nd), (0.19, -hl + nd), (0.22, -hl), (hw - 0.07, -hl), (hw, -hl + 0.07),
            (hw, -n - 0.04), (hw - nd, -n), (hw - nd, n), (hw, n + 0.04), (hw, hl - 0.07), (hw - 0.07, hl),
            (0.22, hl), (0.19, hl - nd), (-0.19, hl - nd), (-0.22, hl), (-hw + 0.07, hl), (-hw, hl - 0.07),
            (-hw, n + 0.04), (-hw + nd, n), (-hw + nd, -n), (-hw, -n - 0.04), (-hw, -hl + 0.07)]
-    Part("white", bevel=0.006, name="frame").plate_xy(out, 0.0, 0.06).done()
+    Part("floor", bevel=0.006, name="frame").plate_xy(out, 0.0, 0.06).done()
     Part("bluegrey", bevel=0.004, name="tray").box((-hw + 0.02, -hl + 0.02, -0.05), (hw - 0.02, hl - 0.02, 0.0)).done()
     cl = Part("darksteel", bevel=0.003, name="clips")
     for sx in (-1, 1):
@@ -286,20 +321,22 @@ def tile_frame(open_middle=False):
 @asset("floor_plain", views=[(-0.25, -0.75, 1.0), (1.0, -0.5, 0.45)])
 def floor_plain():
     x0, y0, x1, y1 = tile_frame()
-    f = Part("white", bevel=0.005, name="fields")
+    f = Part("floor", bevel=0.005, name="fields")
     f.plate_xy(chamfer(x0, y0, x1, -0.006, (0.06, 0.06, 0.0, 0.0)), 0.04, 0.068)
     f.plate_xy(chamfer(x0, 0.006, x1, y1, (0.0, 0.0, 0.06, 0.06)), 0.04, 0.068)
     f.done()
-    ln = Part("dark", bevel=0.0, name="scores")              # scored lines across the fields
-    for y in (-0.52, 0.52):
-        ln.box((x0 + 0.02, y - 0.003, 0.0675), (x1 - 0.02, y + 0.003, 0.0685))
-    ln.box((-0.003, y0 + 0.08, 0.0675), (0.003, -0.02, 0.0685))
-    ln.done()
-    bl = Part("steel", bevel=0.0, name="field bolts")
-    for sx in (-1, 1):
-        for y in (-0.08, 0.08, y0 + 0.1, y1 - 0.1):
-            bl.bolt((sx * (x1 - 0.06), y, 0.068), axis=(0, 0, 1), r=0.009, h=0.004)
-    bl.done()
+    if not S.GAME[0]:
+        ln = Part("dark", bevel=0.0, name="scores")          # scored lines across the fields
+        for y in (-0.52, 0.52):
+            ln.box((x0 + 0.02, y - 0.003, 0.0675), (x1 - 0.02, y + 0.003, 0.0685))
+        ln.box((-0.003, y0 + 0.08, 0.0675), (0.003, -0.02, 0.0685))
+        ln.done()
+    if not S.GAME[0]:
+        bl = Part("steel", bevel=0.0, name="field bolts")
+        for sx in (-1, 1):
+            for y in (-0.08, 0.08, y0 + 0.1, y1 - 0.1):
+                bl.bolt((sx * (x1 - 0.06), y, 0.068), axis=(0, 0, 1), r=0.009, h=0.004)
+        bl.done()
 
 
 @asset("floor_grating", views=[(-0.25, -0.75, 1.0), (1.0, -0.5, 0.45)])
@@ -307,12 +344,12 @@ def floor_grating():
     x0, y0, x1, y1 = tile_frame(open_middle=True)
     Part("dark", bevel=0.0, name="pit").box((x0, y0, 0.0), (x1, y1, 0.012)).done()
     Part("mesh", bevel=0.0, name="mesh").box((x0, y0, 0.03), (x1, y1, 0.04)).done()
-    g = Part("pipe", bevel=0.003, name="bars")
+    g = Part("pipe", bevel=0.0 if S.GAME[0] else 0.003, name="bars")
     for ya, yb in ((y0, -0.08), (0.08, y1)):
         g.grid_xy(x0, x1, ya, yb, 0.03, 0.058, 3, 4, bar=0.022)
     g.box((x0, -0.08, 0.03), (x1, 0.08, 0.062))              # the bridge across the middle
     g.done()
-    Part("white", bevel=0.004, name="bridge").plate_xy(chamfer(-0.2, -0.05, 0.2, 0.05, 0.02), 0.062, 0.07).done()
+    Part("floor", bevel=0.004, name="bridge").plate_xy(chamfer(-0.2, -0.05, 0.2, 0.05, 0.02), 0.062, 0.07).done()
     lv = Part("pipe", bevel=0.002, name="slats")             # the slats at one end
     for i in range(5):
         lv.box((x0 + 0.04, y0 + 0.03 + i * 0.035, 0.04), (x1 - 0.04, y0 + 0.048 + i * 0.035, 0.062))
@@ -335,15 +372,18 @@ CW = 2.0
 def ceiling_frame():
     """The square ceiling panel (references 06, 07): bevelled rim, a carrier above with brackets."""
     h = CW / 2
-    Part("bluegrey", bevel=0.006, name="carrier").box((-h - 0.03, -h - 0.03, 0.06), (h + 0.03, h + 0.03, 0.14)).done()
     rim = Part("white", bevel=0.02, name="panel")
     rim.plate_xy(chamfer(-h, -h, h, h, 0.07), -0.04, 0.06)
     rim.done()
-    br = Part("bluegrey", bevel=0.004, name="brackets")
-    for sx in (-1, 1):
-        for y in (-0.6, 0.6):
-            br.box(tuple(sorted((sx * h, sx * (h + 0.07))))[0:1] + (y - 0.06, 0.0), tuple(sorted((sx * h, sx * (h + 0.07))))[1:2] + (y + 0.06, 0.16))
-    br.done()
+    if S.GAME[0]:                                           # (in the game the panels hang edge to edge under the slab: a plain backing)
+        Part("bluegrey", bevel=0.0, name="carrier").box((-h, -h, 0.02), (h, h, 0.05)).done()
+    else:
+        Part("bluegrey", bevel=0.006, name="carrier").box((-h - 0.03, -h - 0.03, 0.06), (h + 0.03, h + 0.03, 0.14)).done()
+        br = Part("bluegrey", bevel=0.004, name="brackets")
+        for sx in (-1, 1):
+            for y in (-0.6, 0.6):
+                br.box(tuple(sorted((sx * h, sx * (h + 0.07))))[0:1] + (y - 0.06, 0.0), tuple(sorted((sx * h, sx * (h + 0.07))))[1:2] + (y + 0.06, 0.16))
+        br.done()
     sl = Part("dark", bevel=0.0, name="slots")
     for sx in (-1, 1):
         sl.box((sx * (h - 0.06) - 0.012, -0.3, -0.042), (sx * (h - 0.06) + 0.012, 0.3, -0.039))
@@ -366,11 +406,14 @@ def ceiling_light():
     # the cage: two rails along, three hoops across
     for y in (-0.2, 0.17):
         pipe([(-0.56, y, z - 0.03), (-0.56, y, z - 0.1), (0.56, y, z - 0.1), (0.56, y, z - 0.03)], 0.012, "pipe", fillet=0.03)
-    for x in (-0.3, 0.3):
+    for x in ((0.0,) if S.GAME[0] else (-0.3, 0.3)):
         pipe([(x, -0.36, z - 0.03), (x, -0.36, z - 0.11), (x, 0.33, z - 0.11), (x, 0.33, z - 0.03)], 0.01, "pipe", fillet=0.03)
     # the conduit: from the lamp's surround across the face and up through the rim
-    pipe([(0.1, 0.38, z - 0.05), (0.1, 0.55, z - 0.05), (0.32, 0.72, z - 0.05), (0.32, h + 0.02, z - 0.05), (0.32, h + 0.02, 0.1), (0.62, h + 0.02, 0.1)], 0.028, "pipe", fillet=0.07)
-    pipe([(0.2, 0.38, z - 0.04), (0.2, 0.52, z - 0.04), (0.4, 0.68, z - 0.04), (0.4, h - 0.02, z - 0.04)], 0.018, "pipe", fillet=0.05)
+    if S.GAME[0]:
+        pipe([(0.1, 0.38, z - 0.05), (0.1, 0.55, z - 0.05), (0.32, 0.72, z - 0.05), (0.32, h - 0.04, z - 0.05)], 0.028, "pipe", fillet=0.07)
+    else:
+        pipe([(0.1, 0.38, z - 0.05), (0.1, 0.55, z - 0.05), (0.32, 0.72, z - 0.05), (0.32, h + 0.02, z - 0.05), (0.32, h + 0.02, 0.1), (0.62, h + 0.02, 0.1)], 0.028, "pipe", fillet=0.07)
+        pipe([(0.2, 0.38, z - 0.04), (0.2, 0.52, z - 0.04), (0.4, 0.68, z - 0.04), (0.4, h - 0.02, z - 0.04)], 0.018, "pipe", fillet=0.05)
     cl = Part("steel", bevel=0.002, name="clamps")
     cl.box((0.26, 0.76, z - 0.085), (0.45, 0.8, z)).box((0.04, 0.44, z - 0.085), (0.26, 0.48, z))
     for x0, y0, x1, y1 in ((-0.42, 0.44, -0.3, 0.5), (0.34, -0.46, 0.5, -0.4), (-0.5, -0.46, -0.3, -0.4)):       # small vents
@@ -467,7 +510,7 @@ def corridor():
     hw, hl = KW / 2, KL / 2
     # floor: a slab with two plates, grating strips along the walls, a marked line
     Part("bluegrey", bevel=0.01, name="floor slab").box((-hw - 0.12, -hl, -0.16), (hw + 0.12, hl, -0.02)).done()
-    fp = Part("white", bevel=0.006, name="floor plates")
+    fp = Part("floor", bevel=0.006, name="floor plates")
     for y0, y1 in ((-hl + 0.03, -0.02), (0.02, hl - 0.03)):
         fp.plate_xy(chamfer(-hw + 0.5, y0, -0.02, y1, 0.04), -0.02, 0.012).plate_xy(chamfer(0.02, y0, hw - 0.5, y1, 0.04), -0.02, 0.012)
     fp.done()
@@ -595,3 +638,63 @@ def column(height=3.4):
     Part("dark", bevel=0.0, name="channel").box((-0.1, r + 0.0, 0.5), (0.1, r + 0.02, h - 0.5)).done()
     for x in (-0.04, 0.04):
         pipe([(x, r + 0.035, 0.45), (x, r + 0.035, h - 0.45)], 0.022)
+
+
+# ------------------------------------------------------------------ pieces only the game needs (not on the sheets)
+@asset("wall_upper", game=True)
+def wall_upper():
+    """The second row of a room's wall: the same panel, 1.8 m high (a room is 5.2 m: plinth 0.4 + 3.0 + 1.8).
+    Above head height, and two to every wall cell: border and fields only."""
+    hw, h, bd = PW / 2, 1.8, 0.11
+    Part("bluegrey", bevel=0.0, name="carrier").box((-hw, 0.03, 0.0), (hw, 0.11, h)).done()
+    Part("white", bevel=0.008, name="border").plate_xz(chamfer(-hw, 0.0, hw, h, 0.035), -0.012, 0.03).done()
+    Part("white", bevel=0.007, name="field").plate_xz(chamfer(-hw + bd, bd, hw - bd, h - bd, 0.02), -0.045, -0.012).done()
+
+
+@asset("wall_plinth", game=True)
+def wall_plinth():
+    """The foot of a room's wall: 0.4 m of dark plinth under the panels, one panel wide."""
+    hw = PW / 2
+    Part("grey", bevel=0.008, name="plinth").plate_xz(chamfer(-hw, 0.0, hw, 0.4, (0.0, 0.0, 0.02, 0.02)), -0.03, 0.11).done()
+    Part("grey", bevel=0.006, name="plinth foot").box((-hw, -0.06, 0.0), (hw, -0.03, 0.09)).done()
+    Part("dark", bevel=0.0, name="plinth slots").box((-0.5, -0.032, 0.2), (-0.1, -0.03, 0.23)).box((0.1, -0.032, 0.2), (0.5, -0.03, 0.23)).done()
+
+
+@asset("ceiling_plain", game=True, views=[(-0.45, -1.0, -0.42), (1.0, -0.4, -0.2)])
+def ceiling_plain():
+    ceiling_frame()
+    h = CW / 2
+    pl = Part("white", bevel=0.006, name="plates")
+    pl.plate_xy(chamfer(-h + 0.1, -h + 0.1, -0.02, h - 0.1, 0.03), -0.052, -0.03).plate_xy(chamfer(0.02, -h + 0.1, h - 0.1, h - 0.1, 0.03), -0.052, -0.03)
+    pl.done()
+
+
+@asset("door_frame", game=True)
+def door_frame_piece():
+    door(frame=True, leaves=(), half=True)
+
+
+@asset("door_leaf_l", game=True)
+def door_leaf_l():
+    door(frame=False, leaves=("L",), half=True)
+
+
+@asset("door_leaf_r", game=True)
+def door_leaf_r():
+    door(frame=False, leaves=("R",), half=True)
+
+
+@asset("door_surround", game=True)
+def door_surround():
+    """What closes a doorway's cell round the door frame (3.64 m wide, 3.32 m high) up to the wall's second row:
+    a strip each side and one over the top, half the wall deep (one stands on each side of the wall)."""
+    ow, oh = DW + 0.62, DH + 0.72
+    p = Part("white", bevel=0.008, name="surround")
+    p.box((-2.0, 0.0, 0.0), (-ow, 0.15, 3.4)).box((ow, 0.0, 0.0), (2.0, 0.15, 3.4)).box((-ow, 0.0, oh), (ow, 0.15, 3.4))
+    p.done()
+
+
+@asset("column_tall", game=True)
+def column_tall():
+    """The column at a room's height (5.2 m)."""
+    column(height=5.2)

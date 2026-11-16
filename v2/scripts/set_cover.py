@@ -15,21 +15,21 @@ def crate_body(w=1.0, d=0.62, h=0.62, shell="white", z=0.0, lamps=True):
     Part(shell, bevel=0.016, name="lid").plate_xy(chamfer(-hw, -hd, hw, hd, c), seam + 0.02, z + h - 0.035).done()
     g = Part("grey", bevel=0.006, name="band")
     g.plate_xy(chamfer(-hw - 0.008, -hd - 0.008, hw + 0.008, hd + 0.008, c), seam - 0.02, seam + 0.02)
-    g.plate_xy(chamfer(-hw * 0.62, -hd * 0.62, hw * 0.62, hd * 0.62, 0.05), z + h - 0.035, z + h)           # the lid's ridge
     g.plate_xy(chamfer(-hw + 0.02, -hd + 0.02, hw - 0.02, hd - 0.02, c), z, z + 0.03)                      # the foot
     g.done()
+    Part("grey", bevel=0.006, name="lid ridge").plate_xy(chamfer(-hw * 0.62, -hd * 0.62, hw * 0.62, hd * 0.62, 0.05), z + h - 0.035, z + h).done()
     # corner guards: a chunky block on each of the eight corners, cut at 45 degrees
-    gd = Part("grey", bevel=0.01, name="guards")
     gw, gh = min(0.15, w * 0.16), h * 0.24
-    for sx in (-1, 1):
-        for sy in (-1, 1):
-            for z0, z1 in ((z, z + gh), (z + h - gh - 0.02, z + h - 0.01)):
+    for part_name, z0, z1 in (("guards", z, z + gh), ("lid guards", z + h - gh - 0.02, z + h - 0.01)):
+        gd = Part("grey", bevel=0.01, name=part_name)
+        for sx in (-1, 1):
+            for sy in (-1, 1):
                 x0, x1 = sorted((sx * (hw + 0.012), sx * (hw - gw)))
                 y0, y1 = sorted((sy * (hd + 0.012), sy * (hd - gw)))
                 cut = [0.0, 0.0, 0.0, 0.0]
                 cut[{(-1, -1): 0, (1, -1): 1, (1, 1): 2, (-1, 1): 3}[(sx, sy)]] = c + 0.012
                 gd.plate_xy(chamfer(x0, y0, x1, y1, tuple(cut)), z0, z1)
-    gd.done()
+        gd.done()
     # the plate let into the lower front and back, with two slots
     for sy in (-1, 1):
         y = sy * hd
@@ -54,7 +54,7 @@ def crate_body(w=1.0, d=0.62, h=0.62, shell="white", z=0.0, lamps=True):
         Part("dark", bevel=0.004, name="recess").plate_yz(chamfer(-hd * 0.42, seam - 0.17, hd * 0.42, seam - 0.045, 0.02), x, x + sx * 0.006).done()
         handle((x + sx * 0.004, -hd * 0.26, seam - 0.075), (x + sx * 0.004, hd * 0.26, seam - 0.075), (sx * 0.034, 0, -0.04), r=0.009)
     if lamps:
-        Part("cyan", bevel=0.0, name="lamp").box((-0.04, -hd - 0.003, seam + 0.07), (0.04, -hd + 0.002, seam + 0.082)).done()
+        Part("cyan", bevel=0.0, name="lid lamp").box((-0.04, -hd - 0.003, seam + 0.07), (0.04, -hd + 0.002, seam + 0.082)).done()
         Part("orange", bevel=0.0, name="lamp").box((-hw + 0.06, -hd - 0.003, seam - 0.04), (-hw + 0.085, -hd + 0.002, seam - 0.03)) \
             .box((hw * 0.72, -hd - 0.014, z + 0.19), (hw * 0.72 + 0.03, -hd - 0.011, z + 0.2)).done()
         Part("cyan", bevel=0.0, name="lamp").box((-hw + 0.03, -hd - 0.003, seam - 0.04), (-hw + 0.055, -hd + 0.002, seam - 0.03)).done()

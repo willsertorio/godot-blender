@@ -666,6 +666,39 @@ func death(dir: String) -> void:
 	get_tree().quit()
 
 
+## The rooms alone (-- --game-capture=DIR --part=rooms [--match=N,N]): every room (or the rooms numbered in --match)
+## from two opposite corners at eye height, no robots, no gun, no HUD: for looking at the set and the light.
+func rooms(dir: String) -> void:
+	DirAccess.make_dir_recursive_absolute(dir)
+	player.invulnerable = true
+	player.overlay.visible = false
+	game._ui.visible = false
+	for r in game.robots:
+		r.process_mode = Node.PROCESS_MODE_DISABLED
+		r.visible = false
+	var want: Array = []
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--match="):
+			want = Array(a.trim_prefix("--match=").split(","))
+	await _wait(1.0)
+	for i in gen.rooms.size():
+		if not want.is_empty() and not want.has(str(i)):
+			continue
+		var room: DungeonGen.Room = gen.rooms[i]
+		var lo := Vector3(room.rect.position.x * 4.0, 0, room.rect.position.y * 4.0)
+		var hi := Vector3(room.rect.end.x * 4.0, 0, room.rect.end.y * 4.0)
+		var mid := (lo + hi) / 2.0
+		var k := 0
+		for corner in [lo + Vector3(1.6, 0, 1.6), hi - Vector3(1.6, 0, 1.6)]:
+			_look_at(corner, mid + Vector3(0, 1.3, 0))
+			await _wait(0.4)
+			var info := "%d draw calls, %dk triangles" % [int(RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME)), int(RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME) / 1000.0)]
+			await _shot(dir, "room_%02d_%s" % [i, "ab"[k]])
+			print("[rooms] room %d %s: %s" % [i, "ab"[k], info])
+			k += 1
+	get_tree().quit()
+
+
 ## Bullet marks (-- --game-capture=DIR --part=marks): rounds into a wall and the floor, seen close and from 4 m.
 func marks(dir: String) -> void:
 	DirAccess.make_dir_recursive_absolute(dir)
@@ -755,12 +788,12 @@ func capture(dir: String) -> void:
 		victim.hit(9999.0)
 		await _wait(3.5)
 		await _shot(dir, "09_wreck")
-	var exit_room: DungeonGen.Room = gen.rooms[gen.exit_room]
-	var ec := Vector3((exit_room.rect.position.x + 0.5) * 4.0, 0, (exit_room.rect.position.y + 0.5) * 4.0)
-	_look_at(ec, gen.exit_pos + Vector3(0, 1.4, 0))
+	var side: Vector3 = game._exit_xf.basis.x                       # (from in front and a little aside: nothing stands there)
+	var front: Vector3 = game._exit_xf.basis.z
+	_look_at(gen.exit_pos + front * 7.0 + side * 2.5, gen.exit_pos + Vector3(0, 1.5, 0))
 	await _wait(1.5)
 	await _shot(dir, "10_exit_room")
-	_look_at(gen.exit_pos + game._exit_xf.basis.z * 3.4, gen.exit_pos + Vector3(0, 1.4, 0))
+	_look_at(gen.exit_pos + front * 4.6 - side * 1.2, gen.exit_pos + Vector3(0, 1.5, 0))
 	await _wait(0.8)
 	await _shot(dir, "11_exit_portal")
 	for r in gen.rooms:                                    # the map with everything found

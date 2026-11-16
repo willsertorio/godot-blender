@@ -160,3 +160,25 @@ Rules learned: never two materials in one plane (it flickers in the game: the do
 wall's opening); flat things on the floor at z 0.008 or higher (the tiles' joints end at 0.004); bare metal the size of
 a duct or a shelf comes out near black in the game: use `PaintGrey`. Look at new pieces with
 `tools/v2_kit_sheet.gd` before placing them.
+
+## The environment set (what the game is built from)
+
+The user's 24 reference sheets (`reference/set/`) modelled as 33 assets, approved from the sheets
+`renders/set_sheet_<n>.jpg`, then brought into the game as `assets/models/v2/set.glb` (41 pieces with the game-only
+ones).
+
+    blender -b -P v2/scripts/build_set.py [-- --only=a,b] [--render]   # set.blend + renders/set/<name>_a/_b.png
+    python3 -I v2/scripts/set_sheet.py                                 # the approval sheets
+    blender -b -P v2/scripts/export_set.py [-- --no-ao] [--only=a,b]   # set.glb for the game (45 s), then godot --headless --import
+
+- `setlib.py`: the modelling helpers (`Part`, `pipe`, `cable`, `ring`, `handle`, outlines), the materials by short
+  name, the studio. `set_structure.py`, `set_cover.py`, `set_equipment.py`, `set_pickups.py`: one function per asset.
+- For the game the same functions run with `setlib.GAME[0]` set: fewer sides on round things, coarser pipes and
+  cables, and the pieces that tile by the hundred (walls, floor tiles, ceiling panels) lose what cannot be seen
+  from a few metres. Pieces that exist only for the game (two-row walls, the doorway split into frame, surround and
+  leaves, the tall column) are at the end of `set_structure.py`.
+- The Blender materials find worn edges and crevices with Cycles-only nodes (Bevel, ambient occlusion). The export
+  writes both into the vertex colour (G = chamfer faces, R = baked occlusion) and the game's shader reads them: no
+  texture per asset, no UVs.
+- A material for what is walked on is `floor`: the same paint as `white` here, a tone darker in the game.
+The Godot side is described in CLAUDE.md ("The environment set", "V2 game").

@@ -29,13 +29,16 @@ var _gun_room := -1
 var _concept := false             # the detailed room of the Blender scene instead of the studio
 
 
-func _environment() -> void:
+## `ambient`: the even light from all sides; `floor_light`: the light straight down. The lab's numbers are the
+## defaults; the dungeon asks for more of the first (its props are lit from two or three lamps under the ceiling,
+## and a side turned away from them was nearly black: in a real white room the floor lights it).
+func _environment(ambient: float = 0.16, floor_light: float = 0.32, shadows_to: float = 34.0) -> void:
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color(0.02, 0.025, 0.03)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.88, 0.92, 0.95)
-	env.ambient_light_energy = 0.16
+	env.ambient_light_energy = ambient
 	var sky := Sky.new()                            # only for reflections on the metal (CC0 HDRI, as in V1)
 	var pano := PanoramaSkyMaterial.new()
 	pano.panorama = load("res://assets/sky/bank_vault_1k.hdr")
@@ -62,7 +65,7 @@ func _environment() -> void:
 	var down := DirectionalLight3D.new()
 	down.rotation_degrees = Vector3(-84.0, 20.0, 0.0)
 	down.light_color = Color(0.98, 0.99, 1.0)
-	down.light_energy = 0.5 if _low else 0.32
+	down.light_energy = floor_light * (1.56 if _low else 1.0)
 	# Its shadows fall straight down: the pools under the robots, the stairs and the mezzanine. They are the only
 	# shadows: one flat pass over the three rooms (the shell casts none). A shadow-casting omni light draws
 	# everything in its range six times (a cube; the dual-paraboloid mode drew nothing here): two of those per room
@@ -70,7 +73,7 @@ func _environment() -> void:
 	# (measured: with shadows on, this light comes out about half as bright again as without, hence 0.32)
 	down.shadow_enabled = not _low
 	down.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
-	down.directional_shadow_max_distance = 34.0
+	down.directional_shadow_max_distance = shadows_to       # (everything that casts within it is drawn twice)
 	down.shadow_blur = 2.2
 	down.shadow_bias = 0.06
 	down.shadow_normal_bias = 1.5

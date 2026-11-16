@@ -11,8 +11,9 @@ func _run() -> void:
 	var args := OS.get_cmdline_user_args()
 	var dir: String = args[0]
 	var first := int(args[1]) if args.size() > 1 else 0
+	var file: String = args[2] if args.size() > 2 else "kit.glb"       # (set.glb: the environment set)
 	DirAccess.make_dir_recursive_absolute(dir)
-	var kit := (load(V2Assets.DIR + "kit.glb") as PackedScene).instantiate() as Node3D
+	var kit := (load(V2Assets.DIR + file) as PackedScene).instantiate() as Node3D
 	root.add_child(kit)
 	V2Assets.apply(kit)
 	var env := WorldEnvironment.new()
@@ -50,9 +51,9 @@ func _run() -> void:
 		var pname := String(piece.name)
 		# walls and floors are seen from the room's side (Godot +Z after the export); ceilings from below
 		var dir3 := Vector3(0.55, 0.45, 1.0).normalized()
-		if pname.contains("Ceiling"):
+		if pname.to_lower().contains("ceiling"):
 			dir3 = Vector3(0.5, -0.75, 1.0).normalized()
-		elif pname.begins_with("Floor") or pname.begins_with("CFloor"):
+		elif pname.to_lower().begins_with("floor") or pname.begins_with("CFloor"):
 			dir3 = Vector3(0.3, 1.0, 0.8).normalized()
 		cam.global_position = c + dir3 * r * 2.3
 		cam.look_at(c)

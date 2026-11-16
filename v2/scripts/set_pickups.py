@@ -92,21 +92,20 @@ def loot(shell):
     hz.done()
     for sx in (-1, 1):                                       # the straps over the lid
         x0, x1 = sorted((sx * 0.2, sx * 0.27))
-        Part("grey", bevel=0.005, name="strap").box((x0, -0.29, 0.37), (x1, 0.29, 0.59)).done() if False else \
-            Part("grey", bevel=0.005, name="strap").box((x0, -0.292, 0.368), (x1, -0.275, 0.585)).box((x0, -0.28, 0.555), (x1, 0.28, 0.588)).done()
+        Part("grey", bevel=0.005, name="lid strap").box((x0, -0.292, 0.368), (x1, -0.275, 0.585)).box((x0, -0.28, 0.555), (x1, 0.28, 0.588)).done()
 
 
-@asset("loot_crate")
+@asset("loot_crate", lid=(0.0, 0.28, 0.348))
 def loot_crate():
     loot("white")
 
 
-@asset("loot_crate_olive")
+@asset("loot_crate_olive", lid=(0.0, 0.28, 0.348))
 def loot_crate_olive():
     loot("olive")
 
 
-@asset("loot_crate_green")
+@asset("loot_crate_green", lid=(0.0, 0.28, 0.348))
 def loot_crate_green():
     loot("green")
 

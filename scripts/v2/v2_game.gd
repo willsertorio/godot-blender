@@ -119,7 +119,7 @@ func _ready() -> void:
 			bot = maxi(int(a.trim_prefix("--bot=")), 1) if a.contains("=") else 1
 	_rng.seed = hash(seed_used) + 5
 	_loot_rng.seed = hash(seed_used) + 11
-	_environment()
+	_environment(0.38, 0.25, 22.0)
 	gen = DungeonGen.new().generate(seed_used, 0)           # (the threat level is applied here, not by the generator: see below)
 	dungeon = V2Dungeon.new()
 	add_child(dungeon)
@@ -127,7 +127,7 @@ func _ready() -> void:
 	V2Fx.layer_at = func(p: Vector3) -> int:               # (bullet marks, the dropped gun: lit by the room they are in)
 		var a := dungeon.area_at(p)
 		return int(dungeon.areas[a].layer) if a >= 0 else 0xFFFFF
-	_props = (load(V2Assets.DIR + "props.glb") as PackedScene).instantiate()
+	_props = (load(V2Assets.DIR + "set.glb") as PackedScene).instantiate()      # (the environment set: crates, pickups, the exit)
 	V2Assets.apply(_props)
 	for l in gen.loot_spawns:
 		_crate(l)
@@ -257,14 +257,15 @@ func _solid(parent: Node3D, size: Vector3, at: Vector3) -> void:
 ## A supply crate against a wall (the generator's place and what is in it), its front to the room.
 func _crate(l: Dictionary) -> void:
 	var out := Vector3(sin(float(l.yaw)), 0, cos(float(l.yaw)))          # toward the wall
-	var node := _prop("Crate")
+	# (the paint says what is in it: olive = ammunition, white = a health pack, green = a med kit)
+	var node := _prop({"ammo": "loot_crate_olive", "health": "loot_crate", "kit": "loot_crate_green"}[String(l.payoff)])
 	add_child(node)
 	node.position = (l.pos as Vector3) + out * 0.5
 	node.rotation.y = float(l.yaw) + PI
-	_solid(node, Vector3(0.9, 0.58, 0.56), Vector3(0, 0.29, 0))
+	_solid(node, Vector3(1.0, 0.59, 0.62), Vector3(0, 0.3, 0))
 	_set_layer(node, dungeon.areas[dungeon.area_at(l.pos)].layer)
-	crates.append({"node": node, "lid": node.find_child("Crate_Lid", true, false), "light": node.find_child("Crate_Light", true, false),
-		"what": String(l.payoff), "open": false})
+	var lid := node.find_child("Crate_Lid*", true, false)       # (the three crates' lids: Crate_Lid, Crate_Lid_001, ...)
+	crates.append({"node": node, "lid": lid, "light": lid.find_child("*ECyan*", true, false), "what": String(l.payoff), "open": false})
 
 
 ## The exit portal: the gate in the middle of the deepest room, its front toward that room's doorway.
@@ -272,13 +273,13 @@ func _exit() -> void:
 	var room: DungeonGen.Room = gen.rooms[gen.exit_room]
 	var to := (DungeonGen.cell_center(room.doorway_cells[0]) - gen.exit_pos) if not room.doorway_cells.is_empty() else Vector3(0, 0, 1)
 	var yaw := (PI / 2.0 if to.x > 0.0 else -PI / 2.0) if absf(to.x) > absf(to.z) else (0.0 if to.z > 0.0 else PI)
-	var gate := _prop("ExitGate")
+	var gate := _prop("exit_portal")
 	add_child(gate)
 	gate.position = gen.exit_pos
 	gate.rotation.y = yaw
-	for sx in [-1.0, 1.0]:
-		_solid(gate, Vector3(0.42, 2.8, 0.6), Vector3(sx * 1.06, 1.4, 0))
-	_solid(gate, Vector3(2.5, 0.42, 0.6), Vector3(0, 2.61, 0))
+	for sx in [-1.0, 1.0]:                                  # (the arch's legs and head stop the player; the leaves by the field do not)
+		_solid(gate, Vector3(0.5, 3.0, 0.7), Vector3(sx * 1.2, 1.5, 0))
+	_solid(gate, Vector3(2.9, 0.6, 0.7), Vector3(0, 3.05, 0))
 	var layer: int = dungeon.areas[dungeon.area_at(gen.exit_pos)].layer
 	for side in [-1.0, 1.0]:
 		var sign := Label3D.new()                          # (not in the heading font: that one has no X)
@@ -287,11 +288,11 @@ func _exit() -> void:
 		sign.pixel_size = 0.0022
 		sign.modulate = Color(0.1, 0.04, 0.22)
 		sign.outline_size = 0
-		sign.position = Vector3(0, 2.61, side * 0.33)
+		sign.position = Vector3(0, 3.23, side * 0.34)
 		sign.rotation_degrees.y = 0.0 if side > 0.0 else 180.0
 		gate.add_child(sign)
 		var spot := SpotLight3D.new()                      # the field lights the floor on both sides
-		spot.light_color = V2Ui.VIOLET
+		spot.light_color = Color(0.35, 0.9, 1.0)           # (the field's colour)
 		spot.light_energy = 2.0
 		spot.spot_range = 5.0
 		spot.spot_angle = 70.0
@@ -346,15 +347,17 @@ func open_crate(c: Dictionary) -> void:
 	var tw := create_tween()
 	tw.tween_property(c.lid as Node3D, "rotation_degrees:x", -105.0, 0.45).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	if c.light != null:
-		(c.light as MeshInstance3D).set_surface_override_material(0, V2Assets.material("RFrame"))
+		(c.light as MeshInstance3D).set_surface_override_material(0, V2Assets.material("EDarkSteel"))      # (its lamp goes out)
 	drop(String(c.what), node.global_position + Vector3(0, 0.62, 0), 0.5)      # what is in it rises out of it
 
 
 ## A pickup at `at` (world), which the player takes by walking to it, after `delay` seconds.
 func drop(what: String, at: Vector3, delay: float = 0.0) -> void:
-	var node := _prop({"ammo": "AmmoBox", "health": "HealthCell", "kit": "MedKit"}[what])
+	var node := _prop({"ammo": "ammo_box", "health": "medkit_white", "kit": "medkit"}[what])
 	add_child(node)
 	node.global_position = at
+	if what == "ammo":
+		node.scale = Vector3.ONE * 1.7                     # (a box of rounds is 20 cm long: bigger, to be seen on the floor)
 	var area := dungeon.area_at(at)
 	if area >= 0:
 		_set_layer(node, dungeon.areas[area].layer)

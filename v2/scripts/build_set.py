@@ -35,7 +35,7 @@ os.makedirs(OUT, exist_ok=True)
 x = 0.0
 roots = {}
 for name, (fn, opts) in S.ASSETS.items():
-    if only and name not in only:
+    if (only and name not in only) or (opts.get("game") and name not in only):
         continue
     root = S.begin(name, at=(x, 0, 0))
     fn()

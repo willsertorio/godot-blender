@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import v2lib as L  # noqa: E402
 
 COLL = "Set"
+GAME = [False]                  # True: the game's detail (export_set.py): fewer sides to round things, coarser curves
 _root = [None]
 _count = [0]
 ASSETS = {}                     # name -> (function, {options})
@@ -375,6 +376,8 @@ def mat(key):
     steel_wear = dict(edge_wear=0.35, wear_color=(0.6, 0.6, 0.6), cavity=0.5, wear_radius=0.002, wear_noise=140.0, cavity_dist=0.02)
     make = {
         "white": lambda: paint("EPaint", (0.76, 0.77, 0.76)),                      # the off-white shell of everything
+        # (what is walked on: the same paint here; the game gives it a tone under the walls', the lamps above bleach it)
+        "floor": lambda: paint("EPaintFloor", (0.76, 0.77, 0.76)),
         "grey": lambda: paint("EPaintGrey", (0.15, 0.16, 0.17), wear_color=(0.42, 0.42, 0.42), smudge=0.4),
         "bluegrey": lambda: paint("EPaintBlueGrey", (0.36, 0.41, 0.44), wear_color=(0.2, 0.2, 0.21), smudge=0.5),      # the frames behind the panels
         "panelscreen": lambda: screen("EPanelScreen", color=(0.3, 0.6, 0.52), cells=4.0, strength=0.16),
@@ -454,6 +457,8 @@ class Part(L.Builder):
         return self
 
     def cyl(self, a, b, r, segs=20, r2=None, caps=True):
+        if GAME[0]:
+            segs = 5 if segs <= 6 else max(6, int(round(segs * 0.5)))
         super().cyl(a, b, r, segs=segs, r2=r2, caps=caps)
         return self
 
@@ -561,11 +566,11 @@ def _fillet(points, radius, seg=6):
 
 def pipe(points, r, material="pipe", fillet=None, res=5, name="pipe", m=None):
     """A rigid pipe along straight runs with round elbows (fillet = bend radius, default 2.2 r)."""
-    pts = _fillet(points, r * 2.2 if fillet is None else fillet)
+    pts = _fillet(points, r * 2.2 if fillet is None else fillet, seg=3 if GAME[0] else 6)
     cu = bpy.data.curves.new(_name(name), "CURVE")
     cu.dimensions = "3D"
     cu.bevel_depth = r
-    cu.bevel_resolution = res
+    cu.bevel_resolution = (2 if r > 0.03 else 1) if GAME[0] else res
     cu.use_fill_caps = True
     sp = cu.splines.new("POLY")
     sp.points.add(len(pts) - 1)
@@ -581,6 +586,9 @@ def cable(points, r=0.012, material="cable", name="cable", m=None):
     """A flexible cable through the points (smooth)."""
     ob = L.curve_tube(_name(name), [Vector(p) for p in points], r, mat(material) if isinstance(material, str) else material, collection=COLL, resolution=4)
     ob.data.use_fill_caps = True
+    if GAME[0]:
+        ob.data.bevel_resolution = 1 if r > 0.014 else 0     # (a thin cable: four sides)
+        ob.data.resolution_u = 3
     return _adopt(ob, m)
 
 
@@ -593,9 +601,9 @@ def ring(centre, axis, R, r, material="steel", name="ring", m=None, res=5):
     cu = bpy.data.curves.new(_name(name), "CURVE")
     cu.dimensions = "3D"
     cu.bevel_depth = r
-    cu.bevel_resolution = res
+    cu.bevel_resolution = 1 if GAME[0] else res
     sp = cu.splines.new("POLY")
-    n = 32
+    n = 16 if GAME[0] else 32
     sp.points.add(n - 1)
     for i, p in enumerate(sp.points):
         a = math.tau * i / n
