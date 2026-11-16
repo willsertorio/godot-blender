@@ -29,6 +29,7 @@ const SPECIAL := {  # materials that are procedural in Blender
 const SET_PAINT := {
 	"EPaint": [Vector3(0.76, 0.77, 0.76), Vector3(0.17, 0.17, 0.18), 0.75, 0.05],
 	"EPaintFloor": [Vector3(0.4, 0.41, 0.42), Vector3(0.2, 0.2, 0.21), 0.7, 0.04],     # the floor tiles: the walls' paint under the lamps bleached
+	"EAccent": [Vector3(0.08, 0.36, 0.42), Vector3(0.5, 0.5, 0.5), 0.4, 0.1],            # the line of colour round a room (see `accent`)
 	"EPaintGrey": [Vector3(0.15, 0.16, 0.17), Vector3(0.42, 0.42, 0.42), 0.4, 0.05],
 	"EPaintDark": [Vector3(0.07, 0.075, 0.082), Vector3(0.5, 0.5, 0.5), 0.3, 0.05],
 	"EPaintBlueGrey": [Vector3(0.36, 0.41, 0.44), Vector3(0.2, 0.2, 0.21), 0.5, 0.05],
@@ -190,6 +191,16 @@ static func _set_material(mat_name: String) -> Material:
 		s.emission = d.emit
 		s.emission_energy_multiplier = d.energy
 	return s
+
+
+## The accent paint in another colour (linear, as the Blender tints): a room theme's line.
+static func accent(tint: Vector3) -> Material:
+	var key := "EAccent#%s" % str(tint)
+	if not _mats.has(key):
+		var m := _set_material("EAccent") as ShaderMaterial
+		m.set_shader_parameter("tint", tint)
+		_mats[key] = m
+	return _mats[key]
 
 
 static func material(mat_name: String, mesh_key: String = "", asset: String = "") -> Material:

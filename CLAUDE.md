@@ -314,7 +314,7 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   rooms 3..6 cells a side; corridors 1 cell wide; a tree from the spawn room; the exit in the deepest room; doors on
   about half the doorways; `enemy_spawns` turret / brawler / pursuer = our turret / spider / drone; `loot_spawns`;
   `deco_spawns`). `-- --seed=N` gives the same dungeon again; `-- --threat=N` starts at that threat level.
-- Kit: **the environment set** (`assets/models/v2/set.glb`, 41 pieces; see "The environment set" below). The kit
+- Kit: **the environment set** (`assets/models/v2/set.glb`, 43 pieces; see "The environment set" below). The kit
   before it (`v2/scripts/build_kit.py` -> `kit.glb`, 51 pieces, and `build_props.py` -> `props.glb`) is no longer
   loaded by the game: the user found its pieces poorly designed. Its files stay in the repository.
   Rooms 5.2 m high (the turret's pylon ends there), corridors 3.4 m, doorways 2.4 x 2.6 m (every robot fits).
@@ -338,6 +338,14 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   so every check and the bot run headless. `path(a, b)` = cells through open doorways; `arena(area, margin)`;
   `update()` hides areas more than `SEEN` (28 m) away and lets the player's area's lights reach the gun.
   `V2_TRIS=1` in the environment prints each area's triangles and pieces.
+- Dressing (**user: denser big rooms, some grime, a colour per theme, corridor variants: "ok"**): a theme has an
+  `accent` (the paint of the line round the room: a strip on `wall_plinth` and one at the foot of `wall_upper`,
+  material `EAccent`, recoloured per theme by `V2Assets.accent`: lab teal, storage ochre, server blue, power red,
+  workshop green), a `light` (a slight tint of its lamps) and `small` things (crate, drum) that `_beside` puts next
+  to cover shallow enough to keep the pair within 1.2 m of its cell corner, and `_against` now and then beside a
+  piece along a wall; rooms of 5 x 5 cells and more always have something in their middle and a few pieces off the
+  pattern; `FILL` 0.7. Corridors: `CORRIDORS` = `corridor` (wire tray, rail), `corridor_b` (a display, a duct),
+  `corridor_c` (three pipes with a valve): one kind per corridor, one cell in five another.
 - Light of the dungeon (`v2_game.gd`: `_environment(0.38, 0.25, 22.0)` = ambient, the light straight down, how far
   it casts shadows; room lamps 0.25): **more even light than the lab's**. With the lab's numbers a prop's side
   turned away from the two or three lamps of its room was nearly black (white drums looked dark grey: it read as

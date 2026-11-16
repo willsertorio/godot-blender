@@ -506,7 +506,9 @@ KW, KH, KL = 4.0, 3.4, 4.0
 
 
 @asset("corridor", views=[(-1.0, -0.62, 0.3), (0.0, -1.0, 0.08)], res=[(760, 620), (560, 620)], hide=["near_", None])
-def corridor():
+def corridor(variant=0):
+    """variant 0: the reference's (a wire tray under the ceiling, a rail and small boxes on the walls);
+    1: a display on one wall, a duct under the ceiling; 2: three pipes with a valve along one wall, more floor grating."""
     hw, hl = KW / 2, KL / 2
     # floor: a slab with two plates, grating strips along the walls, a marked line
     Part("bluegrey", bevel=0.01, name="floor slab").box((-hw - 0.12, -hl, -0.16), (hw + 0.12, hl, -0.02)).done()
@@ -531,15 +533,29 @@ def corridor():
     for y in (-1.0, 1.0):
         Part("light", bevel=0.006, name="lamp").box((-0.42, y - 0.24, KH - 0.07), (0.42, y + 0.24, KH - 0.05)).done()
         Part("pipe", bevel=0.003, name="lamp bars").box((-0.44, y - 0.01, KH - 0.085), (0.44, y + 0.01, KH - 0.05)).done()
-    tr = Part("steel", bevel=0.0, name="tray")
-    for x in (0.95, 1.3):
-        tr.cyl((x, -hl + 0.05, KH - 0.16), (x, hl - 0.05, KH - 0.16), 0.008, segs=6).cyl((x, -hl + 0.05, KH - 0.08), (x, hl - 0.05, KH - 0.08), 0.008, segs=6)
-    for k in range(27):
-        y = -hl + 0.1 + k * 0.146
-        tr.cyl((0.95, y, KH - 0.16), (1.3, y, KH - 0.16), 0.005, segs=5).cyl((0.95, y, KH - 0.16), (0.95, y, KH - 0.08), 0.005, segs=5).cyl((1.3, y, KH - 0.16), (1.3, y, KH - 0.08), 0.005, segs=5)
-    tr.done()
-    for k in range(4):
-        cable([(1.0 + k * 0.08, -hl + 0.06, KH - 0.14), (1.01 + k * 0.08, 0.0, KH - 0.142), (1.0 + k * 0.08, hl - 0.06, KH - 0.14)], 0.015, ("cable", "pipe", "cable", "cable")[k])
+    if variant == 1:                                         # a duct in place of the tray, on hangers
+        Part("grey", bevel=0.012, name="duct").box((0.86, -hl + 0.02, KH - 0.3), (1.36, hl - 0.02, KH - 0.06)).done()
+        hg = Part("pipe", bevel=0.004, name="duct hangers")
+        for y in (-1.3, 0.0, 1.3):
+            hg.box((0.84, y - 0.03, KH - 0.32), (1.38, y + 0.03, KH - 0.3)).box((0.84, y - 0.03, KH - 0.32), (0.86, y + 0.03, KH)).box((1.36, y - 0.03, KH - 0.32), (1.38, y + 0.03, KH))
+        hg.done()
+    elif variant == 2:                                       # two pipes under the ceiling
+        for x in (0.95, 1.22):
+            pipe([(x, -hl + 0.05, KH - 0.1), (x, hl - 0.05, KH - 0.1)], 0.055 if x < 1.0 else 0.04, "pipe")
+        cl = Part("grey", bevel=0.004, name="pipe clamps")
+        for y in (-1.2, 1.2):
+            cl.box((0.86, y - 0.04, KH - 0.18), (1.3, y + 0.04, KH - 0.16)).box((0.86, y - 0.04, KH - 0.18), (0.88, y + 0.04, KH)).box((1.28, y - 0.04, KH - 0.18), (1.3, y + 0.04, KH))
+        cl.done()
+    else:
+        tr = Part("steel", bevel=0.0, name="tray")
+        for x in (0.95, 1.3):
+            tr.cyl((x, -hl + 0.05, KH - 0.16), (x, hl - 0.05, KH - 0.16), 0.008, segs=6).cyl((x, -hl + 0.05, KH - 0.08), (x, hl - 0.05, KH - 0.08), 0.008, segs=6)
+        for k in range(27):
+            y = -hl + 0.1 + k * 0.146
+            tr.cyl((0.95, y, KH - 0.16), (1.3, y, KH - 0.16), 0.005, segs=5).cyl((0.95, y, KH - 0.16), (0.95, y, KH - 0.08), 0.005, segs=5).cyl((1.3, y, KH - 0.16), (1.3, y, KH - 0.08), 0.005, segs=5)
+        tr.done()
+        for k in range(4):
+            cable([(1.0 + k * 0.08, -hl + 0.06, KH - 0.14), (1.01 + k * 0.08, 0.0, KH - 0.142), (1.0 + k * 0.08, hl - 0.06, KH - 0.14)], 0.015, ("cable", "pipe", "cable", "cable")[k])
     pipe([(-1.1, -hl + 0.05, KH - 0.06), (-1.1, hl - 0.05, KH - 0.06)], 0.035, "pipe")
     # the walls: ribs with braced corners, between them three panels a side
     for sx in (-1, 1):
@@ -567,14 +583,32 @@ def corridor():
             x0, x1 = sorted((xw - sx * 0.072, xw - sx * 0.069))
             dk.box((x0, y0 + 0.08, 1.38), (x1, y1 - 0.08, 1.39))
         dk.done()
-        # what is on the panels: a rail on one, a vent and a small box on another, a riser between two ribs
         xf = xw - sx * 0.07
         y0 = -hl + 0.16 + (KL - 0.18) / 3
-        handle((xf, y0 + 0.2, 1.75), (xf, y0 + 0.9, 1.75), (-sx * 0.06, 0, 0), r=0.022, material="pipe")
-        sm = Part("grey", bevel=0.004, name="wall fittings")
         x0, x1 = sorted((xf, xf - sx * 0.02))
-        sm.box((x0, y0 + 0.2, 0.62), (x1, y0 + 0.85, 0.8)).box((x0, y0 + 0.75, 1.2), (x1, y0 + 0.95, 1.42)).box((x0, -hl + 0.5, 2.3), (x1, -hl + 1.1, 2.36))
-        sm.done()
+        if variant == 1 and sx > 0:
+            # a display in the middle panel, a status strip under it
+            xa, xb = sorted((xf - sx * 0.012, xf - sx * 0.03))
+            Part("dark", bevel=0.006, name="display frame").plate_yz(chamfer(y0 + 0.1, 1.05, y0 + 1.02, 2.2, 0.04), x0, x1).done()
+            Part("panelscreen", bevel=0.0, name="display").box((xa, y0 + 0.16, 1.11), (xb, y0 + 0.96, 2.14)).done()
+            Part("ledgreen", bevel=0.0, name="status").box((xa, y0 + 0.2, 0.9), (xb, y0 + 0.3, 0.93)).done()
+            Part("orange", bevel=0.0, name="status").box((xa, y0 + 0.36, 0.9), (xb, y0 + 0.46, 0.93)).done()
+        elif variant == 2 and sx > 0:
+            # three pipes along the wall through the ribs, a valve on the middle one
+            for k, z in enumerate((1.2, 1.42, 1.64)):
+                pipe([(xw - sx * 0.16, -hl + 0.05, z), (xw - sx * 0.16, hl - 0.05, z)], (0.045, 0.06, 0.035)[k], "pipe")
+            fl = Part("grey", bevel=0.004, name="flanges")
+            for y in (y0 + 0.25, y0 + 0.85):
+                fl.cyl((xw - sx * 0.16, y - 0.02, 1.42), (xw - sx * 0.16, y + 0.02, 1.42), 0.085, segs=12)
+            fl.done()
+            valve_wheel((xw - sx * 0.27, y0 + 0.55, 1.42), (-sx, 0, 0), R=0.1)
+            Part("pipe", bevel=0.0, name="valve stem").cyl((xw - sx * 0.16, y0 + 0.55, 1.42), (xw - sx * 0.27, y0 + 0.55, 1.42), 0.016, segs=6).done()
+        else:
+            # what is on the panels: a rail on one, a vent and a small box on another, a riser between two ribs
+            handle((xf, y0 + 0.2, 1.75), (xf, y0 + 0.9, 1.75), (-sx * 0.06, 0, 0), r=0.022, material="pipe")
+            sm = Part("grey", bevel=0.004, name="wall fittings")
+            sm.box((x0, y0 + 0.2, 0.62), (x1, y0 + 0.85, 0.8)).box((x0, y0 + 0.75, 1.2), (x1, y0 + 0.95, 1.42)).box((x0, -hl + 0.5, 2.3), (x1, -hl + 1.1, 2.36))
+            sm.done()
         pipe([(xw - sx * 0.2, hl / 3 + 0.16, 0.44), (xw - sx * 0.2, hl / 3 + 0.16, KH - 0.44)], 0.035, "pipe")
         pipe([(xw - sx * 0.12, -hl + 0.05, 0.25), (xw - sx * 0.12, hl - 0.05, 0.25)], 0.03, "pipe")
         st = Part("light", bevel=0.0, name="cove")
@@ -649,6 +683,17 @@ def wall_upper():
     Part("bluegrey", bevel=0.0, name="carrier").box((-hw, 0.03, 0.0), (hw, 0.11, h)).done()
     Part("white", bevel=0.008, name="border").plate_xz(chamfer(-hw, 0.0, hw, h, 0.035), -0.012, 0.03).done()
     Part("white", bevel=0.007, name="field").plate_xz(chamfer(-hw + bd, bd, hw - bd, h - bd, 0.02), -0.045, -0.012).done()
+    Part("accent", bevel=0.003, name="upper line").box((-hw + 0.04, -0.024, 0.025), (hw - 0.04, -0.004, 0.095)).done()
+
+
+@asset("corridor_b", game=True)
+def corridor_b():
+    corridor(1)
+
+
+@asset("corridor_c", game=True)
+def corridor_c():
+    corridor(2)
 
 
 @asset("wall_plinth", game=True)
@@ -657,6 +702,7 @@ def wall_plinth():
     hw = PW / 2
     Part("grey", bevel=0.008, name="plinth").plate_xz(chamfer(-hw, 0.0, hw, 0.4, (0.0, 0.0, 0.02, 0.02)), -0.03, 0.11).done()
     Part("grey", bevel=0.006, name="plinth foot").box((-hw, -0.06, 0.0), (hw, -0.03, 0.09)).done()
+    Part("accent", bevel=0.003, name="plinth line").box((-hw, -0.04, 0.265), (hw, -0.02, 0.36)).done()       # the room's colour
     Part("dark", bevel=0.0, name="plinth slots").box((-0.5, -0.032, 0.2), (-0.1, -0.03, 0.23)).box((0.1, -0.032, 0.2), (0.5, -0.03, 0.23)).done()
 
 

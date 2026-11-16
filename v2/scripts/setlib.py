@@ -378,6 +378,8 @@ def mat(key):
         "white": lambda: paint("EPaint", (0.76, 0.77, 0.76)),                      # the off-white shell of everything
         # (what is walked on: the same paint here; the game gives it a tone under the walls', the lamps above bleach it)
         "floor": lambda: paint("EPaintFloor", (0.76, 0.77, 0.76)),
+        # (the line of colour round a room; the game gives each room theme its own: V2Dungeon.ACCENT)
+        "accent": lambda: paint("EAccent", (0.08, 0.36, 0.42), wear_color=(0.5, 0.5, 0.5), smudge=0.4),
         "grey": lambda: paint("EPaintGrey", (0.15, 0.16, 0.17), wear_color=(0.42, 0.42, 0.42), smudge=0.4),
         "bluegrey": lambda: paint("EPaintBlueGrey", (0.36, 0.41, 0.44), wear_color=(0.2, 0.2, 0.21), smudge=0.5),      # the frames behind the panels
         "panelscreen": lambda: screen("EPanelScreen", color=(0.3, 0.6, 0.52), cells=4.0, strength=0.16),

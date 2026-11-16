@@ -22,16 +22,22 @@ const DOOR_H := 2.6
 # pass between) and what stands along its walls. All pieces of assets/models/v2/set.glb (v2/scripts/set_*.py).
 const THEMES := {
 	"lab": {"walls": ["wall_plain", "wall_plain", "wall_plain", "wall_plain", "wall_screen", "wall_screen", "wall_service"], "services": 0.15,
-		"stand": ["tank", "tank", "column_tall"], "along": ["console", "console", "locker", "tank", "charging_dock", "shelving"]},
+		"stand": ["tank", "tank", "column_tall", "barrier"], "along": ["console", "console", "locker", "tank", "charging_dock", "shelving"],
+		"small": ["drum", "crate"], "accent": Vector3(0.05, 0.4, 0.46), "light": Color(0.93, 0.98, 1.0)},
 	"storage": {"walls": ["wall_plain", "wall_plain", "wall_plain", "wall_plain", "wall_plain", "wall_service"], "services": 0.1,
-		"stand": ["crate_stack", "crate_stack", "drum_stack", "barrier", "column_tall"], "along": ["shelving", "shelving", "crate_stack", "drum_stack", "locker", "crate", "drum"]},
+		"stand": ["crate_stack", "crate_stack", "drum_stack", "barrier", "column_tall"], "along": ["shelving", "shelving", "crate_stack", "drum_stack", "locker", "crate", "drum"],
+		"small": ["crate", "crate", "drum"], "accent": Vector3(0.62, 0.36, 0.03), "light": Color(1.0, 0.975, 0.93)},
 	"server": {"walls": ["wall_plain", "wall_plain", "wall_plain", "wall_plain", "wall_screen", "wall_screen", "wall_screen", "wall_service"], "services": 0.35,
-		"stand": ["server_rack", "server_rack", "column_tall"], "along": ["server_rack", "server_rack", "server_rack", "console", "locker", "charging_dock"]},
+		"stand": ["server_rack", "server_rack", "column_tall"], "along": ["server_rack", "server_rack", "server_rack", "console", "locker", "charging_dock"],
+		"small": ["crate"], "accent": Vector3(0.06, 0.16, 0.6), "light": Color(0.9, 0.95, 1.0)},
 	"power": {"walls": ["wall_plain", "wall_plain", "wall_plain", "wall_plain", "wall_plain", "wall_service", "wall_service"], "services": 0.35,
-		"stand": ["power_core", "power_core", "drum_stack", "column_tall"], "along": ["pipe_riser", "pipe_riser", "charging_dock", "tank", "locker", "drum"]},
+		"stand": ["power_core", "power_core", "drum_stack", "column_tall"], "along": ["pipe_riser", "pipe_riser", "charging_dock", "tank", "locker", "drum"],
+		"small": ["drum", "drum", "crate"], "accent": Vector3(0.6, 0.1, 0.03), "light": Color(1.0, 0.96, 0.9)},
 	"workshop": {"walls": ["wall_plain", "wall_plain", "wall_plain", "wall_plain", "wall_plain", "wall_service", "wall_screen"], "services": 0.2,
-		"stand": ["barrier", "crate_stack", "barrier", "column_tall", "drum"], "along": ["workbench", "workbench", "shelving", "charging_dock", "locker", "crate"]},
+		"stand": ["barrier", "crate_stack", "barrier", "column_tall", "drum"], "along": ["workbench", "workbench", "shelving", "charging_dock", "locker", "crate"],
+		"small": ["crate", "drum"], "accent": Vector3(0.2, 0.42, 0.1), "light": Color(1.0, 0.985, 0.95)},
 }
+const CORRIDORS := ["corridor", "corridor_b", "corridor_c"]
 # What stands in rooms: the box that stops the player and rounds [width, height, depth], where its middle is from
 # the piece's origin (the piece's frame: +z toward the room), and how far the piece reaches behind its origin
 # (toward the wall it stands against).
@@ -45,7 +51,7 @@ const DECO_BOX := {
 	"charging_dock": [Vector3(1.4, 1.95, 1.1), Vector3(0, 0, -0.1), 0.72], "pipe_riser": [Vector3(0.5, 2.74, 0.6), Vector3(0, 0, -0.1), 0.42],
 	"column_tall": [Vector3(0.92, 5.2, 0.92), Vector3.ZERO, 0.76],
 }
-const FILL := 0.6                     # of a room's free wall cells, this share gets something standing there
+const FILL := 0.7                     # of a room's free wall cells, this share gets something standing there
 const FACE := 0.045                   # a wall panel's fields stand this far in front of its origin: the panels are set back by it,
                                       # so that the fields' face is the wall's plane (where rounds strike and leave their marks)
 const SEEN := 28.0                    # areas further than this from the player are not drawn
@@ -239,7 +245,9 @@ func _corridor_cell(placed: Array, node: Node3D, c: Vector2i, along_x: bool) -> 
 		if gen.is_floor(nb) and gen.cells[nb].t != DungeonGen.T_CORRIDOR:
 			cut += T
 			shift -= sgn * T / 2.0
-	placed.append(["corridor", Transform3D(basis * Basis.from_scale(Vector3(1.0, 1.0, (CELL - cut) / CELL)), at + lz * shift + Vector3(0, -0.012, 0))])
+	# (a corridor has one kind of section, and now and then a cell of another)
+	var kind: String = CORRIDORS[posmod(hash(area_of.get(c, 0)) + gen.seed_value, 3)] if hash(c) % 5 != 0 else CORRIDORS[posmod(hash(c) / 5, 3)]
+	placed.append([kind, Transform3D(basis * Basis.from_scale(Vector3(1.0, 1.0, (CELL - cut) / CELL)), at + lz * shift + Vector3(0, -0.012, 0))])
 	for d in DungeonGen.DIRS:
 		if not gen.is_floor(c + d):
 			_wall_box(node, at + Vector3(d.x, 0, d.y) * (CELL / 2.0), d, -2.3, 2.3, 0.0, HC)
@@ -262,6 +270,8 @@ func _meshes(i: int) -> void:
 				var key: String = part[2]
 				if key == "ELiquid":                       # (each room's tanks hold a liquid of its own colour)
 					key = "ELiquid#%d" % (int(a.id) % TANKS.size())
+				elif key == "EAccent" and a.room:          # (and the line round its walls has its theme's)
+					key = "EAccent#" + themes[a.id]
 				if not tools.has(key):
 					tools[key] = SurfaceTool.new()
 				(tools[key] as SurfaceTool).append_from(part[0], 0, (p[1] as Transform3D) * (part[1] as Transform3D))
@@ -280,7 +290,12 @@ func _meshes(i: int) -> void:
 			print("[tris] area %d (%s %s) %s: %dk  %s" % [i, "room" if a.room else "corridor", str(a.rect.size), "props" if group[1] else "shell", tr / 1000, str(per)])
 		var s := 0
 		for key: String in tools:
-			mi.set_surface_override_material(s, _liquid(int(key.get_slice("#", 1))) if key.begins_with("ELiquid#") else V2Assets.material(key))
+			var mat: Material = V2Assets.material(key) if not key.contains("#") else null
+			if key.begins_with("ELiquid#"):
+				mat = _liquid(int(key.get_slice("#", 1)))
+			elif key.begins_with("EAccent#"):
+				mat = V2Assets.accent(THEMES[key.get_slice("#", 1)].accent)
+			mi.set_surface_override_material(s, mat)
 			s += 1
 		# (the shell casts no shadow: what stands in it does)
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if group[1] else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -366,7 +381,7 @@ func _lights(i: int) -> void:
 	for at in spots:
 		var l := OmniLight3D.new()
 		l.position = at
-		l.light_color = Color(0.97, 0.98, 1.0)
+		l.light_color = THEMES[themes[a.id]].light if a.room else Color(0.97, 0.98, 1.0)
 		l.light_energy = (0.25 * clampf(rect.get_area() / (spots.size() * 40.0), 0.8, 1.7)) if a.room else 0.24
 		l.omni_range = 12.0 if a.room else 7.5
 		l.omni_attenuation = 0.8
@@ -494,7 +509,17 @@ func _against(what: String, c: Vector2i, d: Vector2i, room_id: int, rng: RandomN
 	var yaw := atan2(-out.x, -out.z)
 	var reach := CELL / 2.0 - (0.0 if what == "pipe_riser" else 0.24) - float(spec[2])
 	var room_for := maxf((CELL - (spec[0] as Vector3).x) / 2.0 - 0.3, 0.0)
-	_stand(what, center(c) + out * reach + side * rng.randf_range(-room_for, room_for), yaw, room_id)
+	var slide := rng.randf_range(-room_for, room_for)
+	_stand(what, center(c) + out * reach + side * slide, yaw, room_id)
+	# now and then something small in what is left of the cell's wall beside it
+	var small: Array = THEMES[themes[room_id]].small
+	var item: String = small[rng.randi() % small.size()]
+	var isz: Vector3 = (DECO_BOX[item] as Array)[0]
+	var free := CELL / 2.0 - 0.15 + absf(slide) - (spec[0] as Vector3).x / 2.0         # on the side the piece moved away from
+	if what != item and rng.randf() < 0.4 and free > isz.x + 0.25:
+		var sgn := -1.0 if slide > 0.0 else 1.0
+		var at := center(c) + side * sgn * (CELL / 2.0 - 0.15 - free / 2.0) + out * (CELL / 2.0 - 0.3 - isz.z / 2.0 - rng.randf_range(0.0, 0.25))
+		_stand(item, at, yaw + rng.randf_range(-0.3, 0.3), room_id)
 
 
 ## The rooms furnished: cover at the corners of the cells inside them (the robots keep to the cells' middles, so
@@ -513,7 +538,11 @@ func _furnish(rng: RandomNumberGenerator) -> void:
 				var ix := x - rc.position.x
 				var iy := y - rc.position.y
 				var outer := (ix == 1 or ix == rc.size.x - 1) and (iy == 1 or iy == rc.size.y - 1)
-				var want := outer if pattern == 0 else ((ix % 2 == 1 and iy % 2 == 1) if pattern == 1 else rng.randf() < 0.45)
+				if rc.size.x >= 5 and rc.size.y >= 5:      # (a big room's middle is not left bare)
+					outer = outer or ((ix == rc.size.x / 2 or ix == (rc.size.x + 1) / 2) and (iy == rc.size.y / 2 or iy == (rc.size.y + 1) / 2))
+				var want := outer if pattern == 0 else ((ix % 2 == 1 and iy % 2 == 1) if pattern == 1 else rng.randf() < 0.5)
+				if rc.size.x >= 5 and rc.size.y >= 5 and not want:
+					want = rng.randf() < 0.18                      # (and a few more, off the pattern)
 				if rc.size.x < 4 or rc.size.y < 4:
 					want = rng.randf() < 0.4                       # (a small room: one or two)
 				if not want:
@@ -527,7 +556,10 @@ func _furnish(rng: RandomNumberGenerator) -> void:
 						by_door = true
 				if by_door:
 					continue
-				_stand(theme.stand[rng.randi() % theme.stand.size()], at, (rng.randi() % 4) * PI / 2.0, r.id)
+				var what: String = theme.stand[rng.randi() % theme.stand.size()]
+				var yaw := (rng.randi() % 4) * PI / 2.0
+				_stand(what, at, yaw, r.id)
+				_beside(what, at, yaw, theme.small, r.id, rng)
 		# --- along the walls
 		var spots: Array = []
 		for c in _cells_of(rc):
@@ -551,6 +583,28 @@ func _furnish(rng: RandomNumberGenerator) -> void:
 			spots.remove_at(at_i)
 			_taken[pick[0]] = true
 			_against(theme.along[rng.randi() % theme.along.size()], pick[0], pick[1], r.id, rng)
+
+
+## Something small next to a piece of cover (a crate left by a stack, a drum by a column): in front of it or behind,
+## a little askew. Only by pieces shallow enough that the pair stays within 1.2 m of the cell corner they stand on:
+## the robots pass along the cells' middles, 2 m from it.
+func _beside(what: String, at: Vector3, yaw: float, small: Array, room_id: int, rng: RandomNumberGenerator) -> void:
+	var spec: Array = DECO_BOX[what]
+	var size: Vector3 = spec[0]
+	if size.z > 1.0 or rng.randf() > 0.65:
+		return
+	var b := Basis(Vector3.UP, yaw)
+	var n := 1 if rng.randf() < 0.7 else 2
+	var sides: Array = [1.0, -1.0] if rng.randf() < 0.5 else [-1.0, 1.0]
+	for k in n:
+		var item: String = small[rng.randi() % small.size()]
+		var isz: Vector3 = (DECO_BOX[item] as Array)[0]
+		var off := size.z / 2.0 + isz.z / 2.0 + rng.randf_range(0.06, 0.14)
+		if off + isz.z / 2.0 > 1.2:
+			continue
+		var slide := maxf((size.x - isz.x) / 2.0, 0.0)
+		var p := at + b * ((spec[1] as Vector3) + Vector3(rng.randf_range(-slide, slide), 0, float(sides[k]) * off))
+		_stand(item, p, yaw + rng.randf_range(-0.22, 0.22) + (PI if rng.randf() < 0.5 else 0.0), room_id)
 
 
 ## One of the set's pieces standing at `at`, turned by `yaw`: into the room's merged mesh, and a box that stops
