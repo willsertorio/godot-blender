@@ -18,9 +18,17 @@ extends V2World
 const TITLE := "res://scenes/v2_title.tscn"
 const KIND := {"turret": "turret", "brawler": "spider", "pursuer": "drone"}      # the generator's hostiles -> the V2 robots
 const SCORE := {"turret": 100, "drone": 150, "spider": 200}
-# The robots of the game against the lab's: [aim lag in seconds (the lab: 0.3), damage x, pauses between bursts /].
-const TOUGH := {"spider": [0.09, 1.3, 1.3], "drone": [0.24, 1.15, 1.2], "turret": [0.24, 1.15, 1.2]}
-const HP_PER_THREAT := 0.2          # robots' health: + this per mission completed
+# The robots of the dungeon against the lab's. A run meets fifteen or more of them, several at a time, and health
+# does not come back: tuned on bot runs (tools/v2_bot.sh; CLAUDE.md has the numbers).
+#   [aim lag in seconds (the lab: 0.3), damage x, pauses between bursts /, health (the lab: 150 / 80 / 180)]
+const TOUGH := {"spider": [0.14, 1.0, 1.0, 100.0], "drone": [0.28, 1.0, 1.0, 60.0], "turret": [0.28, 1.0, 1.0, 110.0]}
+# How many of the robots the generator scatters are kept: a share of each room's, at most two in a room next to
+# the start. (Its numbers were for V1's weaker hostiles: 22 a dungeon at threat 0.) The generator always runs at
+# threat 0 and the game scales with the threat level (MORE, HP_PER_THREAT, _kit_weight), so that a seed's
+# dungeon is the same at every level but for that.  [share kept, the most in one room]
+const CROWD := [0.6, 3]
+const MORE := 1.5                   # robots added to the dungeon per mission completed
+const HP_PER_THREAT := 0.08         # robots' health: + this per mission completed
 const SCORE_PER_THREAT := 0.25      # a kill's worth: + this per mission completed
 const DROP := 0.35                  # chance that a destroyed robot leaves something
 const REACH := 2.4                  # how near a door or a crate must be for E
@@ -72,6 +80,7 @@ var _map: V2Map
 var _tick := 0.0
 var _bot: Node
 var _rng := RandomNumberGenerator.new()
+var _loot_rng := RandomNumberGenerator.new()
 
 
 func _ready() -> void:
@@ -98,8 +107,9 @@ func _ready() -> void:
 		if a.begins_with("--bot"):
 			bot = maxi(int(a.trim_prefix("--bot=")), 1) if a.contains("=") else 1
 	_rng.seed = hash(seed_used) + 5
+	_loot_rng.seed = hash(seed_used) + 11
 	_environment()
-	gen = DungeonGen.new().generate(seed_used, missions)
+	gen = DungeonGen.new().generate(seed_used, 0)           # (the threat level is applied here, not by the generator: see below)
 	dungeon = V2Dungeon.new()
 	add_child(dungeon)
 	dungeon.build(gen)
@@ -107,9 +117,35 @@ func _ready() -> void:
 	V2Assets.apply(_props)
 	for l in gen.loot_spawns:
 		_crate(l)
+		# med kits thin out with the threat level (the first number is drawn at every level, so that the robots,
+		# drawn next from the same stream, are the same at every level of a seed, plus the level's extra ones)
+		if l.payoff == "kit" and _rng.randf() > _kit_weight() / (_kit_weight() + 7.0) * 11.0 / 4.0:
+			crates[-1].what = "ammo" if _loot_rng.randf() < 0.57 else "health"
 	_exit()
+	var per_room: Dictionary = {}                          # the generator's robots, room by room: a share of each room's is kept
 	for e in gen.enemy_spawns:
-		_robot(e)
+		if not per_room.has(e.room):
+			per_room[e.room] = []
+		per_room[e.room].append(e)
+	var keep: Dictionary = {}
+	for room_id in per_room:
+		var n: int = per_room[room_id].size()
+		keep[room_id] = clampi(int(floor(n * CROWD[0] + _rng.randf())), 1, mini(n, 2 if gen.rooms[room_id].depth <= 1 else CROWD[1]))
+	# the threat level: MORE robots in the dungeon per level, first in the rooms away from the start (the biggest
+	# first, a room's limit rising as they fill), then anywhere, until the generator's places are used up
+	# (the generator's own scaling, +0.5 a room per level, is not used: its extra robots also reshuffle the loot)
+	var by_size: Array = per_room.keys()
+	by_size.sort_custom(func(a2: int, b2: int) -> bool: return gen.rooms[a2].rect.get_area() > gen.rooms[b2].rect.get_area())
+	var extra := int(round(MORE * missions))
+	for turn in 6:
+		for room_id in by_size:
+			var most: int = CROWD[1] + turn if gen.rooms[room_id].depth >= 2 else turn
+			if extra > 0 and keep[room_id] < mini(per_room[room_id].size(), most):
+				keep[room_id] += 1
+				extra -= 1
+	for room_id in per_room:
+		for k in keep[room_id]:
+			_robot(per_room[room_id][k])
 	for r in robots:                                       # the robots of a room keep off each other's firing positions
 		r.others = robots.filter(func(o: V2Robot) -> bool: return o.room == r.room)
 	player = V2Player.new()
@@ -157,14 +193,14 @@ func _robot(e: Dictionary) -> void:
 	robot.aim_lag = TOUGH[kind][0]
 	robot.damage_scale = TOUGH[kind][1]
 	robot.haste = TOUGH[kind][2]
-	robot.max_hp *= 1.0 + HP_PER_THREAT * missions
+	robot.max_hp = TOUGH[kind][3] * (1.0 + HP_PER_THREAT * missions)
 	robot.hp = robot.max_hp
 	robot.room = area
 	robot.bounds = dungeon.arena(area, 0.7)
-	# (spider and drone stand on and go between the middles of cells: columns and tanks stand at the cells' corners)
+	# (on the middle of a cell: spider and drone go between the middles of cells, and the turret's arm swings
+	# clear of what stands at the cells' corners, columns and tanks)
 	var floor_rect := dungeon.arena(area, 1.9)
-	var at: Vector3 = V2Dungeon.center(V2Dungeon.cell_of(e.pos)) if kind != "turret" else Vector3(clampf(e.pos.x, floor_rect.position.x + 0.4, floor_rect.end.x - 0.4), 0.0,
-		clampf(e.pos.z, floor_rect.position.y + 0.4, floor_rect.end.y - 0.4))
+	var at: Vector3 = V2Dungeon.center(V2Dungeon.cell_of(e.pos))
 	var mid: Vector2 = (dungeon.areas[area].rect as Rect2).get_center()
 	robot.place(at, rad_to_deg(atan2(-(mid.x - at.x), -(mid.y - at.z))) + _rng.randf_range(-40.0, 40.0))
 	if kind == "turret":                                   # it hangs from a carriage on a short rail under the ceiling
@@ -336,9 +372,13 @@ func say(text: String) -> void:
 
 ## What a wreck leaves: med kits thin out as the threat level climbs (weight 4 falling to 1).
 func roll_payoff() -> String:
-	var weights := [maxi(1, 4 - missions), 4, 3]
-	var pick := _rng.randi_range(0, weights[0] + weights[1] + weights[2] - 1)
-	return "kit" if pick < weights[0] else ("ammo" if pick < weights[0] + weights[1] else "health")
+	var pick := _rng.randf() * (_kit_weight() + 7.0)
+	return "kit" if pick < _kit_weight() else ("ammo" if pick < _kit_weight() + 4.0 else "health")
+
+
+## The med kit's weight among what crates and wrecks give (ammunition 4, health 3): 4 at threat 0, down to 1 at 4.
+func _kit_weight() -> float:
+	return maxf(1.0, 4.0 - 0.75 * missions)
 
 
 func _on_destroyed(robot: V2Robot) -> void:
@@ -358,7 +398,6 @@ func finish(won: bool) -> void:
 	if won:
 		V2Sfx.play("exit")
 		player.invulnerable = true
-		score += maxi(0, 300 - int(elapsed))               # a bonus for speed
 		missions += 1
 	total_score += score
 	_end_screen()
@@ -561,7 +600,7 @@ func _end_screen() -> void:
 	var lines := "Score  %d%s\nRobots destroyed  %d of %d\nRooms seen  %d of %d\nTime  %d:%02d\n%s" % [score,
 		("   (all missions  %d)" % total_score) if total_score != score else "", kills, robots.size(), explored.size(), gen.rooms.size(),
 		int(elapsed) / 60, int(elapsed) % 60,
-		("Next dungeon: threat level %d (more robots, tougher, fewer med kits)" % missions) if won else ("Threat level %d" % missions)]
+		("Next dungeon: threat level %d (more robots, tougher, fewer med kits, kills worth more)" % missions) if won else ("Threat level %d" % missions)]
 	V2Ui.label(_end, lines, 0.5, 0.5, 0.0, -88.0, 18, Color(0.95, 0.98, 1.0), false, HORIZONTAL_ALIGNMENT_CENTER)
 	V2Ui.button(_end, "AGAIN", 0.5, 0.5, -150.0, 80.0, func() -> void: get_tree().reload_current_scene())
 	V2Ui.button(_end, "TITLE", 0.5, 0.5, 150.0, 80.0, to_title)

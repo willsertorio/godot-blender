@@ -12,6 +12,7 @@ var game: Node
 var player: V2Player
 var dungeon: V2Dungeon
 var gen: DungeonGen
+const PULL := 0.7                   # how much of the barrel's climb the bot takes out
 var _strafe := 1.0
 var _strafe_t := 0.0
 var _react := 0.0
@@ -107,6 +108,17 @@ func _aim_at(point: Vector3, delta: float, rate_deg: float = 300.0) -> float:
 	var d := point - player.cam.global_position
 	var yaw := atan2(-d.x, -d.z) + _err.x
 	var pitch := atan2(d.y, Vector2(d.x, d.z).length()) + _err.y
+	# The machine gun's rounds leave along its barrel, which climbs and wanders in a burst: the bot pulls against
+	# most of that, as a player does who keeps the cursor on the target. (Without it, it emptied six magazines
+	# over a robot's head at 15 m and was shot down meanwhile.)
+	var a := player.aim_dir()
+	var climb := (asin(clampf(a.y, -1.0, 1.0)) - player._pitch) * PULL
+	var drift := angle_difference(player._yaw, atan2(-a.x, -a.z)) * PULL
+	if absf(climb) > 0.3 or absf(drift) > 0.3:             # (a reload or a switch swings the gun away: nothing to follow)
+		climb = 0.0
+		drift = 0.0
+	yaw -= drift
+	pitch -= climb
 	player._yaw = rotate_toward(player._yaw, yaw, deg_to_rad(rate_deg) * delta)
 	player._pitch = move_toward(player._pitch, clampf(pitch, -1.4, 1.4), deg_to_rad(rate_deg) * delta)
 	return absf(angle_difference(player._yaw, yaw)) + absf(player._pitch - pitch)
@@ -271,26 +283,33 @@ func play_level() -> Dictionary:
 				await _wait(0.9)
 				await step_to(at, true, 0.9, 3.0)
 		for p in game.pickups.duplicate():                 # what the wrecks left
-			var node := p.node as Node3D
-			if game.state == game.PLAYING and is_instance_valid(node) and dungeon.area_at(node.global_position) == area and float(p.t) > 0.0:
-				if await go(V2Dungeon.cell_of(node.global_position)):
-					await step_to(node.global_position, true, 0.7, 5.0)
+			if game.state != game.PLAYING or not is_instance_valid(p.node) or float(p.t) <= 0.0:
+				continue
+			var lies: Vector3 = (p.node as Node3D).global_position
+			if dungeon.area_at(lies) == area and await go(V2Dungeon.cell_of(lies)):
+				await step_to(lies, true, 0.7, 5.0)
 		hp_low = minf(hp_low, player.hp)
 		note("room %d done: %d robots left in it, health %d, kits %d, rounds %d + %d" % [id, game.alive_in(area), player.hp, player.kits, player.mag.rifle, player.reserve])
 	if game.state == game.PLAYING:
 		await go(V2Dungeon.cell_of(gen.exit_pos))
-		await step_to(gen.exit_pos, true, 0.3, 8.0)
-		await _wait(0.5)
+		for side in [1.0, -1.0, 1.0]:                      # into the gate from in front of it or from behind: from the side its posts are in the way
+			if game.state != game.PLAYING:
+				break
+			await step_to(game._exit_xf * Vector3(0, 0, 1.5 * side), true, 0.3, 6.0)
+			await step_to(gen.exit_pos, true, 0.3, 6.0)
+			await _wait(0.5)
 	return {"won": game.state == game.WON, "hp": player.hp, "low": hp_low, "time": game.elapsed, "kills": game.kills}
 
 
 func play_runs(_n: int) -> void:
-	# (one dungeon per process: tools/v2_bot.sh runs it N times)
+	# (one dungeon per process: tools/v2_bot.sh runs it N times. The clock runs four times as fast: the physics
+	# steps stay 1/60 s, there are only more of them a second)
+	Engine.time_scale = 4.0
 	await _wait(0.3)
 	var r := await play_level()
-	print("[bot] %s  seed %d  threat %d  rooms %d  robots %d  time %.0f s  health %d (lowest after a room %d)  kills %d  kits left %d  rounds left %d" % [
+	print("[bot] %s  seed %d  threat %d  rooms %d  robots %d  time %.0f s  health %d (lowest after a room %d)  kills %d  kits left %d  rounds left %d  shots %d (%d %% hit)" % [
 		"WON" if r.won else ("LOST" if game.state == game.LOST else "STUCK"), game.seed_used, game.missions - (1 if r.won else 0), gen.rooms.size(),
-		game.robots.size(), r.time, r.hp, r.low, r.kills, player.kits, player.reserve])
+		game.robots.size(), r.time, r.hp, r.low, r.kills, player.kits, player.reserve, player._rounds, 100 * player.shots_hit / maxi(player._rounds, 1)])
 	if not r.won or "--verbose" in OS.get_cmdline_user_args():
 		for l in log_lines:
 			print("[bot]   ", l)
@@ -336,7 +355,7 @@ func test() -> void:
 	var kinds := {}
 	for r in game.robots:
 		kinds[r.kind] = int(kinds.get(r.kind, 0)) + 1
-	ok = _check("the dungeon is built", dungeon.areas.size() == gen.rooms.size() + gen.corridors.size() and game.robots.size() == gen.enemy_spawns.size()
+	ok = _check("the dungeon is built", dungeon.areas.size() == gen.rooms.size() + gen.corridors.size() and game.robots.size() >= gen.rooms.size() - 1 and game.robots.size() <= gen.enemy_spawns.size()
 		and game.crates.size() == gen.loot_spawns.size(), "seed %d: %d rooms, %d corridors, %d doors with leaves, %d crates, robots %s" % [game.seed_used, gen.rooms.size(),
 		gen.corridors.size(), dungeon.doors.filter(func(d: Dictionary) -> bool: return d.door).size(), game.crates.size(), str(kinds)]) and ok
 	var space := player.get_world_3d().direct_space_state

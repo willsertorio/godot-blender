@@ -17,6 +17,7 @@ blender -b v2/scene.blend -P v2/scripts/anim_robots.py                    # bake
 blender -b v2/scene.blend -P v2/scripts/anim_fx.py                        # effects for every shot, the deaths and the Firefight (run LAST; saves)
 blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100 view=pistol frame=1637   # the Firefight still
 blender -b -P v2/scripts/build_studio.py                                  # the lab's test room -> v2/studio.blend + assets/models/v2/studio.glb (its own file: nothing in scene.blend changes)
+blender -b -P v2/scripts/build_kit.py                                     # the dungeon's modular kit (floors, ceilings, walls, doorway, corridor pieces, tank, console, block, locker, column) -> v2/kit.blend + assets/models/v2/kit.glb
 blender -b -P v2/scripts/build_props.py                                   # the game's props (crate, ammunition box, health cell, med kit, exit gate) -> v2/props.blend + assets/models/v2/props.glb
 blender -b v2/scene.blend -P v2/scripts/recolor_pistol.py                 # the pistol's slide / frame in the machine gun's paints, in place (build_pistol.py PAINT); then export_godot.sh materials
 v2/scripts/export_godot.sh                                                # everything to Godot: assets/models/v2 + assets/textures/v2 (see CLAUDE.md, "V2"); `export_godot.sh pistol rifle` for some (materials room spider drone turret pistol rifle)

@@ -114,7 +114,7 @@ rule no longer applies to the environment):
 V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`); it still runs with `-- --v1`.
 - **Blender side**: `v2/` (Godot ignores it). `v2/scene.blend` = room + three robots + two weapon views (pistol, machine
   gun) with rigged gloved arms, all animated, plus effects. Commands, method and what was learned: `v2/README.md`.
-- **Godot side**: pressing Play opens the **title** (`scenes/v2_title.tscn`): PLAY = the V2 game, one level
+- **Godot side**: pressing Play opens the **title** (`scenes/v2_title.tscn`): PLAY = the V2 game, a generated dungeon
   (`scenes/v2_game.tscn`, see "V2 game" below), LAB = the V2 lab; Backspace in the lab goes back to the title.
   Options for the lab or the game on the command line skip the title (`v2_title.gd`: `--lab`, the lab's tests and
   `--capture=`; `--play`, `--game-test`, `--bot=N`, `--game-capture=DIR`).
@@ -292,77 +292,93 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
   A fine weave seen at arm's length beats against the pixel grid even with mipmaps: the glove fabrics are sampled
   with a mip bias. A directional light with shadows on came out about half as bright again as without.
 - Not done yet: a browser build of V2; the pistol has no cursor recoil (it shoots at the middle of the screen: the
-  user called its firing good); music (the user: not now); the V1 game's dungeon generator, map, difficulty curve
-  and Quaternius art are not part of the V2 game (V1 still runs with `-- --v1`).
+  user called its firing good); music (the user: not now); V1 (its Quaternius art, enemies and UI) still runs with `-- --v1`;
+  its generator is what the V2 game builds on.
   User decisions: realistic recorded sound, CC0, one consistent line, no music for now; no browser build of V2 for now (`tools/export_web.sh` is untested with V2);
-  studio rooms in the lab, the concept room for the real game; the game has PLAY and LAB and one level;
+  studio rooms in the lab; the game has PLAY and LAB and is the generated dungeon of the GDD in a new modular kit (the concept room is not in it);
   wrecks are electrical (no fire); the pistol wears the machine gun's colours; footsteps quiet and dull;
   a drone shot down goes down in a straight line; the dead turret is heavy.
 
-## V2 game (one level; `scripts/v2/v2_game.gd`)
+## V2 game: the generated dungeon (`scripts/v2/v2_game.gd`)
 
-User decisions: the real game has PLAY and LAB; **one level only**.
-- Level (`LEVEL` in v2_game.gd): four sectors A-D = the concept room four times in a row (x = i * 11.6 m), told apart
-  by the colour of their tanks (cyan, green, amber, violet) and a letter by the doors. A: start, a crate. B: two
-  spiders. C: two drones, a turret. D: spider, drone, turret, the exit gate at the front wall. Doors between sectors
-  (E opens, they stay open; **a sector's door onward is locked while one of its robots works**: lamp red / amber /
-  green. Without the lock the level is a sprint from door to door under the mezzanine). Only the player's sector and a neighbour behind an open door are drawn and awake.
-- **The concept room's floor plan** (learned the hard way: `tools/v2_room_map.gd` prints it by trying the player's
-  capsule on a grid; a map made by casting rays down from 2.3 m missed every thin or tall thing): the doorways
-  (z = -10.2) open under the mezzanine's edge. From the left door the hall is reached through a 1.4 m gap between
-  the stairs (x -0.2..3.2, z -9.6..-11.2) and a post, at x = -1.3; or round under the mezzanine (z -12) to the
-  right side. The right door is beside the hall's right-back corner (4.6, -9.3). Two blocks stand at z -7.8..-9.4
-  (x < -2.4 and x 1.2..3.0). **A strip along the right wall (x 4.6..6.4, z -7.6..2.6) is closed off** (a
-  partition the capsule cannot pass): nothing may be put there. Waypoints: `V2Robot.WAY` (drone), `NODES` in
-  v2_game_bot.gd (the bot); the drone's verified by sweeping its box, the bot's by the walk check.
-- Rules (`V2Player.rules = true`): pistol 15 rounds, unlimited magazines; machine gun 30 + 60 carried (max 240);
-  R reloads (the magazine is filled at the clip's "magazine in" sound), an empty gun clicks and reloads by itself;
-  no health regeneration; med kits (H, +40, max 3); E = `interact` (nearest door or crate within 2.3 m);
-  1 / 2 or Q switch gun; going down ends the run. In the lab none of this applies.
-- Robots in the game (`respawns = false`): a wreck stays (its smoke stops after 40 s, its sparks become rare) and
-  **does not block the player** (`V2Robot._solid`: a wreck's hit boxes go to physics layer 2, which rounds still
-  strike; a wreck in a doorway or in the gap by the stairs would have shut the level). They are a little sharper
-  than the lab's (`TOUGH` in v2_game.gd: drone and turret aim lag 0.24 s instead of 0.3, damage x1.15, pauses
-  between bursts /1.2; the spider lag 0.09 s, damage x1.3, pauses /1.3, and it closes to 3.8-6 m).
-- **Balance, measured with the bot** (`tools/v2_bot.sh`; about 8 minutes a run under software GL): 4 of 4 runs
-  won in about 130 s, all 8 robots destroyed, 49 / 60 / 53 / 99 health left, 0 to 2 med kits used. Sector D (spider +
-  drone + turret at once) costs most. `-- --bot-diag` prints what sector B's spiders do against a player who only
-  strafes: with the lab's numbers 66 rounds, 1 hit in 30 s (their rounds scatter several degrees with the guns'
-  recoil and trail the target); with the game's, 3 hits. The bot takes no damage in B because it fights from
-  beside the stairs, which stop the spiders' low rounds: cover that a player will find too. The bot is better at
-  strafing than a person and worse at using cover: read its numbers as "the level can be won with margin", not
-  as how hard it feels. Held down, the machine gun climbs off its target: the bot fires bursts of half a second.
-  Spiders hold their hall, each in its own `arena`: **a spider cannot pass a doorway** (it is about 1.9 m across
-  its legs, the doorway 1.3 m). Drones that have seen the player and lost them follow into the next sector if the
-  door is open (`V2Robot.travel`, state TRAVEL): a drone is 1.7 m wide, so it goes through **on edge** (rolled 83
-  degrees, 1.2 m up, nose first) along `WAY`, and is re-parented to the next room's node as it crosses (robots live
-  in their room's frame). The turret runs along a rail under the ceiling (`set_rail`; the concept room's cable
-  `Loop3` is hidden for it) to where the player is abreast of it; in the lab's studio too.
-  A door opening alerts the robots beyond it. 35 % of destroyed robots leave a pickup. Score: turret 100, drone 150, spider 200, + (300 - seconds) on a win.
-- Props: `v2/scripts/build_props.py` -> `v2/props.blend` + `assets/models/v2/props.glb` (crate with `Crate_Lid`,
-  `AmmoBox`, `HealthCell`, `MedKit`, `ExitGate`; the robots' materials by name; the gate's field is
-  `v2_field.gdshader`). The game duplicates each by name. Their collision is boxes added in code.
-- **A robot sees the player by their chest or their head** (`V2Robot._look`, lab too) and aims at the part it
-  sees. With the chest alone a player under the mezzanine could shoot a spider through the stairs' railings while
-  it could not see them: in nine bot runs the two spiders of sector B never fired once.
-- HUD / screens: `scripts/v2/v2_ui.gd` (`V2Ui`: labels, bars, buttons; headings in Kenney Future: no K or X).
-  Health, med kits, gun + rounds, sector line, a note line (what was picked up), the sector's name on entry,
-  cursor, hurt flash with a red bar on the side the hit came from (top = ahead), F3 = frame rate / draw calls.
-  Going down, the view sinks to the floor. No prompts and
-  no pause (GDD): Esc frees the mouse and shows RESUME / TITLE while the game goes on. End screen: AGAIN / TITLE.
-- Checks, bot, pictures (`scripts/v2/v2_game_bot.gd`):
-  `godot --headless --path . -- --game-test` = the rules (magazines, crate, kit, door, a drone following through
-  a door on edge, the turret's rail, wrecks stay, win, lose, sounds);
-  `xvfb-run -a godot --rendering-driver opengl3 --path . --resolution 480x270 -- --game-test --quality=low` = the
-  same plus the walk through every waypoint and door to the exit (needs the rooms' collision: headless has none);
-  `tools/v2_bot.sh [N]` = the balance bot plays the level N times (one process per run; slow under software GL);
-  `... -- --game-capture=DIR` = pictures of every sector, the crate, a door, the exit, the menu, the end screen;
-  `... -- --title-capture=FILE.png`.
-- Sound of the game: `door`, `crate`, `pickup`, `dry` (an empty gun, a locked door), `heal`, `exit_hum` (loop on
-  the gate), `exit`, `ui`, `room_tone` (a very low ventilation loop, `V2Sfx.ambience`; title too), `ricochet`
-  (one round in five or six that hits a wall, lab too).
-- Static state survives a scene change (`V2Fx._marks`, `V2Sfx.root`): every scene's `_ready` sets the roots and
-  calls `V2Fx.reset()`.
+**User decisions (this replaces the hand-built four-sector level):** the game follows the GDD's loop: every run a
+fresh dungeon of 8 to 12 rooms joined by corridors and doors, robots, loot and one exit portal scattered through
+it; ROOMS n / N; a map; score; AGAIN after a win = a harder dungeon, with no end. The title keeps PLAY and LAB.
+A new modular kit only (the detailed concept room is no longer in the game; it is the title's backdrop and still
+the lab's `--concept`). Free doors (E opens any door at any time). Spiders and drones chase; turrets stay.
+- Layout: `scripts/dungeon_gen.gd` (`DungeonGen`, V1's, unchanged: pure data from seed + difficulty; 4 m cells;
+  rooms 3..6 cells a side; corridors 1 cell wide; a tree from the spawn room; the exit in the deepest room; doors on
+  about half the doorways; `enemy_spawns` turret / brawler / pursuer = our turret / spider / drone; `loot_spawns`;
+  `deco_spawns`). `-- --seed=N` gives the same dungeon again; `-- --threat=N` starts at that threat level.
+- Kit: `v2/scripts/build_kit.py` -> `v2/kit.blend` + `assets/models/v2/kit.glb`: `Floor`, `CFloor`, `Ceiling`,
+  `CeilingBeams`, `CCeiling`, `Wall`, `WallScreen`, `WallPipes`, `CWall`, `WallDoor`, and what stands in rooms:
+  `Tank`, `Console`, `Block`, `Locker`, `Column`. Rooms 5.2 m high (the turret's pylon ends there), corridors 3.4 m,
+  doorways 2.4 x 2.6 m (every robot fits). Materials are the concept room's and the robots', by name.
+- `scripts/v2/v2_dungeon.gd` (`V2Dungeon`): an area per room and per corridor: its pieces merged into one mesh per
+  material (`SurfaceTool.append_from`), its lights (their cull mask = the area's render layer; areas within 13 m of
+  each other get different layers, 9 of them: a mesh takes 8 lights), **collision as boxes made from the layout**
+  (walls, doorway sides and lintels, floors, ceilings, furniture): it exists headless, so every check and the bot
+  run headless. Doors (leaves slide into the wall, lamp amber -> green), furniture: the generator's decor, plus
+  columns or tanks at the corners of the cells inside rooms of 4 x 4 and up (cover), plus more along the walls;
+  each room's tanks hold a liquid of its own colour. `path(a, b)` = cells through open doorways; `arena(area, margin)`;
+  `update()` hides areas more than 34 m away and lets the player's area's lights reach the gun.
+- Robots (all children of the game node: world frame): placed on the middle of a cell; **spider and drone go from
+  cell middle to cell middle along rows and columns** (`V2Robot.grid`, `_spot`: columns and tanks stand at the cells'
+  corners, so they are never walked through). One that has seen the player (or heard a door open within 16 m) and
+  lost them follows along `V2Dungeon.path` (`V2Robot.follow`, state TRAVEL; a drone comes down to 1.7 m in
+  corridors and doorways; it stops and fights when it sees the player within 11 m; `arrived` -> the game gives it the
+  arena of the area it stands in, a corridor too). The turret hangs on a rail of at most 4.8 m. Robots more than
+  48 m away sleep. The robots of a room keep off each other's firing positions (`others`).
+- Rules as before (`V2Player.rules`): pistol 15 rounds, unlimited magazines; machine gun 30 + 60 carried (max 240);
+  no health regeneration; med kits (H, +40, max 3); E = nearest shut door or crate within 2.4 m; going down ends the
+  run. Crates give what the generator says (ammunition +60 / health +35 / a med kit); 35 % of wrecks leave something
+  (`roll_payoff`: med kits thin out with the threat level). A wreck does not block the player.
+- **Threat level** (`missions`, static: missions completed in this sitting; TITLE resets it), applied by the game
+  (the generator always runs at threat 0: its own scaling, +0.5 robots a room and +20 % health a level, is not used,
+  and its extra robots reshuffle the loot, so two levels of a seed could not be compared): 1.5 more robots in the
+  dungeon per level (`MORE`: rooms two or more from the start first, the biggest first, until the generator's
+  places are used up, about threat 6), robots' health +8 % per level without end (`HP_PER_THREAT`), med kits rarer
+  in crates and wrecks (`_kit_weight`: 4 at threat 0, 1 from threat 4), a kill worth +25 % per level. A seed's
+  dungeon is the same at every level but for those (kept that way on purpose: the crates' second random draw is on
+  its own stream). Score = kills only.
+- **Balance, measured with the bot** (`tools/v2_bot.sh N threat first_seed`: headless, the clock four times as
+  fast, about 1.5 minutes a dungeon; three batches side by side on this container's four cores). 0.6 of the
+  generator's robots are kept (`CROWD`: at most 3 in a room, 2 in a room next to the start; 11 to 19 a dungeon at
+  threat 0) and the dungeon's robots have less health than the lab's and the lab's damage (`TOUGH`: spider 100,
+  drone 60, turret 110; the lab: 150 / 80 / 180). Seeds 10 and up: **threat 0: 11 wins in 12** (the twelfth was the
+  bot stuck on the exit gate's post, since fixed), **threat 2: 9 in 9, threat 4: 7 in 9, threat 6: 5 in 9**; the
+  bot ends a won dungeon at threat 0 with about 90 health and 2 or 3 med kits, 60 to 85 % of its rounds hitting.
+  **What went wrong on the way (it cost four tuning rounds):** the bot aimed the camera at a robot while the
+  machine gun's rounds leave along the barrel, which climbs in a burst; it fired whole magazines over robots'
+  heads (186 rounds for one kill in one room) and its 1-in-6 results were read as "too many robots". It now pulls
+  against the climb as a player follows the cursor (`PULL`), and prints its hit rate: look at that number before
+  believing a loss. And 6 to 8 runs a level are noise (the same settings gave 6 of 8 and 3 of 8).
+  The bot clears every room (a player may walk past rooms), aims better than a trackpad allows and uses no cover:
+  read its numbers as how the threat levels compare, not as how hard it feels.
+- Map (`scripts/v2/v2_map.gd`, Tab; the game goes on): rooms entered, robots still working in each (red number),
+  corridors walked, doorways (amber shut / green open / grey no door), the exit once its room was entered, the
+  player. Scaled to the whole dungeon, so the empty part of the panel says how much is left.
+- HUD / screens (`scripts/v2/v2_ui.gd`; headings in Kenney Future: no K or X): health, med kits, gun + rounds, one
+  line (THREAT, ROOMS n / N, hostiles here, the exit), "ROOM n OF N" on entering a new room, a note line, cursor,
+  hurt flash with a bar on the side the hit came from, F3 = frame rate. No prompts, no pause: Esc frees the mouse
+  and shows RESUME / TITLE. End screen: score, robots destroyed, rooms seen, time, the next threat level; AGAIN / TITLE.
+- Props: `v2/scripts/build_props.py` -> `props.glb` (crate with `Crate_Lid`, `AmmoBox`, `HealthCell`, `MedKit`,
+  `ExitGate`: the exit portal, standing free in the middle of the deepest room; its field is `v2_field.gdshader`).
+- Checks, bot, pictures (`scripts/v2/v2_game_bot.gd`), all headless except the pictures:
+  `godot --headless --path . -- --game-test` (seed 7): the generator over 40 seeds (8-12 rooms, every cell reachable,
+  exit deepest, more robots at threat 3), walls stop rays, magazines, a crate, a med kit, no regeneration, a door
+  (shut it blocks the way and the paths), wrecks stay, a robot follows the player out of its room, the turret's
+  rail, the walk through every room (ROOMS counts), the exit raises the threat level, going down does not, sounds;
+  `tools/v2_bot.sh [N] [threat] [seed]`; `xvfb-run -a godot --rendering-driver opengl3 --path . --
+  --game-capture=DIR [--seed=N]`; `... -- --title-capture=FILE.png`.
+- Learned here: a wall of the kit may reach 0.12 m into the cell at most; a large flat metallic surface (the
+  first locker, the first door leaves) comes out black indoors (it mirrors the dark HDRI): paint it; a ray along
+  the seam between two collision boxes passes between them (the door check aims through one leaf); an `await`ed
+  bot function that errors never returns: guard freed pickups with `is_instance_valid` before every use.
+- Sound of the game: `door`, `crate`, `pickup`, `dry` (an empty gun), `heal`, `exit_hum` (loop on the portal),
+  `exit`, `ui`, `room_tone` (a very low ventilation loop, `V2Sfx.ambience`; title too), `ricochet`.
+- Static state survives a scene change (`V2Fx._marks`, `V2Sfx.root`, the game's `missions`): every scene's `_ready`
+  sets the roots and calls `V2Fx.reset()`.
 
 ## Conventions (fixed on day one; do not drift)
 
