@@ -614,6 +614,12 @@ func flicker(dir: String) -> void:
 	for co in gen.corridors:
 		var cells: Array = co.cells
 		views.append(["corr%02d" % co.id, V2Dungeon.center(cells[0]), V2Dungeon.center(cells[cells.size() - 1]) + Vector3(0, 1.2, 0)])
+	var only := ""                                         # -- --match=TEXT: only the views whose name has TEXT in it
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--match="):
+			only = arg.trim_prefix("--match=")
+	if only != "":
+		views = views.filter(func(v2: Array) -> bool: return String(v2[0]).contains(only))
 	for v in views:
 		for k in 3:
 			if k != 1:

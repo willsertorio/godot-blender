@@ -174,6 +174,19 @@ func _area(is_room: bool, id: int, rect: Rect2, cells: Array, rng: RandomNumberG
 			var edge := at + Vector3(d.x, 0, d.y) * (CELL / 2.0)
 			var xf := Transform3D(Basis(Vector3.UP, _yaw(-d)), edge)
 			if not gen.is_floor(n):
+				if not is_room:
+					# A corridor's side wall stops at the back of the room wall it runs into: run to the end of its
+					# cell, its end face lay in the plane of the room wall's face, a strip 0.3 m wide beside every
+					# doorway where two meshes lit by different areas' lights fought for the pixels (it flickered).
+					var lx := xf.basis.x                       # the wall's length, in the world
+					var cut := 0.0
+					var shift := 0.0
+					for sgn in [-1.0, 1.0]:
+						var nb: Vector2i = c + Vector2i(roundi(lx.x * sgn), roundi(lx.z * sgn))
+						if gen.is_floor(nb) and gen.cells[nb].t != DungeonGen.T_CORRIDOR:
+							cut += T
+							shift -= sgn * T / 2.0
+					xf = Transform3D(xf.basis * Basis.from_scale(Vector3((CELL - cut) / CELL, 1.0, 1.0)), edge + lx * shift)
 				placed.append([theme.walls[rng.randi() % theme.walls.size()] if is_room else CWALLS[rng.randi() % CWALLS.size()], xf])
 				_wall_box(node, edge, d, -2.3, 2.3, 0.0, height)
 			elif is_room and gen.cells[n].t == DungeonGen.T_CORRIDOR:

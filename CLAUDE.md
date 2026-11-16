@@ -419,8 +419,12 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
 - **Flicker (user: "lights flicker, under an open door"), what it was**: two faces of different materials in one
   plane. The doorway's dark lining was flush with the opening cut in the white wall slab, the sill lay level with
   the corridor's grating (and the two are lit by different areas' lights), an open leaf's end showed its armour
-  and its edge strip in one plane. Now the lining stands 3 cm proud (`LIN`), the sill is a raised plate, the
-  leaves go fully into the lining; the walkway grating and the wall panels are calmed (`V2Assets.CALM`: a polished,
+  and its edge strip in one plane, and **a corridor's side walls ran to the end of their cell, so their end faces
+  lay in the plane of the room wall's face: a strip 0.3 m wide beside every doorway** (found last, in the marked
+  pictures; a first guess, the open leaf's shadow, was wrong: check a fix with `--match=TEXT`, which limits the
+  flicker capture to the views whose name has TEXT in it, 1 minute). Now the lining stands 3 cm proud (`LIN`),
+  the sill is a raised plate, the leaves go fully into the lining, a corridor wall next to a room is shortened by
+  the wall's thickness (`_area`); the walkway grating and the wall panels are calmed (`V2Assets.CALM`: a polished,
   strongly normal-mapped metal throws single bright pixels that crawl), the floor joints are 3.6 cm of dull grey
   (2.4 cm of near-black was thinner than a pixel a few rooms off). It was not the lights: the engine pairs lights
   with meshes by cull mask (read in the 4.3 source), no mesh has more than 6, and nothing flashes on changing area.
