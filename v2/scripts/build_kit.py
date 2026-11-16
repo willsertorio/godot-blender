@@ -35,7 +35,7 @@ COLOURS = {  # what the .blend shows (base colour, emission strength); the game 
     "CeilingLight": ((1, 1, 1), 6), "CoveLight": ((0.85, 0.95, 1.0), 6), "LightStrip": ((0.95, 0.98, 1.0), 8),
     "ScreenCyan": ((0.15, 0.85, 1.0), 5), "StatusOrange": ((1.0, 0.45, 0.1), 6), "SignGreen": ((0.2, 1.0, 0.45), 5),
     "TankLiquid": ((0.2, 0.62, 0.68), 1), "TankLight": ((0.75, 0.95, 1.0), 8), "RArmor": ((0.85, 0.86, 0.88), 0),
-    "RFrame": ((0.03, 0.03, 0.035), 0),
+    "RFrame": ((0.03, 0.03, 0.035), 0), "Seam": ((0.06, 0.065, 0.07), 0),
 }
 MATS = {}
 for name, (col, emit) in COLOURS.items():
@@ -106,9 +106,11 @@ class Part:
 # ------------------------------------------------------------------ floors and ceilings (one cell: 4 x 4 m)
 p = piece("Floor")
 Part("Floor_Slab", "FloorTile", p).box((-2, -2, -0.2), (2, 2, 0)).done()
-seam = Part("Floor_Seams", "DarkSteel", p)                           # the joints of the 2 m tiles
+# the joints of the 2 m tiles: 3.6 cm of dull dark grey (2.4 cm of near-black steel was a line thinner than a
+# pixel a few rooms away, and crawled as the player walked)
+seam = Part("Floor_Seams", "Seam", p)
 for v in (-2.0, 0.0):
-    seam.box((v - 0.012, -2, 0.0), (v + 0.012, 2, 0.004)).box((-2, v - 0.012, 0.0), (2, v + 0.012, 0.004))
+    seam.box((v - 0.018, -2, 0.0), (v + 0.018, 2, 0.004)).box((-2, v - 0.018, 0.0), (2, v + 0.018, 0.004))
 seam.done()
 
 p = piece("CFloor")                                                 # corridor: a grating runs down its middle (along y)
@@ -185,6 +187,7 @@ Part("CWall_Strip", "LightStrip", w).box((-1.6, -0.02, 2.86), (1.6, 0, 2.9)).don
 Part("CWall_StripBack", "DarkSteel", w).box((-1.7, -0.012, 2.8), (1.7, 0, 2.96)).done()
 
 # the doorway: an opening 2.4 x 2.6 m in a room wall, a steel lining through it, finished on the corridor's side too
+LIN = 0.03
 w = piece("WallDoor")
 sl = Part("WallDoor_Slab", "WallPanel", w)
 sl.box((-2, 0, 0), (-DW, T, H)).box((DW, 0, 0), (2, T, H)).box((-DW, 0, DH), (DW, T, H))
@@ -193,8 +196,10 @@ dk = Part("WallDoor_Dark", "DarkSteel", w)
 for sx in (-1, 1):
     dk.box((sx * 2, -0.03, 0), (sx * (DW + 0.14), 0, 0.42))                          # kick plates, both sides
     dk.box((sx * 2, T, 0), (sx * (DW + 0.14), T + 0.03, 0.42))
-    dk.box((sx * DW, -0.07, 0), (sx * (DW + 0.14), T + 0.07, DH + 0.14))             # the lining's jambs
-dk.box((-DW - 0.14, -0.07, DH), (DW + 0.14, T + 0.07, DH + 0.14))                    # its lintel
+    # the lining's jambs and lintel stand LIN proud of the opening's faces: flush with them, the dark lining and
+    # the white slab behind it lay in one plane and fought for the pixels (the doorways flickered)
+    dk.box((sx * (DW - LIN), -0.07, 0), (sx * (DW + 0.14), T + 0.07, DH + 0.14))
+dk.box((-DW - 0.14, -0.07, DH - LIN), (DW + 0.14, T + 0.07, DH + 0.14))
 dk.box((-2, -0.05, 4.42), (2, 0, 4.5)).box((-2, -0.02, 4.56), (2, 0, H))             # ledge and upper band, the room's side
 dk.box((-0.7, -0.09, DH + 0.2), (0.7, -0.07, DH + 0.5))                              # the plate the door's lamp sits on
 dk.box((-0.7, T + 0.07, DH + 0.2), (0.7, T + 0.09, DH + 0.5))
@@ -205,7 +210,10 @@ for sx in (-1, 1):
     hz.box((sx * (DW + 0.02), -0.076, 0.02), (sx * (DW + 0.12), -0.07, 1.3))
     hz.box((sx * (DW + 0.02), T + 0.07, 0.02), (sx * (DW + 0.12), T + 0.076, 1.3))
 hz.done()
-Part("WallDoor_Sill", "Grating", w).box((-DW, -0.07, 0.0), (DW, T + 0.07, 0.006)).done()
+# the threshold: a steel plate that stands clear above the corridor's grating (0.006) and its edge strips (0.01);
+# level with the grating, it flickered against it
+Part("WallDoor_Sill", "DarkSteel", w, 0.004).box((-DW + LIN, -0.09, 0.0), (DW - LIN, T + 0.09, 0.018)).done()
+Part("WallDoor_SillGrip", "Galvanised", w).box((-DW + 0.12, -0.03, 0.018), (DW - 0.12, T + 0.03, 0.022)).done()
 
 # ------------------------------------------------------------------ what stands in the rooms (against a wall: front toward -y)
 p = piece("Tank")                                                   # a specimen tank, 1 m across, 2.7 m high

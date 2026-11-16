@@ -13,8 +13,14 @@ const SPECIAL := {  # materials that are procedural in Blender
 	"StudioBlock": {"color": Color(0.50, 0.53, 0.57), "rough": 0.75},
 	"StudioLight": {"color": Color(1, 1, 1), "rough": 0.5, "emit": Color(0.97, 0.98, 1.0), "energy": 2.6},
 	# the game's props (v2/scripts/build_props.py): the exit gate's light strips; its field is v2_field.gdshader
+	"Seam": {"color": Color(0.085, 0.09, 0.1), "rough": 0.92},        # the floor tiles' joints (build_kit.py)
 	"ExitLight": {"color": Color(0.05, 0.03, 0.08), "rough": 0.5, "emit": Color(0.71, 0.55, 1.0), "energy": 3.0},
 }
+
+# Surfaces that sparkle in the game as the Blender numbers have them (a polished, strongly normal-mapped metal
+# throws single bright pixels that crawl as the player walks: the walkway grating did, and it read as a flickering
+# light under the doors): [metallic, roughness (x the map), normal strength] used instead.
+const CALM := {"Grating": [0.45, 1.0, 0.45], "WallPanel": [0.0, 0.8, 0.45]}
 
 # Wear of the guns' and robots' paint (the numbers of the Blender materials: v2/scripts/build_*.py), drawn by
 # v2_worn.gdshader from the asset's baked mask. [wear, wear colour (linear), wear metallic, cavity, grunge]
@@ -151,6 +157,10 @@ static func material(mat_name: String, mesh_key: String = "", asset: String = ""
 				s.normal_enabled = true
 				s.normal_texture = n
 				s.normal_scale = minf(d.normal, 2.0)
+			if CALM.has(mat_name):                      # (see CALM)
+				s.metallic = CALM[mat_name][0]
+				s.roughness = CALM[mat_name][1]
+				s.normal_scale = CALM[mat_name][2]
 			s.uv1_triplanar = true                      # box projection in object space, as in Blender
 			s.uv1_scale = Vector3.ONE / float(d.scale)
 			s.uv1_triplanar_sharpness = 4.0

@@ -14,13 +14,16 @@ const RED := Color(1.0, 0.3, 0.12)
 const DUST := Color(0.74, 0.73, 0.7)
 const SMOKE := Color(0.36, 0.36, 0.38)             # the puff off struck metal
 const GUNSMOKE := Color(0.82, 0.82, 0.8)
-const MAX_MARKS := 40
+const MAX_MARKS := 90
+const HOLES := 8                    # variants of the bullet hole (each mark is turned at random as well)
+static var layer_at: Callable       # position -> the render layer of the room there (set by the scene)
 
 
 ## A new scene: the marks of the last one are gone with it.
 static func reset() -> void:
 	_marks.clear()
 	_mark_i = 0
+	layer_at = Callable()
 	hold = 1.0
 
 
@@ -215,6 +218,13 @@ static func scorch(pos: Vector3, normal: Vector3, big: float = 0.0) -> void:
 		var quad := QuadMesh.new()
 		quad.size = Vector2(1, 1)
 		mi.mesh = quad
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(mi)
+		_marks.append(mi)
+	else:
+		mi = _marks[_mark_i]
+		_mark_i = (_mark_i + 1) % MAX_MARKS
+	if big > 0.0:                                          # soot (an explosion): a soft dark patch
 		if not _cache.has("scorch"):
 			var m := StandardMaterial3D.new()
 			m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -224,16 +234,20 @@ static func scorch(pos: Vector3, normal: Vector3, big: float = 0.0) -> void:
 			m.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
 			_cache["scorch"] = m
 		mi.material_override = _cache["scorch"]
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		root.add_child(mi)
-		_marks.append(mi)
-	else:
-		mi = _marks[_mark_i]
-		_mark_i = (_mark_i + 1) % MAX_MARKS
+	else:                                                  # a bullet's strike: one of HOLES variants of the shader
+		var key := "hole%d" % (randi() % HOLES)
+		if not _cache.has(key):
+			var sm := ShaderMaterial.new()
+			sm.shader = load("res://assets/shaders/v2_bullet_hole.gdshader")
+			sm.set_shader_parameter("seed", float(_cache.size()) * 1.37 + 0.31)
+			_cache[key] = sm
+		mi.material_override = _cache[key]
+	# lit by the lights of the room it is in (each room's lights reach only that room's render layer)
+	mi.layers = int(layer_at.call(pos + normal * 0.3)) if layer_at.is_valid() else 0xFFFFF
 	var up := Vector3.RIGHT if absf(normal.y) > 0.9 else Vector3.UP
-	var size := big if big > 0.0 else randf_range(0.09, 0.16)
+	var size := big if big > 0.0 else 0.36 * randf_range(0.85, 1.25)      # (the shader's measures are for a quad of 0.24 m: craters of 3 to 6 cm)
 	mi.global_transform = Transform3D(Basis.looking_at(-normal, up).rotated(normal, randf() * TAU) * Basis.from_scale(Vector3.ONE * size),
-		pos + normal * 0.004)
+		pos + normal * (0.004 if big > 0.0 else 0.003))
 
 
 ## Where a round lands: a shower of sparks, chips, a puff of dust, a short flash of light; a scorch mark on the room.

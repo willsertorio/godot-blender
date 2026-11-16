@@ -30,6 +30,9 @@ const CROWD := [0.6, 3]
 const MORE := 1.5                   # robots added to the dungeon per mission completed
 const HP_PER_THREAT := 0.08         # robots' health: + this per mission completed
 const SCORE_PER_THREAT := 0.25      # a kill's worth: + this per mission completed
+const GATHER := 9                   # a robot comes to look at the player who is down from at most this many cells away
+const RING := [0.0, 50.0, -50.0, 100.0, -100.0, 150.0, -150.0]      # where they stand round the player (degrees from where the player faces)
+const DEATH_WAIT := [3.4, 9.0]      # seconds from going down to the options: at the earliest, at the latest
 const DROP := 0.35                  # chance that a destroyed robot leaves something
 const REACH := 2.4                  # how near a door or a crate must be for E
 const CHASE := 18                   # a robot follows the player at most this many cells
@@ -79,6 +82,9 @@ var _end: Control
 var _map: V2Map
 var _tick := 0.0
 var _bot: Node
+var _death_t := 0.0
+var _seen_t := 0.0
+var _watchers: Array = []
 var _rng := RandomNumberGenerator.new()
 var _loot_rng := RandomNumberGenerator.new()
 
@@ -93,6 +99,7 @@ func _ready() -> void:
 	if _low:
 		get_viewport().msaa_3d = Viewport.MSAA_DISABLED
 	var capture := ""
+	var part := ""
 	var bot := 0
 	seed_used = int(Time.get_ticks_usec()) ^ (randi() << 8)
 	if "--game-test" in args:
@@ -104,6 +111,8 @@ func _ready() -> void:
 			missions = int(a.trim_prefix("--threat="))
 		if a.begins_with("--game-capture="):
 			capture = a.trim_prefix("--game-capture=")
+		if a.begins_with("--part="):                       # with --game-capture: flicker / death / marks (v2_game_bot.gd)
+			part = a.trim_prefix("--part=")
 		if a.begins_with("--bot"):
 			bot = maxi(int(a.trim_prefix("--bot=")), 1) if a.contains("=") else 1
 	_rng.seed = hash(seed_used) + 5
@@ -113,6 +122,9 @@ func _ready() -> void:
 	dungeon = V2Dungeon.new()
 	add_child(dungeon)
 	dungeon.build(gen)
+	V2Fx.layer_at = func(p: Vector3) -> int:               # (bullet marks, the dropped gun: lit by the room they are in)
+		var a := dungeon.area_at(p)
+		return int(dungeon.areas[a].layer) if a >= 0 else 0xFFFFF
 	_props = (load(V2Assets.DIR + "props.glb") as PackedScene).instantiate()
 	V2Assets.apply(_props)
 	for l in gen.loot_spawns:
@@ -165,7 +177,9 @@ func _ready() -> void:
 		_bot = (load("res://scripts/v2/v2_game_bot.gd") as GDScript).new()
 		_bot.game = self
 		add_child(_bot)
-		if capture != "":
+		if capture != "" and part != "":
+			_bot.call(part, capture)
+		elif capture != "":
 			_bot.capture(capture)
 		elif bot > 0:
 			_bot.play_runs(bot)
@@ -400,11 +414,77 @@ func finish(won: bool) -> void:
 		player.invulnerable = true
 		missions += 1
 	total_score += score
+	player.mouse_look = false
+	_map.visible = false
+	if won:
+		_show_end()
+	else:
+		_death_t = 0.0                                     # the player falls; the robots come to look; then the options
+		_gather()
+
+
+func _show_end() -> void:
 	_end_screen()
 	if _bot == null:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	player.mouse_look = false
-	_map.visible = false
+
+
+## The player is down: the robots that can get there come and stand round them, looking (they do not fire any
+## more); the turrets turn their heads. Places in a ring round the player, in front of their eyes first.
+func _gather() -> void:
+	var at := player.global_position
+	var head := at + Vector3(0, V2Player.LIE, 0)
+	var my_cell := V2Dungeon.cell_of(at)
+	var fwd := -player.global_basis.z
+	var alive: Array = robots.filter(func(r: V2Robot) -> bool: return r.state != V2Robot.DEAD)
+	alive.sort_custom(func(a2: V2Robot, b2: V2Robot) -> bool: return a2.global_position.distance_to(at) < b2.global_position.distance_to(at))
+	var k := 0
+	for r: V2Robot in alive:
+		if r.kind == "turret":
+			if r.global_position.distance_to(at) < 30.0:
+				r.watch(head, r.position)
+			continue
+		var cells := dungeon.path(V2Dungeon.cell_of(r.global_position), my_cell)
+		if cells.is_empty() or cells.size() > GATHER:
+			continue
+		var spot := Vector3.INF
+		while k < RING.size() and spot == Vector3.INF:
+			var p := at + fwd.rotated(Vector3.UP, deg_to_rad(RING[k])) * (2.0 if r.kind == "spider" else 1.5)
+			k += 1
+			var q := PhysicsRayQueryParameters3D.create(at + Vector3(0, 0.5, 0), p + Vector3(0, 0.5, 0))
+			q.exclude = [player.get_rid()]
+			var res := get_world_3d().direct_space_state.intersect_ray(q)
+			if res.is_empty() or res.collider.has_meta("robot"):
+				spot = p
+		if spot == Vector3.INF:
+			continue
+		var way: Array = []                                # cell middle to cell middle, up to the cell next to the player's
+		for i in range(1, cells.size() - 1):
+			way.append([V2Dungeon.center(cells[i]), dungeon.low_cell(cells[i])])
+		r.active = true
+		r.set_process(true)
+		r.watch(head, spot, way)
+		_watchers.append(r)
+
+
+## After going down: the robots on their way are kept lit by the areas they cross; the options appear once the
+## first of them has stood over the player for a moment (or after a while, if none comes).
+func _death(delta: float) -> void:
+	_death_t += delta
+	if _end != null:
+		return
+	var there := false
+	for r: V2Robot in _watchers:
+		var area := dungeon.area_at(r.global_position)
+		if area >= 0 and area != r.room:
+			r.room = area
+			_set_layer(r, dungeon.areas[area].layer)
+		if r.state == V2Robot.WATCH and Vector2(r.position.x - r._watch_spot.x, r.position.z - r._watch_spot.z).length() < 0.6:
+			there = true
+	_seen_t = _seen_t + delta if there else 0.0
+	var quick := _bot != null and DisplayServer.get_name() == "headless"
+	if quick or _death_t > DEATH_WAIT[1] or (_death_t > DEATH_WAIT[0] and (_seen_t > 1.6 or _watchers.is_empty())):
+		_show_end()
 
 
 func alive_in(area: int) -> int:
@@ -443,6 +523,8 @@ func _process(delta: float) -> void:
 		if _tick <= 0.0:
 			_tick = 0.4
 			_robots_tick()
+	if state == LOST:
+		_death(delta)
 	_pickups(delta)
 	_hud_update(delta)
 
@@ -568,7 +650,7 @@ func _hud_update(delta: float) -> void:
 	var side := wrapi(int(round(angle_difference(player._yaw, atan2(-to.x, -to.z)) / (-PI / 2.0))), 0, 4)      # 0 ahead, 1 right, 2 behind, 3 left
 	for k in 4:
 		(_from_bars[k] as ColorRect).color.a = player.hurt_flash * 0.75 if (k == side and state == PLAYING) else 0.0
-	_low_hp.color.a = clampf((35.0 - player.hp) / 35.0, 0.0, 1.0) * (0.1 + 0.05 * sin(elapsed * 5.0)) if state == PLAYING else 0.0
+	_low_hp.color.a = clampf((35.0 - player.hp) / 35.0, 0.0, 1.0) * (0.1 + 0.05 * sin(elapsed * 5.0)) if state == PLAYING else (0.1 if state == LOST else 0.0)
 	var dot := player.aim_dot if player.weapon in V2Player.AUTO else size / 2.0
 	_dot.visible = state == PLAYING and dot.x >= 0.0 and not (player.busy in V2Player.NO_CURSOR) and not _map.visible
 	_dot.position = dot - Vector2(2, 2)
@@ -593,7 +675,9 @@ func _end_screen() -> void:
 	_end.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_ui.add_child(_end)
 	var won := state == WON
-	V2Ui.full(_end, Color(0.02, 0.03, 0.045, 0.8))
+	V2Ui.full(_end, Color(0.02, 0.03, 0.045, 0.8 if won else 0.5))      # (lost: the robots standing over the player stay in sight)
+	_end.modulate.a = 0.0
+	create_tween().tween_property(_end, "modulate:a", 1.0, 0.6)
 	V2Ui.label(_end, "MISSION COMPLETE" if won else "MISSION FAILED", 0.5, 0.5, 0.0, -190.0, 44, V2Ui.VIOLET if won else V2Ui.RED, true, HORIZONTAL_ALIGNMENT_CENTER)
 	V2Ui.label(_end, "You reached the exit portal." if won else "You went down %s." % ("in a room" if here >= 0 and dungeon.areas[here].room else "in a corridor"),
 		0.5, 0.5, 0.0, -128.0, 17, Color(0.8, 0.86, 0.9), false, HORIZONTAL_ALIGNMENT_CENTER)

@@ -294,11 +294,13 @@ func open_door(i: int) -> void:
 		return
 	d.open = true
 	V2Sfx.play("door", (d.at as Vector3) + Vector3(0, 1.3, 0))
+	# (the leaves go all the way into the doorway's lining: left 4 cm proud of it, the end of a leaf showed, and
+	# its two faces in one plane, the armour's and the edge strip's, flickered)
 	for k in 2:
 		var leaf := d.leaves[k] as Node3D
 		var tw := create_tween()
 		tw.tween_interval(0.12)
-		tw.tween_property(leaf, "position:x", leaf.position.x + (-1.0 if k == 0 else 1.0) * (DOOR_HALF - 0.04), 0.6) \
+		tw.tween_property(leaf, "position:x", leaf.position.x + (-1.0 if k == 0 else 1.0) * (DOOR_HALF - 0.012), 0.6) \
 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	for lamp in d.lamps:
 		(lamp as MeshInstance3D).material_override = _lamp(Color(0.224, 1.0, 0.533))

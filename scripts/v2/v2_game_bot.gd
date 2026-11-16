@@ -482,9 +482,60 @@ func test() -> void:
 	player.down = false
 	player.hp = 100.0
 	level = game.missions
+	# (in the biggest room, with a spider and a drone put back in service two cells away: the walk through the
+	# dungeon has left none)
+	var big: DungeonGen.Room = gen.rooms[0]
+	for r in gen.rooms:
+		if r.rect.get_area() > big.rect.get_area() and r.id != gen.exit_room:
+			big = r
+	var mid := Vector2i(big.rect.position + big.rect.size / 2)
+	player.invulnerable = true
+	teleport(V2Dungeon.center(mid))
+	var put := {}
+	var offsets := {"spider": Vector2i(-1, 0), "drone": Vector2i(0, -1)}
+	for robot: V2Robot in game.robots:
+		if offsets.has(robot.kind) and not put.has(robot.kind):
+			put[robot.kind] = true
+			robot.respawns = true
+			robot.respawn()
+			robot.respawns = false
+			robot.set_process(true)
+			robot.room = dungeon.area_of[mid]
+			robot.arena = dungeon.arena(robot.room, 1.9)
+			robot.place(V2Dungeon.center(mid + offsets[robot.kind]), 0.0)
+	await _wait(0.6)
+	player.invulnerable = false
 	player.hurt(999.0, Vector3.ZERO)
 	await _wait(0.2)
 	ok = _check("going down fails the mission, the threat level stays", game.state == game.LOST and player.down and game.missions == level) and ok
+	# --- then: the player falls onto their side, the gun lies on the floor, the robots come and look, none fires
+	var could := 0                                         # robots that can walk or fly there
+	for r in game.robots:
+		if r.state != V2Robot.DEAD and r.kind != "turret":
+			var cells := dungeon.path(V2Dungeon.cell_of(r.global_position), V2Dungeon.cell_of(player.global_position))
+			if not cells.is_empty() and cells.size() <= game.GATHER:
+				could += 1
+	var shots := 0
+	for r in game.robots:
+		shots += r.shots_fired
+	await _wait(11.0)
+	var nearest := 99.0
+	var facing := 0
+	for r: V2Robot in game._watchers:
+		var d := Vector2(r.global_position.x - player.global_position.x, r.global_position.z - player.global_position.z).length()
+		nearest = minf(nearest, d)
+		if d < 2.8 and r.aim_error() < deg_to_rad(12.0):
+			facing += 1
+	var shots_after := 0
+	for r in game.robots:
+		shots_after += r.shots_fired
+	ok = _check("down: the view lies on its side at the floor, the gun is on the floor",
+		absf(player.cam.global_position.y - player.global_position.y - V2Player.LIE) < 0.03 and absf(player.cam.global_basis.x.y) > 0.9
+		and player.dropped != null and player.dropped.global_position.y < 0.12 and not player.overlay.visible,
+		"eye %.2f m up, rolled %.0f degrees" % [player.cam.global_position.y - player.global_position.y, rad_to_deg(asin(clampf(absf(player.cam.global_basis.x.y), 0.0, 1.0)))]) and ok
+	ok = _check("down: the robots come close and look, and hold their fire",
+		(could == 0 or (game._watchers.size() >= mini(could, 2) and nearest < 2.6 and facing >= 1)) and shots_after == shots and game._end != null,
+		"%d could come, %d came, the nearest %.1f m away, %d with their guns on the player, %d rounds fired" % [could, game._watchers.size(), nearest, facing, shots_after - shots]) and ok
 	var want := ["door", "crate", "pickup", "heal", "exit", "pistol_shot", "rifle_shot", "pistol_mag_in", "rifle_mag_in"]
 	var unheard: Array = []
 	for key in want:
@@ -505,6 +556,118 @@ func _shot(dir: String, shot_name: String) -> void:
 func _look_at(from: Vector3, at: Vector3) -> void:
 	var d := at - (from + Vector3(0, 1.62, 0))
 	teleport(from, rad_to_deg(atan2(-d.x, -d.z)), rad_to_deg(atan2(d.y, Vector2(d.x, d.z).length())))
+
+
+## Flicker hunt (-- --game-capture=DIR --part=flicker): at every doorway and in every room, three frames. `a` two frames after the
+## player arrives there from another area, `b` eight frames later from the same spot, `c` with the camera 1 mm
+## aside. a against b = what flashes when the player changes area; b against c = surfaces that fight for the same
+## pixels (two faces in one plane) or sparkle. tools/flicker_diff.py reads them and lists the worst.
+func flicker(dir: String) -> void:
+	DirAccess.make_dir_recursive_absolute(dir)
+	player.invulnerable = true
+	player.overlay.visible = false
+	game._ui.visible = false
+	for r in game.robots:
+		r.process_mode = Node.PROCESS_MODE_DISABLED
+		r.visible = false
+	for i in dungeon.doors.size():
+		game.open_door(i)
+	await _wait(1.5)
+	var views: Array = []                                  # [name, from (feet), look at]
+	for i in dungeon.doors.size():
+		var d: Dictionary = dungeon.doors[i]
+		var out := Vector3(d.dir.x, 0, d.dir.y)
+		var side := Vector3(-out.z, 0, out.x)
+		var at: Vector3 = d.at
+		views.append(["door%02d_room" % i, at - out * 3.6 + side * 0.7, at + Vector3(0, 0.9, 0)])
+		views.append(["door%02d_sill" % i, at - out * 1.5, at + out * 0.3])
+		views.append(["door%02d_sill2" % i, at + out * 1.9 + side * 0.4, at])
+	for r in gen.rooms:
+		var lo := Vector3(r.rect.position.x * 4.0, 0, r.rect.position.y * 4.0)
+		var hi := Vector3(r.rect.end.x * 4.0, 0, r.rect.end.y * 4.0)
+		var mid: Vector3 = (lo + hi) / 2.0
+		views.append(["room%02d_from0" % r.id, lo + (mid - lo).normalized() * 1.2, mid + Vector3(0, 1.0, 0)])
+		views.append(["room%02d_from2" % r.id, hi + (mid - hi).normalized() * 1.2, mid + Vector3(0, 1.0, 0)])
+		views.append(["room%02d_corner" % r.id, lo + (mid - lo).normalized() * 4.0, lo + Vector3(0, 0.3, 0)])
+	for co in gen.corridors:
+		var cells: Array = co.cells
+		views.append(["corr%02d" % co.id, V2Dungeon.center(cells[0]), V2Dungeon.center(cells[cells.size() - 1]) + Vector3(0, 1.2, 0)])
+	for v in views:
+		for k in 3:
+			if k != 1:
+				_look_at((v[1] as Vector3) + (Vector3(0.001, 0, 0.0007) if k == 2 else Vector3.ZERO), v[2])
+			player.velocity = Vector3.ZERO
+			for f in (8 if k == 1 else 2):
+				await _frame()
+			await RenderingServer.frame_post_draw
+			get_viewport().get_texture().get_image().save_png(dir.path_join("%s_%s.png" % [v[0], "abc"[k]]))
+	print("[flicker] %d views" % views.size())
+	get_tree().quit()
+
+
+## Going down (-- --game-capture=DIR --part=death): the player is shot down in the room with most robots; frames of
+## the fall, the gun on the floor, the robots coming to look, the options.
+func death(dir: String) -> void:
+	DirAccess.make_dir_recursive_absolute(dir)
+	await _wait(1.0)
+	var best := -1
+	var most := 0
+	for r in gen.rooms:
+		var n: int = game.alive_in(dungeon.area_of[r.rect.position])
+		if n > most:
+			most = n
+			best = r.id
+	var room: DungeonGen.Room = gen.rooms[best]
+	player.invulnerable = true
+	_look_at(room.center() + Vector3(0.6, 0, 0.6), room.center() + Vector3(4, 1.2, 0))
+	await _wait(2.5)
+	var foe: V2Robot = null
+	for r in game.robots:
+		if r.state != V2Robot.DEAD and r.room == dungeon.area_of[room.rect.position] and (foe == null or r.kind == "spider"):
+			foe = r
+	_look_at(player.global_position, foe.hit_point())
+	await _wait(0.4)
+	player.invulnerable = false
+	player.hurt(999.0, foe.global_position)
+	var t := 0.0
+	for stop in [0.2, 0.45, 0.7, 1.0, 1.6, 2.6, 3.8, 5.2, 7.0, 9.6]:
+		await _wait(stop - t)
+		t = stop
+		await _shot(dir, "death_%04.1f" % stop)
+	print("[death] watchers %d, end screen %s, gun on the floor %s" % [game._watchers.size(), str(game._end != null), str(player.dropped != null)])
+	get_tree().quit()
+
+
+## Bullet marks (-- --game-capture=DIR --part=marks): rounds into a wall and the floor, seen close and from 4 m.
+func marks(dir: String) -> void:
+	DirAccess.make_dir_recursive_absolute(dir)
+	player.invulnerable = true
+	for r in game.robots:
+		r.process_mode = Node.PROCESS_MODE_DISABLED
+		r.visible = false
+	await _wait(1.0)
+	var room: DungeonGen.Room = gen.rooms[gen.spawn_room]
+	var lo := Vector3(room.rect.position.x * 4.0, 0, room.rect.position.y * 4.0)
+	var wall := Vector3(lo.x, 1.5, room.center().z + 0.7)             # a point on the room's -x wall
+	var from := wall + Vector3(1.4, -1.5, 0)
+	for k in 9:
+		var at := wall + Vector3(0, randf_range(-0.35, 0.3), randf_range(-0.45, 0.45))
+		V2Fx.impact(at, Vector3(1, 0, 0))
+	for k in 5:
+		V2Fx.impact(Vector3(lo.x + randf_range(0.5, 1.1), 0.0, wall.z + randf_range(-0.5, 0.5)), Vector3.UP)
+	await _wait(2.0)
+	player.overlay.visible = false
+	game._ui.visible = false
+	_look_at(from, wall)
+	await _wait(0.5)
+	await _shot(dir, "marks_wall_close")
+	_look_at(wall + Vector3(4.0, -1.5, 1.5), wall + Vector3(0, -0.5, 0))
+	await _wait(0.5)
+	await _shot(dir, "marks_4m")
+	_look_at(wall + Vector3(1.6, -1.5, 0.0), Vector3(lo.x + 0.8, 0.0, wall.z))
+	await _wait(0.5)
+	await _shot(dir, "marks_floor")
+	get_tree().quit()
 
 
 func capture(dir: String) -> void:

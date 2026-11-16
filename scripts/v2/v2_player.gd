@@ -77,7 +77,20 @@ var overlay: CanvasLayer
 static var world_env: Environment   # set by the lab before the player is made: the gun's camera uses a copy
 var _clock := 0.0
 var _cue := {"clip": "", "pos": 0.0}
-var _stride := 0.0                  # metres walked since the last footstep
+var _stride := 0.5                  # where the walk is between two footfalls, 0..1
+var _running := false               # Shift held and going forward (whatever the gun is doing)
+# going down under the game's rules: the player falls onto their side and lies there, the gun drops in front
+const FALL := 0.8                   # seconds from standing to the floor
+const LIE := 0.17                   # the eye's height lying down
+var fallen := -1.0                  # seconds since going down (-1 = standing)
+var dropped: Node3D                 # the gun on the floor
+var _fall_side := 1.0               # +1 = onto the left side
+var _fall_from := Vector2.ZERO      # [eye height, pitch] when it began
+var _drop_from := Transform3D.IDENTITY
+var _drop_to := Transform3D.IDENTITY
+var _drop_t := -1.0
+var _thud := false
+var steps := 0                      # footfalls heard so far (the checks)
 var _air := false
 var _rounds := 0
 var _aimed := 0.0                   # 1 = the gun is up at the eye
@@ -222,7 +235,95 @@ func hurt(damage: float, from: Vector3) -> void:
 		hp = 0.0
 		down = true
 		V2Sfx.play("down")
+		if rules:
+			_go_down(from)
 		died.emit()
+
+
+## Down for good (the game): the fall begins, away from the side the round came from; the gun leaves the hands.
+func _go_down(from: Vector3) -> void:
+	fallen = 0.0
+	_thud = false
+	_fall_from = Vector2(_eye, _pitch)
+	var to := from - global_position
+	_fall_side = 1.0 if to.dot(global_basis.x) > 0.0 else -1.0      # (hit from the right: over onto the left side)
+	busy = ""
+	bot_fire = false
+	_drop_gun()
+
+
+## The camera of a player who is down: `t` seconds into the fall. Falls faster and faster, rolls onto the side,
+## meets the floor with a small bounce, and lies looking along it.
+func _fallen_view(t: float) -> Transform3D:
+	var k := clampf(t / FALL, 0.0, 1.0)
+	var drop := k * k
+	var after := maxf(t - FALL, 0.0)
+	var bounce := 0.03 * sin(minf(after / 0.26, 1.0) * PI) + 0.008 * sin(minf(maxf(after - 0.26, 0.0) / 0.16, 1.0) * PI)
+	var roll := _fall_side * deg_to_rad(83.0) * smoothstep(0.0, 1.0, k) - _fall_side * deg_to_rad(4.0) * sin(minf(after / 0.4, 1.0) * PI)
+	var pitch := lerpf(_fall_from.y, 0.03, smoothstep(0.0, 1.0, k))
+	var basis := Basis(Vector3(0, 0, 1), roll) * Basis(Vector3.RIGHT, pitch)
+	return Transform3D(basis, Vector3(-_fall_side * 0.24 * drop, lerpf(_fall_from.x, LIE, drop) + bounce, -0.1 * drop))
+
+
+## The gun leaves the hands and lands on the floor in front of the player: a copy of the view's gun without the
+## arms, in the world (the view itself, which only the gun's camera draws, is switched off).
+func _drop_gun() -> void:
+	var live: Node3D = _views[weapon].scene
+	var copy := (load(V2Assets.DIR + "view_" + weapon + ".glb") as PackedScene).instantiate() as Node3D
+	V2Assets.apply(copy, "view_" + weapon)
+	dropped = Node3D.new()
+	get_parent().add_child(dropped)
+	dropped.add_child(copy)
+	var ap := V2Assets.clips(copy, "view_" + weapon)
+	ap.play("Idle")
+	ap.advance(0.0)
+	ap.active = false
+	for n in copy.find_children("ArmRig*", "", true, false):
+		n.queue_free()
+	var layer := int(V2Fx.layer_at.call(global_position)) if V2Fx.layer_at.is_valid() else 1
+	var box := AABB()
+	var first := true
+	for n in copy.find_children("*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		var hidden := String(mi.name).contains("Flash") or String(mi.name).contains("Casing") or String(mi.name).contains("Magazine2") \
+			or mi.find_parent("ArmRig*") != null
+		if hidden or mi.scale.x < 0.01:
+			mi.visible = false
+			continue
+		mi.layers = layer
+		var part := (dropped.global_transform.affine_inverse() * mi.global_transform) * mi.get_aabb()
+		box = part if first else box.merge(part)
+		first = false
+	copy.position = -box.get_center()
+	# from the hands ...
+	_drop_from = live.global_transform * Transform3D(Basis.IDENTITY, box.get_center())
+	# ... to the floor, on its side, a little to the side the player falls to, where the lying eye looks
+	var fwd := -global_basis.z
+	var lie := Basis(Vector3.UP, _yaw + randf_range(0.5, 1.1) * _fall_side) * Basis(Vector3(0, 0, 1), PI / 2.0 * _fall_side)
+	var thick: float = minf(box.size.x, box.size.y)
+	_drop_to = Transform3D(lie, Vector3(global_position.x, global_position.y + thick / 2.0 + 0.004, global_position.z)
+		+ fwd * (0.95 if weapon == "pistol" else 1.25) - global_basis.x * _fall_side * 0.32)
+	dropped.global_transform = _drop_from
+	_drop_t = 0.0
+	overlay.visible = false
+
+
+func _drop_step(delta: float) -> void:
+	if _drop_t < 0.0 or dropped == null:
+		return
+	var was := _drop_t
+	_drop_t += delta
+	var k := clampf(_drop_t / 0.55, 0.0, 1.0)
+	var hop := 0.05 * sin(clampf((_drop_t - 0.55) / 0.22, 0.0, 1.0) * PI)              # one small hop where it lands
+	var pos := _drop_from.origin.lerp(_drop_to.origin, k)
+	pos.y = lerpf(_drop_from.origin.y, _drop_to.origin.y, k * k) + hop
+	var q := _drop_from.basis.get_rotation_quaternion().slerp(_drop_to.basis.get_rotation_quaternion(), smoothstep(0.0, 1.0, k))
+	dropped.global_transform = Transform3D(Basis(q), pos)
+	if was < 0.55 and _drop_t >= 0.55:
+		V2Sfx.play("bolt", pos, -5.0, 0.8)                 # steel on the floor
+	if _drop_t > 0.8:
+		_drop_t = -1.0
+		dropped.global_transform = _drop_to
 
 
 func revive() -> void:
@@ -271,6 +372,35 @@ func act(clip: String) -> void:
 	ap.seek(0.0, true)
 
 
+## Footsteps fall with the walk the player sees: the Walk clip's bob is lowest twice a second, the Sprint clip's
+## every 0.35 s, and a step sounds as the camera reaches the bottom. (They were spaced by distance, 0.8 m: four a
+## second at a walk, twice what the view shows.) While another clip plays (firing, a reload), the same pace by
+## the clock.
+const STEP_WALK := 0.5
+const STEP_RUN := 0.35
+const STEP_CROUCH := 0.62
+
+
+func _footsteps(delta: float) -> void:
+	var speed := Vector2(velocity.x, velocity.z).length()
+	if down or not is_on_floor() or speed < 0.6:
+		_stride = 0.5                                  # (the first step comes half a pace after setting off)
+		return
+	var ap := _ap()
+	var pos := ap.current_animation_position
+	var last := _stride
+	if ap.current_animation == &"Walk" and not crouched:
+		_stride = fposmod(pos / STEP_WALK, 1.0)
+	elif ap.current_animation == &"Sprint" and pos > SPRINT[weapon][0]:
+		_stride = fposmod((pos - SPRINT[weapon][0]) / STEP_RUN - 0.5, 1.0)
+	else:
+		_stride += delta / (STEP_CROUCH if crouched else (STEP_RUN if _sprinting else STEP_WALK))
+	if _stride >= 1.0 or _stride < last - 0.5:         # past the bottom of the bob
+		_stride = fposmod(_stride, 1.0)
+		steps += 1
+		V2Sfx.play("step", Vector3.INF, 3.0 if _sprinting else (-5.0 if crouched else 0.0))
+
+
 ## Leave a held clip (automatic fire, sprint) for the rest pose, or for the aim it was fired from.
 func _release() -> void:
 	var ap := _ap()
@@ -285,12 +415,16 @@ func _release() -> void:
 
 ## R: the reload that fits what is in the gun. False if there is nothing to do (full, or no rounds to put in).
 func reload() -> bool:
+	if not rules and (_running or busy == "Sprint"):
+		return false
 	if not rules:
 		act("Reload" if weapon == "pistol" else "ReloadTactical")
 		return true
 	if mag[weapon] >= MAG[weapon] or (weapon == "rifle" and reserve <= 0):
 		return false
-	if busy in ["ADS", "Sprint"]:
+	if _running or busy == "Sprint":                   # not at a run: the hands are busy with the gun
+		return false
+	if busy == "ADS":
 		busy = ""
 	act("Reload" if weapon == "pistol" else ("ReloadEmpty" if mag[weapon] <= 0 else "ReloadTactical"))
 	return busy.begins_with("Reload")
@@ -423,7 +557,8 @@ func _physics_process(delta: float) -> void:
 		dir = auto_move
 	if down:
 		dir = Vector3.ZERO
-	var sprint := Input.is_key_pressed(KEY_SHIFT) and dir.z < 0.0
+	var sprint := Input.is_key_pressed(KEY_SHIFT) and dir.z < 0.0 and not busy.begins_with("Reload")      # (no running through a reload)
+	_running = sprint
 	if sprint or (is_on_floor() and Input.is_key_pressed(KEY_SPACE)):
 		crouched = false                               # (running and jumping stand the player up)
 	dir = (Basis(Vector3.UP, _yaw) * dir).normalized()
@@ -443,15 +578,8 @@ func _physics_process(delta: float) -> void:
 		V2Sfx.play("jump")
 	var fall := -velocity.y
 	move_and_slide()
-	# footsteps by the distance covered (a stride is longer at a run), a thud on landing
-	if is_on_floor():
-		if _air and fall > 2.5:
-			V2Sfx.play("land")
-		_stride += Vector2(velocity.x, velocity.z).length() * delta
-		var stride_len := 1.15 if sprint else (0.6 if crouched else 0.8)
-		if _stride >= stride_len:
-			_stride = 0.0
-			V2Sfx.play("step", Vector3.INF, 3.0 if sprint else (-5.0 if crouched else 0.0))
+	if is_on_floor() and _air and fall > 2.5:          # a thud on landing (the footsteps: _footsteps)
+		V2Sfx.play("land")
 	_air = not is_on_floor()
 	_sprinting = sprint and is_on_floor() and Vector2(velocity.x, velocity.z).length() > 3.6
 	if sprint and busy == "" and is_on_floor():
@@ -466,7 +594,7 @@ func _process(delta: float) -> void:
 	hurt_flash = maxf(hurt_flash - delta * 2.5, 0.0)
 	hit_confirm = maxf(hit_confirm - delta, 0.0)
 	_dry_t = maxf(_dry_t - delta, 0.0)
-	if rules and _want_reload and busy in ["", "ADS"] and not down:
+	if rules and _want_reload and busy in ["", "ADS"] and not down and not _running:
 		_want_reload = false
 		reload()
 	if not rules and not down and _since_hurt > REGEN_AFTER:
@@ -476,7 +604,14 @@ func _process(delta: float) -> void:
 	# shake: the CamKick node of the view, which is in the Blender camera's frame = this camera's turned 90 degrees).
 	var ct := Transform3D(Basis(Vector3.RIGHT, _pitch + _kick), Vector3(0, _eye, 0))
 	var kick: Node3D = _views[weapon].kick
-	if kick != null:
+	if fallen >= 0.0:
+		fallen += delta
+		ct = _fallen_view(fallen)
+		if not _thud and fallen >= FALL:
+			_thud = true
+			V2Sfx.play("land", Vector3.INF, 7.0, 0.8)
+		_drop_step(delta)
+	elif kick != null:
 		var rx := Transform3D(Basis(Vector3.RIGHT, PI / 2.0), Vector3.ZERO)
 		ct = ct * (rx * kick.transform * rx.affine_inverse())
 	cam.transform = ct
@@ -500,6 +635,7 @@ func _process(delta: float) -> void:
 		var want := "Walk" if Vector2(velocity.x, velocity.z).length() > 0.6 and is_on_floor() else "Idle"
 		if ap.current_animation != want:
 			ap.play(want, 0.18)
+	_footsteps(delta)
 	# the view: turned so that the barrel is parallel to the line of sight, except while aiming (the aimed pose is
 	# built on the line of sight already)
 	var aimed := 0.0

@@ -13,8 +13,8 @@ extends Node3D
 ## A hit pushes the robot: the body is knocked back and tilted on springs and it is shoved a little way.
 ## Preview mode (set_ai(false)): the robot stands where it stands in the Blender scene and cycles through its clips.
 
-enum { ROAM, ENGAGE, AIM, SHOOT, DEAD, PREVIEW, TRAVEL }
-const STATE_NAMES := ["roam", "engage", "aim", "shoot", "dead", "preview", "travel"]
+enum { ROAM, ENGAGE, AIM, SHOOT, DEAD, PREVIEW, TRAVEL, WATCH }
+const STATE_NAMES := ["roam", "engage", "aim", "shoot", "dead", "preview", "travel", "watch"]
 const ORDER := {
 	"spider": ["Idle", "Shoot", "Walk", "Run", "Death"],
 	"drone": ["Idle", "Shoot", "Fly", "Death"],
@@ -86,6 +86,8 @@ var grid := 0.0                   # > 0 (the game: the dungeon's cells, 4 m): it
 #                                   another along the rows and columns, never across a cell's corner: columns and tanks stand there
 var others: Array = []            # the robots it shares its floor with: it keeps its firing position off theirs
 var _route: Array = []            # on its way somewhere (`follow`): [[point (its parent's frame), low: bool], ...]
+var _watch := Vector3.INF         # the player is down: what it has come to look at (world); INF = nothing
+var _watch_spot := Vector3.ZERO   # and where it stands to look (its parent's frame)
 var _rail_dir := 1.0
 var _spec: Dictionary
 var _root: Node3D                 # the glb's <Kind>_Root joint, re-seated on this node
@@ -397,6 +399,7 @@ func respawn() -> void:
 	var was_wreck := state == DEAD
 	hp = max_hp
 	state = ROAM
+	_watch = Vector3.INF
 	V2Fx.set_smoke(_smoke, false)
 	_settle()
 	_go_home()
@@ -727,7 +730,7 @@ func _step_round(dir: Vector3, delta: float) -> float:
 func _move(delta: float, fast: bool, face_player: bool) -> bool:
 	var to := _target - position
 	to.y = 0.0
-	if grid > 0.0 and absf(to.x) > 0.35 and absf(to.z) > 0.35:
+	if grid > 0.0 and state != WATCH and absf(to.x) > 0.35 and absf(to.z) > 0.35:
 		to = Vector3(to.x, 0.0, 0.0) if absf(fposmod(position.z, grid) - grid / 2.0) < absf(fposmod(position.x, grid) - grid / 2.0) \
 			else Vector3(0.0, 0.0, to.z)                   # (first along the row or the column it is on the middle of)
 	var dist := to.length()
@@ -749,7 +752,7 @@ func _move(delta: float, fast: bool, face_player: bool) -> bool:
 		k = clampf(1.0 - _face(to, _spec.turn, delta) / deg_to_rad(70.0), 0.0, 1.0)      # turns first, then goes
 	var pl := _local(player.global_position) - position
 	pl.y = 0.0
-	if pl.length() < 3.0 and pl.dot(to) > 0.0:         # never into the player
+	if pl.length() < 3.0 and pl.dot(to) > 0.0 and state != WATCH:      # never into the player
 		k = 0.0
 	var speed: float = (_spec.run if fast else _spec.walk) * k
 	_own_vel = to / maxf(dist, 0.001) * speed
@@ -803,6 +806,9 @@ func _mobile(delta: float) -> void:
 		_servo(delta, false)
 		_travel(delta)
 		return
+	if state == WATCH:
+		_watching(delta)
+		return
 	if kind == "drone":
 		_seat.y = move_toward(_seat.y, _seat_y, 1.5 * delta)
 	if state != ROAM and _unseen > 3.0:                # lost the player
@@ -848,6 +854,48 @@ func _mobile(delta: float) -> void:
 				_engage()
 
 
+## The player is down: come and look. `spot` = where to stand (its parent's frame), `at` = what to look at
+## (world: the player's head on the floor), `way` = the way there if it is in another room (as for `follow`).
+## It does not fire. The turret turns its head (and runs along its rail) to look.
+func watch(at: Vector3, spot: Vector3, way: Array = []) -> void:
+	if state == DEAD or state == PREVIEW:
+		return
+	_watch = at
+	_watch_spot = Vector3(spot.x, 0.0, spot.z)
+	_aim_point = at
+	_aim_valid = true
+	_cool = 1e6                                            # (no more rounds)
+	if kind == "turret":
+		return
+	arena = Rect2(-1e6, -1e6, 2e6, 2e6)
+	_route = way
+	state = TRAVEL if not way.is_empty() else WATCH
+	_target = _watch_spot
+
+
+func _watching(delta: float) -> void:
+	_aim_point = _watch
+	_aim_valid = true
+	_target = _watch_spot
+	var far := Vector2(position.x - _watch_spot.x, position.z - _watch_spot.z).length()
+	if kind == "drone":
+		_seat.y = move_toward(_seat.y, 1.25 if far < 3.0 else _seat_y, 1.2 * delta)      # it comes down to look
+	_servo(delta, true)
+	if not _move(delta, far > 3.5, kind == "drone" and far < 2.0):
+		return
+	# there: turned to the player, still, its guns on them
+	var dir := _local(_watch) - position
+	if kind == "spider":
+		var off := absf(angle_difference(rotation.y, atan2(-dir.x, -dir.z)))
+		if off > deg_to_rad(10.0) or (clip == "Turn" and off > deg_to_rad(3.0)):
+			_step_round(dir, delta)
+		else:
+			_rest_pose()
+	else:
+		_face(dir, _spec.turn, delta)
+		_play(_spec.clips[4])
+
+
 ## Go somewhere along a way of points (its parent's frame; `low` = a corridor or a doorway: a drone comes down for
 ## it): after the player, through the dungeon's doorways (v2_game.gd finds the way). The turret stays where it hangs.
 func follow(points: Array) -> void:
@@ -861,6 +909,9 @@ func follow(points: Array) -> void:
 func _travel(delta: float) -> void:
 	# the end of the way; or the player in sight close by: it stops and fights where it stands
 	var near := _sees and global_position.distance_to(player.global_position) < 11.0
+	if _watch != Vector3.INF and _route.is_empty():        # (come to look at the player who is down: the last stretch)
+		state = WATCH
+		return
 	if _route.is_empty() or near:
 		_route.clear()
 		state = ROAM
@@ -896,7 +947,10 @@ func aim_error() -> float:
 
 
 func _turret(delta: float) -> void:
-	var tracking := _aim_valid and _unseen < 2.5
+	if _watch != Vector3.INF:                              # (the player is down: it looks at them)
+		_aim_point = _watch
+		_aim_valid = true
+	var tracking := _aim_valid and (_unseen < 2.5 or _watch != Vector3.INF)
 	if rail.y > rail.x:
 		# its carriage runs along the rail: to where the player is abreast of it, or slowly up and down on patrol
 		var want := position.z
