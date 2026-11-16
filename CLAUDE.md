@@ -312,7 +312,9 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
   with the walk; a drone shot down goes down in a straight line; the dead turret is heavy; no reload at a run;
   going down = a fall onto the side, the gun on the floor, the robots coming to look, then the options;
   the map's detail is modelled in Blender from the user's 24 reference sheets (the environment set, approved and in the game);
-  robots tougher and more aggressive from the start;
+  robots tougher and more aggressive from the start; their guns sound more aggressive; the turret is a gatling
+  (wind-up, 15 to 20 rounds); wrecks are solid; the training dummy is destroyed by the last round; a run opens
+  with fades and the gun's draw and inspect; the menu's music is Exploration Theme;
   the interface is the user's UI concept (ammunition on the HUD, not on the guns); "the gameplay feels really good".
 
 ## V2 game: the generated dungeon (`scripts/v2/v2_game.gd`)
@@ -427,6 +429,10 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   threat 4: 3 in 9**: the same within what nine runs can tell (the lowest health after a room at threat 0: 48 to
   65). Seed 17 is lost at threat 0 and 2 with 36 to 52 % of the rounds hitting where the others have 70 to 93 %:
   somewhere in it the bot fires at a robot it sees and cannot hit (not looked into).
+  **With the gatling turret and solid wrecks** (same seeds): **threat 0: 9 in 9, threat 2: 8 in 9, threat 4: 7 in
+  9** (it was 3 in 9): the turret's wind-up gives the bot 0.85 s to shoot first and a round does 2.5, so the top
+  levels are easier for the bot than before. Not retuned (the user has not played it yet); if it plays too
+  easy: `SPEC.turret.damage` 3 to 3.5, or `SPIN_UP` shorter. No run was stuck on a wreck.
   History: with the first robots (100 / 60 / 110 health, 0.6 kept) it was 11 in 12, 9 in 9, 7 in 9, and 5 in 9 at
   threat 6, and the user found the game too easy.
   **What went wrong on the way (it cost four tuning rounds):** the bot aimed the camera at a robot while the
