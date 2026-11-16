@@ -379,7 +379,7 @@ func update(delta: float) -> void:
 	# --- the hit: blur, the glow on the side it came from, the arc round the cursor
 	if player.hurt_flash > _last_flash + 0.2 and playing:
 		_hit_t = 1.0
-		_blur_t = 1.0
+		_blur_t = maxf(_blur_t, clampf(player.hurt_amount / 10.0, 0.3, 1.0))     # (a small round blurs little: a long burst must not blind)
 		var to := player.hurt_from - player.global_position
 		_hit_angle = -angle_difference(player._yaw, atan2(-to.x, -to.z))
 	_last_flash = player.hurt_flash

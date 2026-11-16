@@ -3,10 +3,9 @@
 #   tools/build_v2_music.sh        (the raw files must be in assets_src/music_v2/, see the URLs below)
 # Raw files (git-ignored):
 #   exploration_theme/   https://opengameart.org/sites/default/files/exploration_theme.zip   (unzipped into unz/)
-#   budding_of_consciousness/   https://opengameart.org/sites/default/files/the_budding_of_consciousness.wav
-#   solar_sail/          https://opengameart.org/sites/default/files/solar_sail_1.wav
-# Each is brought to -23 LUFS (integrated: quiet, under the game's sounds) and encoded as Vorbis q4. The first loops
-# seamlessly as it comes; the other two end, so they fade in and out over two seconds and start again.
+# It is brought to -23 LUFS (integrated: quiet, under the game's sounds) and encoded as Vorbis q4; it loops
+# seamlessly as it comes. (A piece that ends: build it with "fade": two seconds in and out.)
+# The two candidates the user did not take: The Budding of Consciousness (Yoiyami), Solar Sail (vitalezzz).
 # Then: godot --headless --import, and loop=true in each music/*.ogg.import.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -26,5 +25,3 @@ build() {  # name, source file, extra filter ("" for none)
   echo "$1: $i LUFS -> gain $gain dB, $(du -k "$out/$1.ogg" | cut -f1) kB, ${dur%.*} s"
 }
 build menu_exploration_theme "$src/exploration_theme/unz/Exploration Theme/Exploration Theme.wav" ""
-build menu_budding_of_consciousness "$src/budding_of_consciousness/the_budding_of_consciousness.wav" fade
-build menu_solar_sail "$src/solar_sail/solar_sail_1.wav" fade

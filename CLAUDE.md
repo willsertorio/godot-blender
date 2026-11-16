@@ -171,8 +171,9 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
   degrees do not count (breathing, the walk's bob: a round at rest goes to the middle of the screen, as before).
   The muzzle flips 8.6 degrees in a shot and is back after 0.25 s, so only a second round at the gun's fastest
   (0.2 s) goes high, by about a degree. **The round takes the aim of the moment the trigger was pulled**
-  (`_shot_off`, set in `act`): the clip's flash comes a frame or two later, when the muzzle is already rising (the
-  check caught it: the round left 7.8 degrees high). No aim offset while the gun is busy with something else or
+  (`_shot_dir`, set in `act`, **in the world's frame**: in the camera's frame it was turned up by the camera's own
+  recoil by the time the flash came): the clip's flash comes a frame or two later, when the muzzle is already
+  rising (the check caught it: the round left 7.8 degrees high). No aim offset while the gun is busy with something else or
   for 0.25 s after (`_settle`).
   The gun and arms are drawn by **their own camera** (`view_cam`, `GUN_LAYER`) into a transparent SubViewport laid
   over the world, under the HUD: a wall cannot cut into the gun, and the world camera zooms while aiming
@@ -203,11 +204,14 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
   bouncing off the walls, spinning, shedding sparks), then falls (Death clip) and **explodes** where it lands
   (`V2Fx.explosion`; `BLAST`: up to 40 damage within 3.5 m). `v2_fx.gd` (`V2Fx`): tracers, impact sparks / chips / dust / scorch
   marks, smoke, flash lights.
-- Sound: `scripts/v2/v2_sfx.gd` (`V2Sfx`): one table, a key per interaction (33; `assets/audio/v2/README.md`),
+- Sound: `scripts/v2/v2_sfx.gd` (`V2Sfx`): one table, a key per interaction (46; `assets/audio/v2/README.md`),
   `play(key[, place])`, `loop` / `drive` for the drone's rotors, `V2Sfx.heard` / `log` for the checks,
-  `-- --no-sound`. Everything goes through one bus (`V2Sfx.bus`): a short room reverb, then +3 dB into a hard
+  `-- --no-sound`. **Robots' guns, third pass (user: "more aggressive")**: the crack squeezed harder and lifted
+  at 2 to 6 kHz, less room, 3 dB up in the mix. Making the low layers louder was tried first and measured: in a
+  file brought to the same loudness that leaves 1 to 3 dB less of the crack, heavier and duller, the opposite.
+  Everything goes through one bus (`V2Sfx.bus`): a short room reverb, then +3 dB into a hard
   limiter (the machine gun's rounds pile up).
-  Files: `assets/audio/v2/<key>_NN.ogg` (103, 1.7 MB), **all CC0, from opengameart.org**: the guns from The Free
+  Files: `assets/audio/v2/<key>_NN.ogg` (120, 1.6 MB), **all CC0, from opengameart.org**: the guns from The Free
   Firearm Sound Library (pistol = Walther PPQ, machine gun = AR-15, spider = Tikka .30-06, drone = Carl Gustav M45,
   turret = AK-47), the rest from foley packs (rubberduck, Thimras, Fantozzi, BMacZero, qubodup and others).
   `tools/fetch_v2_audio.sh` downloads the raw files to `assets_src/audio_v2/` (git-ignored; needs `py7zr`),
@@ -375,7 +379,14 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
 - Rules (`V2Player.rules`): pistol 15 rounds, unlimited magazines; machine gun 30 + 60 carried (max 240);
   no health regeneration; med kits (H, +40, max 3); E = nearest shut door or crate within 2.4 m; going down ends the
   run. Crates give what the generator says (ammunition +60 / health +35 / a med kit); 35 % of wrecks leave something
-  (`roll_payoff`: med kits thin out with the threat level). A wreck does not block the player.
+  (`roll_payoff`: med kits thin out with the threat level), dropped beside the wreck on the player's side.
+  **Wrecks are solid (user: "make all dead robots solid, so the character has to jump through them")**: when a
+  spider's or a drone's wreck has come to rest it gets one box (`V2Robot._wreck_solid`: the footprint of its part
+  boxes x 0.8, so leg tips stick out of it; `WRECK_TOP` 0.55 m high: a jump reaches 0.83 m, and one can stand on
+  it), not while the player stands in it; rounds that strike the box strike the wreck (meta `wreck`). **The
+  turret's wreck is not solid**: it hangs from the ceiling with its head at the player's, which shut the middle of
+  its cell to the player and the bot (the game check hung there), and nobody jumps over that. The bot jumps when
+  it has stood still for 0.25 s (`V2Player.bot_jump`).
   **No reload at a run** (R is ignored while Shift + forward, the automatic reload waits, and a reload under way
   holds the player to a walk): user decision, lab too.
 - **Going down** (user's direction): the player falls onto their side (`V2Player._fallen_view`: 0.8 s, eye to
@@ -398,6 +409,14 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   divided by 1.35; `CROWD` = 0.75 of the generator's robots kept, at most 4 in a room, 2 in a room next to the
   start (11 to 22 a dungeon at threat 0); a robot within `HEAR` (24 m) of the player's gunfire is alerted and comes
   through the doorways, and one that loses sight of the player follows after 1.2 s.
+- **The turret is a gatling (user: "play a sound like a rolling gatling gun before firing, and make it fire
+  longer, like 15-20 shots instead of 2-3")**: on target it winds up for `SPIN_UP` (0.85 s, sound `turret_spin_up`;
+  it goes on turning with the player meanwhile), then plays the firing part of its Shoot clip (4 rounds, frames
+  4 to 20 of the clip: `GATLING`) at twice the speed 4 or 5 times over = **16 or 20 rounds at 11 a second**, then
+  `turret_spin_down` + `turret_tail` and its pause. A round does 2.5 (it was 7 for 4 rounds; a whole burst on
+  target was 28 and is 40 to 50, spread 0.8 degrees, and it sweeps after a moving player). Losing the player
+  during the wind-up runs the barrels down again. Pictures and the count: `--game-capture=DIR --part=wrecks
+  --match=turret`.
 - **Balance, measured with the bot** (`tools/v2_bot.sh N threat first_seed`: headless, the clock four times as
   fast, about 1.5 minutes a dungeon; three batches side by side on this container's four cores; **the container
   only runs while a command of the session is running: wait for a batch with a blocking loop, not by coming back
@@ -469,8 +488,13 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
     HOSTILES / ROOMS, THREAT nn -> nn, ENTER DATASPACE nn / STOP HERE) and Signal lost (the view blurred 4.5 and
     washed, dark edges, an orange band, scan lines; RE-ASSEMBLE = a new dungeon at the same threat / STOP HERE).
     Enter = the first button. Signal lost comes after the fall and the robots gathering, as before.
-  - Title (`v2_title.gd`): the white page, PROJECT / FIREWALL, PRESS ENTER; any key or a click starts a run
-    (M steps the music's candidates).
+  - Title (`v2_title.gd`): the white page, PROJECT / FIREWALL, PRESS ENTER; any key or a click starts a run.
+    **How a run opens (user's direction)**: the title fades into the grey of the end screens (0.7 s, the music
+    going down with it), the game comes up under the same grey (`V2Game._opening`, a layer 8 veil), the grey lifts
+    off the room in 1.4 s with no gun and no HUD, then the gun comes up (Draw) and is turned over once (Inspect;
+    only on the run that has the training), and only then the keys and the mouse answer (`V2Player.locked`) and
+    the HUD fades in: about 6 s from the key to control. Not for the bot, the checks or the pictures.
+    Frames of it: `-- --title --open-capture=DIR` (`V2World.film`: every frame as a jpg with its milliseconds).
     **No menu: the lab is on L** (not shown), `--lab` as before. Esc in the game: a small glass card, RESUME /
     STOP HERE ("the run keeps going").
   - F3 (frame rate) sits under the room panel. Pictures of all of it: `--game-capture=DIR --part=ui` at
@@ -490,7 +514,8 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   `_training_spot` = a cell's middle 5 m or more from the player, rather ahead of them, off the doorways and the
   crate; `_training_build` = a dark plinth with two `floor_hazard` tiles on it and the spider on top
   (`V2Robot.dummy`: it stands in the preview's Idle, a hit jars it on its springs and emits `struck`, it is not
-  in `robots`, so no count, no score, no hostile line). A hit counts only **aimed** (`player._aimed` > 0.6) and
+  in `robots`, so no count, no score, no hostile line). **The last round of the rifle step destroys it** (user;
+  `V2Robot.finish_off`: the usual burst, Death clip and smoking wreck, solid, on its pad: `floor_y`). A hit counts only **aimed** (`player._aimed` > 0.6) and
   with the step's gun; otherwise a chip says why. The kit step ends when the player holds a kit, then the doors
   unlock; a door of the room opening ends the training: the rounds fired are given back, the clock starts, and
   **while it lasts the robots beyond hear nothing** (`_robots_tick`). HUD: a card top middle (`V2Hud._training`:
@@ -505,12 +530,11 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   sounds, no more music"**; this replaces "no music for now" for the menu only). `scripts/v2/v2_music.gd`
   (`V2Music`): starts on the title, fades out when a run or the lab starts (the player node hangs from the tree's
   root, so it fades across the change of scene); the game has the room tone as before, the title no longer has.
-  **Three CC0 candidates from opengameart.org, because nothing can be heard here**: `TRACKS[0]` Exploration Theme
-  (Cleyton Kauffman, 2:14, loops seamlessly), The Budding of Consciousness (Yoiyami, 3:44), Solar Sail (vitalezzz,
-  6:10); **M on the title steps through them** and names the one playing. When the user has chosen: keep that
-  one as `TRACKS[0]`, delete the other two files and their `licenses.csv` rows, and take the M key out.
-  `tools/build_v2_music.sh` (raw files in `assets_src/music_v2/`, URLs in the script) -> `assets/audio/v2/music/
-  *.ogg`, each at -23 LUFS; `loop=true` in their `.import`. Level `V2Music.LEVEL` (-5 dB).
+  **The track: Exploration Theme** (Cleyton Kauffman, CC0, opengameart.org; 2:14, loops seamlessly), **chosen by
+  the user** out of three candidates ("first music is fine"); the other two and the M key that stepped through
+  them are gone. `tools/build_v2_music.sh` (raw file in `assets_src/music_v2/`, URL in the script) ->
+  `assets/audio/v2/music/menu_exploration_theme.ogg` at -23 LUFS; `loop=true` in its `.import`. Level
+  `V2Music.LEVEL` (-5 dB).
 - Props (from the set): loot crates `loot_crate` (health), `loot_crate_olive` (ammunition), `loot_crate_green` (a
   med kit), lid under `Crate_Lid` (found with `find_child("Crate_Lid*")`: Blender numbers the duplicates), the
   lid's cyan lamp goes dark when opened; what a crate or a wreck leaves: `ammo_box`, `medkit_white` (health),
@@ -520,10 +544,13 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   `godot --headless --path . -- --game-test` (seed 7): the generator over 40 seeds (8-12 rooms, every cell reachable,
   exit deepest, more robots at threat 3), walls stop rays, magazines, a crate, a med kit, no regeneration, a door
   (shut it blocks the way and the paths), wrecks stay, a robot follows the player out of its room, the turret's
-  rail, the walk through every room (ROOMS counts), the exit raises the threat level, going down does not, the
+  rail, a wreck stops a walk and a jump goes over it, the walk through every room with a wreck in every robot's
+  place (ROOMS counts), the exit raises the threat level, going down does not, the
   fall and the dropped gun, the robots coming to look without firing, sounds;
   `tools/v2_bot.sh [N] [threat] [seed]`; `xvfb-run -a godot --rendering-driver opengl3 --path . --
   --game-capture=DIR [--seed=N]`; `... -- --title-capture=FILE.png`. With `--part=NAME` the capture is one of:
+  `wrecks` (with `--training`: the dummy destroyed, a spider's and a drone's wreck with their boxes drawn in
+  orange, a turret's burst; `--match=turret` = the turret alone),
   `rooms` (every room, or `--match=2,5`, from two corners without gun or HUD: 40 s for two rooms; the quick look
   at the set and the light), `death` (frames of going down), `marks` (bullet holes on a wall and the floor), `flicker` (at every doorway and
   in every room three frames: on arriving, 8 frames later, 1 mm aside; `python3 -I tools/flicker_diff.py DIR`

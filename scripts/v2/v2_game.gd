@@ -213,6 +213,37 @@ func _ready() -> void:
 			_bot.test()
 	else:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		_opening(training)
+		for a in args:                                     # (pictures of the opening: -- --title --open-capture=DIR)
+			if a.begins_with("--open-capture="):
+				V2World.film(self, a.trim_prefix("--open-capture="), "game", 24.0)
+
+
+## How a run opens (**user: "a fade in into the environment, then the gun appears with the inspecting motion, then
+## the character is playable"**; the title has faded into this same grey): the grey lifts off the room, the gun
+## comes up into view (Draw) and is turned over once (Inspect), and only then do the keys and the mouse answer and
+## the HUD comes in. Later runs of a sitting open the same way without the turning over. Not for the bot, the
+## checks or the pictures.
+func _opening(full: bool) -> void:
+	var top := CanvasLayer.new()
+	top.layer = 8
+	add_child(top)
+	var veil := V2Ui.full(top, UIPalette.COMPLETE_BG)
+	player.locked = true
+	player.overlay.visible = false
+	hud.modulate.a = 0.0
+	await get_tree().create_timer(0.4).timeout
+	var tw := create_tween()
+	tw.tween_property(veil, "color:a", 0.0, 1.4).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	await tw.finished
+	top.queue_free()
+	player.overlay.visible = true
+	for clip in (["Draw", "Inspect"] if full else ["Draw"]):
+		player.act(clip)
+		while player.busy != "" and state == PLAYING:
+			await get_tree().process_frame
+	player.locked = false
+	create_tween().tween_property(hud, "modulate:a", 1.0, 0.45)
 
 
 # ---------------------------------------------------------------------------------------------- what the dungeon holds
@@ -400,6 +431,8 @@ func _training_build(at: Vector3) -> void:
 	dummy.play("Idle")
 	dummy._home.y = 0.31
 	dummy.position.y = 0.31
+	dummy.floor_y = 0.31
+	dummy.bounds = dungeon.arena(dungeon.area_of[gen.rooms[gen.spawn_room].rect.position], 0.7)
 	_set_layer(dummy, layer)
 	dummy.struck.connect(_on_dummy_struck)
 	_train_kits = player.kits
@@ -422,6 +455,8 @@ func _on_dummy_struck() -> void:
 		return
 	train_hits += 1
 	if train_hits >= TRAIN_HITS[train_step]:
+		if train_step == 1:                                # every shot asked for has been fired at it: it is destroyed
+			dummy.finish_off(player.last_aim)
 		_training_next()
 
 
@@ -579,10 +614,13 @@ func _on_destroyed(robot: V2Robot) -> void:
 	kills += 1
 	score += int(round(SCORE[robot.kind] * (1.0 + SCORE_PER_THREAT * missions)))
 	if _rng.randf() < DROP:
+		# (beside the wreck, on the player's side of it: the wreck is solid, and what lay under it could not be reached)
 		var at := robot.global_position
+		var to := player.global_position - at
+		to.y = 0.0
+		at += (to.normalized() if to.length() > 0.1 else Vector3.FORWARD).rotated(Vector3.UP, _rng.randf_range(-0.6, 0.6)) * minf(1.6, maxf(to.length() - 0.6, 0.0))
 		var b := robot.bounds
-		drop(roll_payoff(), Vector3(clampf(at.x + _rng.randf_range(-0.5, 0.5), b.position.x, b.end.x), 0.05,
-			clampf(at.z + _rng.randf_range(-0.5, 0.5), b.position.y, b.end.y)), 2.5 if robot.kind == "drone" else 1.0)
+		drop(roll_payoff(), Vector3(clampf(at.x, b.position.x, b.end.x), 0.05, clampf(at.z, b.position.y, b.end.y)), 2.5 if robot.kind == "drone" else 1.0)
 
 
 func finish(won: bool) -> void:

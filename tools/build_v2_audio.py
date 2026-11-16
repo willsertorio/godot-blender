@@ -403,9 +403,15 @@ def recipes():
     # the robots' guns: mono, single shots recorded at a distance (duller: the treble is lifted) and rounds out of
     # the long bursts recorded close by (the distant bursts are a tangle of shots and their echoes), a little more
     # room
-    far_tone = (shelf_hi(2000, 5.0),)
+    # (third pass, **user: "make the shot sound of the enemies more aggressive"**: the crack squeezed harder and
+    # lifted where a shot bites, 2 to 6 kHz; less room, so it is nearer; and 3 dB up in the game's mix,
+    # V2Sfx.SOUNDS. A first try made the low layers louder and harder driven: measured, that left less of the
+    # crack in the same loudness, 1 to 3 dB down from 1.5 kHz up: heavier and duller, the opposite.)
+    far_tone = (shelf_hi(1800, 8.5), bell(3400, 5.0, 1.3))
 
     def robot_gun(paths, n, rt=(0.9, 0.7, 0.35), **kw):
+        kw.setdefault("squeeze_db", -21.0)
+        kw.setdefault("warm", 8.0)
         out = []
         for i in range(n):
             path, idx, burst = paths[i % len(paths)]
@@ -415,15 +421,40 @@ def recipes():
         return out
     # spider: a cannon. Tikka .30-06
     r["spider_shot"] = robot_gun([(f("Tikka", "W_24P.wav"), 0, False), (f("Tikka", "W_24P.wav"), 1, False)], 4,
-                                 wet=-15.0, body=0.65, boom=0.3, sub=0.18, sub_hz=(120, 46), sub_tau=0.07, length=1.3)
+                                 wet=-17.5, body=0.6, boom=0.3, sub=0.16, sub_hz=(120, 46), sub_tau=0.07, length=1.3)
     # drone: a light, fast gun. Carl Gustav M45 9 mm: its three single shots, three rounds out of a long burst
     m45, m45b = f("Carl Gustav M45", "G_20P.wav"), f("Carl Gustav M45", "G_35P.wav")
     r["drone_shot"] = robot_gun([(m45, 0, False), (m45b, 2, True), (m45, 1, False), (m45b, 5, True), (m45, 2, False), (m45b, 8, True)], 6,
-                                rt=(0.7, 0.6, 0.3), wet=-15.0, body=0.5, boom=0.12, sub=0.06, length=0.75)
+                                rt=(0.7, 0.6, 0.3), wet=-17.5, body=0.45, boom=0.12, sub=0.06, length=0.75)
     # turret: AK-47 7.62x39: two single shots, four rounds out of a long burst
     ak, akb = f("AK-47", "C_31P.wav"), f("AK-47", "C_27P.wav")
+    # (a rotary gun now, twelve rounds a second: each round short and its room small, as the player's machine gun;
+    # the long ring of the room is a sound of its own, `turret_tail`, played when the burst ends)
     r["turret_shot"] = robot_gun([(ak, 0, False), (akb, 3, True), (ak, 1, False), (akb, 11, True), (akb, 6, True), (akb, 19, True)], 6,
-                                 wet=-15.0, body=0.6, boom=0.25, sub=0.14, sub_hz=(135, 50), length=1.05)
+                                 rt=(0.45, 0.38, 0.2), wet=-17.0, body=0.55, boom=0.22, sub=0.12, sub_hz=(135, 55), sub_tau=0.035,
+                                 length=0.45, out_fade=0.5)
+    tdry = robot_gun([(ak, 0, False)], 1, wet=-60.0, body=0.55, boom=0.22, sub=0.12, length=0.4)[0]
+    tfar = convolve(eq(tdry, hp(140), lp(5500)), room_ir((1.6, 1.3, 0.6), 2.0, 45, ch=1, early=(), late=1.0, build=0.08))
+    r["turret_tail"] = [fade(tfar[int(0.07 * SR):int(1.8 * SR)], 0.05, 1.2)]
+    # its barrels running up before the first round and down after the last (**user: "a sound like a rolling
+    # gatling gun before firing"**): the fan recording again, its pitch run up fast (the motor), the same four
+    # times higher (the whine of the barrels' bearings), and a metal tick for each barrel passing, coming faster
+    # and faster. All made from recordings already in use: no gatling recording under CC0 was looked for.
+    fan0 = load(o("fan_interval.wav"))
+    tick = fade(eq(load(o("lightclunk1.wav")), hp(900))[:int(0.03 * SR)], 0.0005, 0.02)
+    tick = tick / np.abs(tick).max()
+
+    def spin(rates, dur, f0, f1, seed):
+        g = np.random.default_rng(seed)
+        motor = eq(glide(fan0, rates, dur), hp(180), lp(4200))
+        whine = eq(glide(fan0, [x * 3.2 for x in rates], dur), hp(1400), lp(6500))
+        t, ticks = 0.03, []
+        while t < dur - 0.04:
+            ticks.append((tick, 0.6 + 0.4 * g.random(), t))
+            t += 1.0 / (f0 + (f1 - f0) * (t / dur) ** 1.4)
+        return layer((motor / np.abs(motor).max(), 1.0, 0.0), (whine / np.abs(whine).max(), 0.3, 0.0), (layer(*ticks), 0.6, 0.0))
+    r["turret_spin_up"] = [fade(spin((0.5, 1.5, 2.7, 3.4), 0.95, 7.0, 36.0, 1), 0.04, 0.08)]
+    r["turret_spin_down"] = [fade(spin((3.4, 2.1, 1.0, 0.4), 1.25, 32.0, 4.0, 2), 0.01, 0.8)]
     # ---- handling the guns
     r["pistol_mag_out"] = [level(cut(rl, 0.06, 0.40), -8.0)]
     r["pistol_mag_in"] = [level(cut(rl, 0.54, 0.90), -3.0)]

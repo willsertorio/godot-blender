@@ -253,3 +253,18 @@ func _room_at(x: float) -> int:
 func hide_for_rail(room: Node3D) -> void:
 	for n in room.find_children("Loop3*", "MeshInstance3D", true, false):
 		(n as Node3D).visible = false
+
+
+## Every frame of the next `seconds` as a picture: DIR/<label>_<milliseconds>.png (for looking at a transition;
+## it ends with the node `on`, so a change of scene ends it; at the end of the game's own film the game quits).
+static func film(on: Node, dir: String, label: String, seconds: float) -> void:
+	DirAccess.make_dir_recursive_absolute(dir)
+	var t0 := Time.get_ticks_msec()
+	while is_instance_valid(on) and on.is_inside_tree() and Time.get_ticks_msec() - t0 < seconds * 1000.0:
+		await RenderingServer.frame_post_draw
+		if not (is_instance_valid(on) and on.is_inside_tree()):
+			return
+		on.get_viewport().get_texture().get_image().save_jpg("%s/%s_%05d.jpg" % [dir, label, Time.get_ticks_msec() - t0], 0.8)
+	if label == "game" and is_instance_valid(on) and on.is_inside_tree():
+		on.get_tree().quit()
+

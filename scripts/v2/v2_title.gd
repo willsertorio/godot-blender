@@ -13,8 +13,8 @@ const LAB_ARGS := ["--lab", "--enemy-test", "--gun-test", "--input-test", "--per
 const GAME_ARGS := ["--play", "--game-test", "--training", "--no-training", "--training-test"]
 
 var _press: Label
-var _note: Label                    # which of the music's candidates plays (M)
-var _note_t := 0.0
+var _veil: ColorRect
+var _leaving := false
 var _t := 0.0
 
 
@@ -43,6 +43,9 @@ func _ready() -> void:
 	for a in args:
 		if a.begins_with("--title-capture="):
 			_shot(a.trim_prefix("--title-capture="))
+		if a.begins_with("--open-capture="):               # the way into a run, frame by frame (the game goes on with it)
+			V2World.film(self, a.trim_prefix("--open-capture="), "title", 6.0)
+			get_tree().create_timer(1.2).timeout.connect(_start)
 
 
 func _page() -> void:
@@ -81,9 +84,8 @@ func _page() -> void:
 	_press.anchor_bottom = 1.0
 	_press.offset_top = -112.0 - 20.0
 	_press.offset_bottom = -112.0
-	_note = V2Ui.text(ui, "", "medium", 12, UIPalette.GRAPHITE_SECONDARY, 0.12)
-	V2Ui.at(_note, 0.0, 1.0, 32.0, -28.0)
-	_note.modulate.a = 0.0
+	# pressing start: the page fades into the grey of the game's own pages, and the run opens out of that grey
+	_veil = V2Ui.full(ui, Color(UIPalette.COMPLETE_BG, 0.0))
 
 
 func _process(delta: float) -> void:
@@ -92,20 +94,16 @@ func _process(delta: float) -> void:
 	_t += delta
 	# 1.0 -> 0.25 -> 1.0 over 1.8 s, eased in and out
 	_press.modulate.a = 0.625 + 0.375 * cos(_t * TAU / 1.8)
-	_note_t -= delta
-	_note.modulate.a = clampf(_note_t, 0.0, 1.0)
+
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _press == null:
+	if _press == null or _leaving:
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_L:
 			V2Music.stop()
 			get_tree().change_scene_to_file(LAB)
-		elif event.keycode == KEY_M:                       # the next of the music's candidates (until one is chosen)
-			_note.text = V2Music.next(get_tree())
-			_note_t = 4.0
 		elif not (event.keycode in [KEY_ESCAPE, KEY_F3, KEY_F4, KEY_META, KEY_CTRL, KEY_ALT, KEY_SHIFT]):
 			_start()
 	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
@@ -113,9 +111,15 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _start() -> void:
+	if _leaving:
+		return
+	_leaving = true
 	V2Sfx.play("ui")
-	V2Music.stop()
-	get_tree().change_scene_to_file(GAME)
+	V2Music.stop(1.6)
+	var tw := create_tween()
+	tw.tween_property(_veil, "color:a", 1.0, 0.7).set_trans(Tween.TRANS_SINE)
+	tw.tween_interval(0.25)
+	tw.tween_callback(func() -> void: get_tree().change_scene_to_file(GAME))
 
 
 func _shot(path: String) -> void:

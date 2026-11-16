@@ -58,6 +58,10 @@ var hurt_from := Vector3.ZERO       # where the round that hit came from (the HU
 var hit_confirm := 0.0              # > 0 just after one of the player's rounds hit a robot
 var shots_hit := 0
 var bot_aim := false                # the aim held by code (the checks)
+var bot_jump := false               # a jump asked for by code (the bot at a wreck)
+var locked := false                 # no moving, looking or shooting (the run's opening: the gun is still coming up)
+var hurt_amount := 0.0              # how much the last round took (the HUD blurs the picture by it)
+var _hurt_snd := 0.0
 var bot_fire := false               # the trigger held by code (the game's bot and checks)
 var grab := true                    # a click captures the mouse when it is free (the lab); the game's menu does it itself
 var rules := false                  # the game: magazines run out, health does not come back by itself (the lab: neither)
@@ -238,8 +242,11 @@ func hurt(damage: float, from: Vector3) -> void:
 	if down or invulnerable or _grace > 0.0:
 		return
 	hurt_from = from
+	hurt_amount = damage
 	hp -= damage
-	V2Sfx.play("hurt")
+	if _clock - _hurt_snd > 0.16:                      # (a turret's burst is twelve rounds a second: not twelve grunts)
+		_hurt_snd = _clock
+		V2Sfx.play("hurt")
 	hurt_flash = 1.0
 	_since_hurt = 0.0
 	if hp <= 0.0:
@@ -514,7 +521,7 @@ func _on_finished(anim: StringName) -> void:
 
 ## (_input, not _unhandled_input: looking and shooting must not depend on what the HUD does with the mouse)
 func _input(event: InputEvent) -> void:
-	if down:
+	if down or locked:
 		return
 	if event is InputEventMouseMotion and mouse_look and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		var sens := 0.0022 * lerpf(1.0, AIM_ZOOM, _aimed)        # (slower while zoomed in: the same hand movement, the same picture)
@@ -570,11 +577,13 @@ func _physics_process(delta: float) -> void:
 		dir.x += 1.0
 	if auto_move != Vector3.ZERO:
 		dir = auto_move
-	if down:
+	if down or locked:
 		dir = Vector3.ZERO
+	var jump := (Input.is_key_pressed(KEY_SPACE) or bot_jump) and not locked
+	bot_jump = false
 	var sprint := Input.is_key_pressed(KEY_SHIFT) and dir.z < 0.0 and not busy.begins_with("Reload")      # (no running through a reload)
 	_running = sprint
-	if sprint or (is_on_floor() and Input.is_key_pressed(KEY_SPACE)):
+	if sprint or (is_on_floor() and jump):
 		crouched = false                               # (running and jumping stand the player up)
 	dir = (Basis(Vector3.UP, _yaw) * dir).normalized()
 	var speed := 6.2 if sprint else (1.7 if crouched else 3.4)
@@ -587,7 +596,7 @@ func _physics_process(delta: float) -> void:
 	velocity.x = move_toward(velocity.x, dir.x * speed, 40.0 * delta)
 	velocity.z = move_toward(velocity.z, dir.z * speed, 40.0 * delta)
 	velocity.y -= 15.0 * delta
-	if is_on_floor() and Input.is_key_pressed(KEY_SPACE):
+	if is_on_floor() and jump:
 		velocity.y = 5.0
 	if is_on_floor() and velocity.y > 4.0:
 		V2Sfx.play("jump")
@@ -632,7 +641,7 @@ func _process(delta: float) -> void:
 	cam.transform = ct
 	var ap := _ap()
 	var view: Dictionary = _views[weapon]
-	var held := not down and (bot_fire or (mouse_look and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)))
+	var held := not down and not locked and (bot_fire or (mouse_look and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)))
 	if busy == "ADS":                              # hold the aim while the button is down, then lower the gun
 		if ap.current_animation == &"ADS" and aiming() and ap.current_animation_position >= ADS_IN[weapon]:
 			ap.play("AimHold", 0.05)
@@ -705,6 +714,8 @@ func _process(delta: float) -> void:
 		if not res.is_empty():
 			to = res.position
 			var robot: V2Robot = res.collider.get_meta("robot") if res.collider.has_meta("robot") else null
+			if robot == null and res.collider.has_meta("wreck"):       # (the box that makes a wreck solid: the wreck is struck)
+				robot = res.collider.get_meta("wreck")
 			V2Fx.impact(to, res.normal, robot != null)
 			if robot != null:
 				robot.hit(DAMAGE[weapon], aim, to, res.collider.get_meta("joint") if res.collider.has_meta("joint") else null)

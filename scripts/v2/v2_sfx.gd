@@ -47,9 +47,14 @@ const SOUNDS := {
 	"hurt": [["impactPlate_heavy_001"], 1.0, -7.0, 0.06, 0.0],
 	"down": [["lowFrequency_explosion_000"], 1.2, -5.0, 0.0, 0.0],
 	# the robots (their guns: Tikka .30-06, Carl Gustav M45 9 mm, AK-47, recorded a few metres off)
-	"spider_shot": [["explosionCrunch_000"], 1.5, 3.0, 0.04, 45.0],
-	"drone_shot": [["explosionCrunch_002"], 1.8, 0.0, 0.05, 45.0],
-	"turret_shot": [["explosionCrunch_000"], 1.3, 1.0, 0.04, 45.0],
+	# (user: "make the shot sound of the enemies more aggressive": rebuilt harder, and 3 dB up here; the turret's
+	# rounds come twelve a second now, so each is lower than the others')
+	"spider_shot": [["explosionCrunch_000"], 1.5, 6.0, 0.04, 50.0],
+	"drone_shot": [["explosionCrunch_002"], 1.8, 3.0, 0.05, 50.0],
+	"turret_shot": [["explosionCrunch_000"], 1.3, 1.0, 0.03, 50.0],
+	"turret_tail": [[], 1.0, -3.0, 0.03, 50.0],                                                # the room after its burst
+	"turret_spin_up": [[], 1.0, -4.0, 0.03, 32.0],                                             # its barrels run up: it is about to fire
+	"turret_spin_down": [[], 1.0, -8.0, 0.03, 26.0],
 	"spider_step": [["impactMetal_light_001", "impactMetal_light_004"], 0.8, -11.0, 0.1, 18.0],
 	"servo": [[], 1.0, -19.0, 0.08, 16.0],                                                     # a joint driven round: aiming, turning
 	"drone_rotor": [["spaceEngineSmall_003"], 1.4, -12.0, 0.0, 20.0],                          # loop

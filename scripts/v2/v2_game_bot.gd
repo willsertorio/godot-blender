@@ -183,6 +183,8 @@ func step_to(goal: Vector3, fight: bool, near: float = 0.3, limit: float = 14.0)
 		t += delta
 		stuck = stuck + delta if player.global_position.distance_to(last) < 0.4 * delta else 0.0
 		last = player.global_position
+		if stuck > 0.25:                                   # (a wreck in the way: over it)
+			player.bot_jump = true
 		if t > limit or stuck > 2.5:
 			if OS.has_environment("V2_BOT_STUCK"):
 				for h in [0.1, 0.5, 1.0, 1.5]:
@@ -457,6 +459,61 @@ func test() -> void:
 	await _wait(V2Robot.RESPAWN + 4.0)
 	ok = _check("a destroyed robot stays destroyed", first.state == V2Robot.DEAD and game.kills == 1 and game.score == game.SCORE[first.kind],
 		"kills %d, score %d" % [game.kills, game.score]) and ok
+	# --- a wreck is solid: it stops a walk, and a jump goes over it
+	var hulk: V2Robot = null
+	for r in game.robots:
+		if r.kind == "spider" and hulk == null:
+			hulk = r
+	if hulk != null:
+		var kills_was: int = game.kills
+		var score_was: int = game.score
+		if hulk.state != V2Robot.DEAD:
+			hulk.hit(9999.0)
+		teleport(hulk.global_position + Vector3(0, 0, 6.0))
+		t = await _until(func() -> bool: return hulk._wreck_body != null, 8.0)
+		game.kills = kills_was
+		game.score = score_was
+		var solid := hulk._wreck_body != null
+		var box := Vector3.ZERO
+		var stopped := false
+		var over := false
+		if solid:
+			var mid: Vector3 = hulk._wreck_body.global_position
+			box = ((hulk._wreck_body.get_child(0) as CollisionShape3D).shape as BoxShape3D).size
+			# (walk at it along +Z from a free side: the way that is free of walls and cover is found by ray)
+			var from := mid
+			for a in 8:
+				var dirv := Vector3(sin(a * PI / 4.0), 0.0, cos(a * PI / 4.0))
+				var q := PhysicsRayQueryParameters3D.create(mid + Vector3(0, 1.0, 0) + dirv * (box.length() / 2.0 + 0.1), mid + Vector3(0, 1.0, 0) + dirv * 3.2)
+				q.collision_mask = 1
+				var q2 := PhysicsRayQueryParameters3D.create(mid + Vector3(0, 1.0, 0) - dirv * (box.length() / 2.0 + 0.1), mid + Vector3(0, 1.0, 0) - dirv * 3.2)
+				q2.collision_mask = 1
+				var dss := player.get_world_3d().direct_space_state
+				if dss.intersect_ray(q).is_empty() and dss.intersect_ray(q2).is_empty():
+					from = mid + dirv * 2.6
+					break
+			var yaw := rad_to_deg(atan2(from.x - mid.x, from.z - mid.z))
+			teleport(from, yaw)
+			player.auto_move = Vector3(0, 0, -1)
+			await _wait(2.2)
+			stopped = (player.global_position - from).length() < 2.6 and player.global_position.y < 0.2
+			var short_of := Vector2(player.global_position.x - mid.x, player.global_position.z - mid.z).length()
+			teleport(from, yaw)
+			var tj := 0.0
+			var top := 0.0
+			while tj < 3.0:
+				var dj := await _frame()
+				tj += dj
+				player.auto_move = Vector3(0, 0, -1)
+				if Vector2(player.global_position.x - mid.x, player.global_position.z - mid.z).length() < maxf(box.x, box.z) / 2.0 + 0.75:
+					player.bot_jump = true
+				top = maxf(top, player.global_position.y)
+			over = (player.global_position - from).length() > 3.4
+			player.auto_move = Vector3.ZERO
+			ok = _check("a wreck is solid: a walk stops at it, a jump goes over it", stopped and over,
+				"box %.2f x %.2f x %.2f m after %.1f s; walking: stopped %.2f m from its middle; jumping: %.1f m travelled, feet up to %.2f m" % [box.x, box.y, box.z, t, short_of, (player.global_position - from).length(), top]) and ok
+		else:
+			ok = _check("a wreck is solid: a walk stops at it, a jump goes over it", false, "no box after %.1f s" % t) and ok
 	# --- a spider or a drone that has seen the player follows them out of its room, through the doorways
 	for i in dungeon.doors.size():
 		game.open_door(i)
@@ -631,6 +688,10 @@ func training_test() -> void:
 	player.bot_fire = false
 	player.bot_aim = false
 	ok = _check("training: six aimed rifle hits pass the second step; the doors stay locked", game.train_step == 2 and d0.locked, "step %d, hits %d" % [game.train_step, game.train_hits]) and ok
+	await _wait(3.5)
+	ok = _check("training: the last round destroys the dummy; its wreck stays on the pad, solid, and counts for nothing",
+		target.state == V2Robot.DEAD and target._wreck_body != null and absf(target.global_position.y - 0.31) < 0.12 and game.kills == 0 and game.score == 0,
+		"state %d, box %s, at %.2f m, kills %d" % [target.state, str(target._wreck_body != null), target.global_position.y, game.kills]) and ok
 	await _until(func() -> bool: return player.busy == "", 3.0)
 	var crate: Dictionary = {}
 	for c in game.crates:
@@ -1026,3 +1087,99 @@ func capture(dir: String) -> void:
 	await _wait(0.8)
 	await _shot(dir, "13_won")
 	get_tree().quit()
+
+
+## Pictures of the solid wrecks and the turret's long burst (-- --training --game-capture=DIR --part=wrecks):
+## the training dummy destroyed on its pad; a spider's and a drone's wreck with the box that stops the player
+## drawn over them (orange, only here); a turret winding up and firing, with the rounds of its burst counted.
+func wrecks(dir: String) -> void:
+	DirAccess.make_dir_recursive_absolute(dir)
+	player.invulnerable = true
+	await _wait(1.0)
+	if game.dummy != null and "--match=turret" in OS.get_cmdline_user_args():
+		game._training_end()
+	elif game.dummy != null:
+		var target: V2Robot = game.dummy
+		var to_spawn := gen.player_spawn - target.global_position
+		to_spawn.y = 0.0
+		var feet := target.global_position
+		feet.y = 0.0
+		_look_at(feet + to_spawn.normalized() * 3.6, target.hit_point())
+		await _wait(0.4)
+		target.finish_off(player.last_aim)
+		await _wait(0.5)
+		await _shot(dir, "Dummy1_struck")
+		await _until(func() -> bool: return target._wreck_body != null, 8.0)
+		_look_at(feet + to_spawn.normalized() * 3.6, feet + Vector3(0, 0.5, 0))
+		await _wait(0.5)
+		await _shot(dir, "Dummy2_wreck")
+		game._training_end()
+	for i in dungeon.doors.size():
+		game.open_door(i)
+	for kind in ([] if "--match=turret" in OS.get_cmdline_user_args() else ["spider", "drone"]):
+		var r: V2Robot = null
+		for x in game.robots:
+			if x.kind == kind and x.state != V2Robot.DEAD and r == null:
+				r = x
+		if r == null:
+			continue
+		for x in game.robots:
+			if x != r and x.room == r.room and x.state != V2Robot.DEAD:
+				x.set_process(false)
+		teleport(r.global_position + Vector3(8.0, 0, 8.0))
+		r.hit(9999.0)
+		var t := await _until(func() -> bool: return r._wreck_body != null, 12.0)
+		if r._wreck_body == null:
+			print("[wrecks] %s: no box after %.1f s" % [kind, t])
+			continue
+		var mid: Vector3 = r._wreck_body.global_position
+		var box: Vector3 = ((r._wreck_body.get_child(0) as CollisionShape3D).shape as BoxShape3D).size
+		print("[wrecks] %s: box %.2f x %.2f x %.2f m, %.1f s after it was destroyed" % [kind, box.x, box.y, box.z, t])
+		var from := mid + Vector3(2.6, 0, 1.6)
+		_look_at(from, mid + Vector3(0, 0.3, 0))
+		await _wait(0.6)
+		await _shot(dir, "Wreck_%s" % kind)
+		var show := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = box
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(1.0, 0.45, 0.0, 0.35)
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		bm.material = mat
+		show.mesh = bm
+		show.layers = 0xFFFFF
+		game.add_child(show)
+		show.global_position = mid
+		await _wait(0.3)
+		await _shot(dir, "Wreck_%s_box" % kind)
+		show.queue_free()
+	var turret: V2Robot = null
+	for x in game.robots:
+		if x.kind == "turret" and x.state != V2Robot.DEAD and turret == null:
+			turret = x
+	if turret != null:
+		for x in game.robots:
+			if x != turret and x.state != V2Robot.DEAD:
+				x.set_process(false)
+		var at := turret.global_position
+		var stand := Vector3(at.x + 3.2, 0.0, at.z + 2.4)
+		_look_at(stand, turret.hit_point())
+		V2Sfx.heard.clear()
+		var t0 := Time.get_ticks_msec()
+		await _until(func() -> bool: return turret._spin_up > 0.0, 12.0)
+		var wound := Time.get_ticks_msec()
+		await _shot(dir, "Turret1_winding_up")
+		await _until(func() -> bool: return turret.state == V2Robot.SHOOT, 6.0)
+		var fired0: int = turret.shots_fired
+		var start: float = game.elapsed
+		await _wait(0.25)
+		await _shot(dir, "Turret2_burst")
+		await _wait(0.3)
+		await _shot(dir, "Turret3_burst")
+		await _until(func() -> bool: return turret.state != V2Robot.SHOOT, 8.0)
+		print("[wrecks] turret: saw the player after %.1f s, a burst of %d rounds in %.2f s of the game's time; heard: %s" % [
+			(wound - t0) / 1000.0, turret.shots_fired - fired0, game.elapsed - start,
+			", ".join(["turret_spin_up", "turret_shot", "turret_spin_down", "turret_tail"].filter(func(k: String) -> bool: return V2Sfx.heard.has(k)))])
+	get_tree().quit()
+

@@ -39,7 +39,9 @@ the build script; a volume is one number in `SOUNDS`.
 | `step` / `jump` / `land` | boots on a hard floor, quiet | Kenney's concrete footsteps (short dull taps); a low thud for the landing |
 | `crouch` | gear as the player drops or rises | a rattle, a light clunk |
 | `hurt` / `down` | the player is hit / goes down | dull blows |
-| `spider_shot` / `drone_shot` / `turret_shot` | the robots' guns, at their muzzles (mono), 4 / 6 / 6 variants | Tikka .30-06 / Carl Gustav M45 9 mm / AK-47: single shots at mid distance and rounds out of the near bursts, designed |
+| `spider_shot` / `drone_shot` / `turret_shot` | the robots' guns, at their muzzles (mono), 4 / 6 / 6 variants | Tikka .30-06 / Carl Gustav M45 9 mm / AK-47: single shots at mid distance and rounds out of the near bursts, designed. Third pass ("more aggressive"): the crack squeezed harder, +8.5 dB above 1.8 kHz and +5 dB at 3.4 kHz, less room, 3 dB louder in the mix. The turret's rounds are short (0.45 s): it fires 11 a second |
+| `turret_spin_up` / `turret_spin_down` | the turret's barrels run up before a burst (0.95 s) / run down after it or when it loses its target | a fan recording pitched from low to high (and back) + a row of light metal ticks that quicken with it |
+| `turret_tail` | the room after the turret's burst | the AK's shot with its reverb, once, in place of a tail on each of 20 rounds |
 | `spider_step` | a metal foot coming down | metal footsteps on concrete |
 | `servo` | a joint driven round | a motor run up and let go (the motor loop, 3-4 times as fast, gliding) + a trace of gear squeal |
 | `drone_rotor` | LOOP, pitch bent by the game | a motor loop, pitched up |

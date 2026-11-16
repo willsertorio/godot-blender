@@ -34,9 +34,18 @@ const SPEC := {
 	"drone": {"hp": 80.0, "damage": 7.0, "spread": 0.7, "walk": 1.3, "run": 2.6, "turn": 260.0, "eye": 2.4,
 		"keep": [4.0, 7.5], "cooldown": [1.0, 2.0], "arena": Rect2(-2.3, -7.0, 5.0, 8.5),
 		"clips": ["Fly", 1.3, "Fly", 2.0, "Idle"]},
-	"turret": {"hp": 180.0, "damage": 7.0, "spread": 0.5, "turn": 150.0, "eye": 2.8, "cooldown": [1.1, 1.9]},
+	"turret": {"hp": 180.0, "damage": 2.5, "spread": 0.8, "turn": 150.0, "eye": 2.8, "cooldown": [1.1, 1.9]},
 }
 const AIM_LAG := 0.3              # seconds the aim point trails the player
+# The turret is a rotary gun (user: "a sound like a rolling gatling gun before firing", "fire longer, like 15-20
+# shots instead of 2-3"): its barrels run up for SPIN_UP seconds, heard, before the first round; then the firing
+# part of its Shoot clip (four rounds, frames 4 to 20 of it) is run GATLING[0] times as fast and repeated, 4 or 5
+# times: 16 or 20 rounds at 12 a second; then it runs down. A round does 2.5 (it was 7 for four rounds).
+const SPIN_UP := 0.85
+const GATLING := [2.0, 4.0 / 24.0, 20.0 / 24.0]      # clip speed; the repeated part, seconds into the clip
+# A wreck is in the way (user: "make all dead robots solid, so the character has to jump through them"): once it
+# lies still it gets one low box over its footprint, WRECK_TOP high at most: the player jumps 0.83 m.
+const WRECK_TOP := 0.55
 const TURN_RATE := 60.0           # degrees a second the spider's Turn clip turns at speed 1 (anim_robots.py)
 # how hard a round from the player pushes: [body knock m/s, tilt rad/s, shove along the floor / through the air m/s]
 const PUSH := {"spider": [1.5, 3.2, 0.7], "drone": [1.2, 5.0, 2.2], "turret": [0.0, 4.5, 0.0]}
@@ -68,6 +77,7 @@ var max_hp := 1.0
 var player: V2Player
 var active := false               # the player is in this robot's room
 var auto := true                  # preview: cycle through the clips
+var _dummy_last := false          # the next round that strikes the dummy destroys it (`finish_off`)
 var dummy := false                # a target to practise on: it stands (the preview's Idle), a hit jars it, nothing more
 var shots_fired := 0
 var travelled := 0.0
@@ -95,6 +105,10 @@ var _spec: Dictionary
 var _root: Node3D                 # the glb's <Kind>_Root joint, re-seated on this node
 var _bodies: Array[RID] = []        # the hit boxes, one per part (on its joint)
 var _solids: Array[StaticBody3D] = []
+var _wreck_body: StaticBody3D     # what stops the player at a wreck
+var _spin_up := 0.0               # turret: seconds its barrels have been running up (0 = at rest)
+var _passes := 0                  # turret: how often the firing part of the clip is still to be repeated
+var floor_y := 0.0                # what it stands on (the training dummy: its pad)
 var _flop: Dictionary = {}          # joint -> {off, vel (axis * angle, the joint's frame), base, mine}
 var _spin := 0.0                    # drone, shot down: seconds of flight out of control still to go
 var _spin_total := 1.0
@@ -398,6 +412,9 @@ func _solid(on: bool) -> void:
 
 func respawn() -> void:
 	_solid(true)
+	if is_instance_valid(_wreck_body):
+		_wreck_body.queue_free()
+	_wreck_body = null
 	var was_wreck := state == DEAD
 	hp = max_hp
 	state = ROAM
@@ -425,8 +442,19 @@ func flash_on() -> bool:
 	return false
 
 
+## The training dummy: the round that has just struck it was the last one wanted. It falls apart as a robot does.
+func finish_off(dir: Vector3) -> void:
+	_dummy_last = true
+	hit(1.0, dir)
+	_shove = Vector3.ZERO
+
+
 ## A round from the player, flying along `dir`, that struck at `point` the part on `joint`.
 func hit(damage: float = 34.0, dir: Vector3 = Vector3.ZERO, point: Vector3 = Vector3.INF, joint: Node3D = null) -> void:
+	if dummy and _dummy_last:                              # the training's last round: it is destroyed like any robot
+		dummy = false
+		state = ROAM
+		hp = 0.01
 	if dummy:
 		if dir == Vector3.ZERO:
 			dir = Vector3.FORWARD
@@ -461,7 +489,11 @@ func hit(damage: float = 34.0, dir: Vector3 = Vector3.ZERO, point: Vector3 = Vec
 		hp = 0.0
 		kills += 1
 		state = DEAD
+		# (its part boxes stop rounds only from here on; a spider or a drone gets one box on the floor when it has
+		# come to rest, `_wreck_solid`. The turret's wreck hangs from the ceiling with its head at the height of the
+		# player's: solid, it shut the middle of its cell to everything, and nobody jumps over that.)
 		_solid(false)
+		_spin_up = 0.0
 		destroyed.emit(self)
 		_dead_for = 0.0
 		_short_t = randf_range(0.25, 0.6)
@@ -494,6 +526,49 @@ func hit(damage: float = 34.0, dir: Vector3 = Vector3.ZERO, point: Vector3 = Vec
 		_cool = maxf(_cool, 0.3)                       # it loses its aim for a moment
 		if state == ROAM and kind != "turret":
 			_engage()                                  # it knows where that came from
+
+
+## The wreck becomes a thing in the way: once it lies still (the spider's body is down, the drone has come down
+## and blown up) and the player does not stand in it, one box over the footprint of its parts, as high as they
+## reach but WRECK_TOP at most, so that it can always be jumped (its parts above that are not solid).
+func _wreck_solid() -> void:
+	if _wreck_body != null or kind == "turret" or not _crashed or not _exploded or _spin > 0.0:
+		return
+	if clip == "Death" and ap.is_playing() and ap.current_animation_position < ap.current_animation_length - 0.05:
+		return
+	var lo := Vector3(1e9, 1e9, 1e9)
+	var hi := -lo
+	for b in _solids:
+		var shape := b.get_child(0) as CollisionShape3D
+		var half: Vector3 = (shape.shape as BoxShape3D).size / 2.0
+		var xf := shape.global_transform
+		for sx in [-1.0, 1.0]:
+			for sy in [-1.0, 1.0]:
+				for sz in [-1.0, 1.0]:
+					var p := xf * (half * Vector3(sx, sy, sz))
+					lo = lo.min(p)
+					hi = hi.max(p)
+	if lo.x > hi.x:                                        # (no parts: headless without mesh data)
+		lo = global_position - Vector3(0.8, 0.0, 0.8)
+		hi = global_position + Vector3(0.8, 0.5, 0.8)
+	# (a little inside the outermost leg tips and duct edges: what is jumped is the bulk of it)
+	var size := Vector3(maxf((hi.x - lo.x) * 0.8, 0.5), clampf(hi.y - global_position.y, 0.25, WRECK_TOP), maxf((hi.z - lo.z) * 0.8, 0.5))
+	var mid := Vector3((lo.x + hi.x) / 2.0, global_position.y + size.y / 2.0, (lo.z + hi.z) / 2.0)
+	if player != null:
+		var d := player.global_position - mid
+		if absf(d.x) < size.x / 2.0 + 0.45 and absf(d.z) < size.z / 2.0 + 0.45 and player.global_position.y < mid.y + size.y:
+			return                                         # (the player stands in it: when they have stepped out)
+	_wreck_body = StaticBody3D.new()
+	var cs := CollisionShape3D.new()
+	var bs := BoxShape3D.new()
+	bs.size = size
+	cs.shape = bs
+	_wreck_body.add_child(cs)
+	_wreck_body.top_level = true
+	_wreck_body.set_meta("wreck", self)
+	add_child(_wreck_body)
+	_wreck_body.global_transform = Transform3D(Basis.IDENTITY, mid)
+	_bodies.append(_wreck_body.get_rid())
 
 
 ## A wreck's short circuits: sparks and a crackle from one of its parts, often just after it dies, then now and
@@ -988,17 +1063,36 @@ func _turret(delta: float) -> void:
 			_tyaw += clampf(e.x * 0.8, -deg_to_rad(_spec.turn) * delta, deg_to_rad(_spec.turn) * delta)
 			# (_tpitch turns the head by -angle about that axis)
 			_tpitch = clampf(_tpitch - clampf(e.y * signf(pitch_axis.cross(b).y) * 0.8, -1.6 * delta, 1.6 * delta), -0.8, 1.1)
-		if state == AIM and _aim_err < deg_to_rad(3.0) and _cool <= 0.0 and _sees:
-			state = SHOOT
-			_play("Shoot", 1.0, true)
-			_t = ap.get_animation("Shoot").length
-		elif state == SHOOT and _t <= 0.0:
-			state = AIM
-			_cool = randf_range(_spec.cooldown[0], _spec.cooldown[1]) / haste
-			_rest_pose()
+		if state == AIM and _cool <= 0.0 and _sees and (_aim_err < deg_to_rad(3.0) or _spin_up > 0.0):
+			# the barrels run up first: heard, and time to get out of its line
+			if _spin_up <= 0.0:
+				V2Sfx.play("turret_spin_up", hit_point())
+			_spin_up += delta
+			if _spin_up >= SPIN_UP / haste and _aim_err < deg_to_rad(4.0):
+				state = SHOOT
+				_passes = 3 + randi() % 2                  # the firing part 4 or 5 times: 16 or 20 rounds
+				_play("Shoot", GATLING[0], true)
+		elif state == AIM and _spin_up > 0.0:              # (lost sight of them while running up)
+			_spin_up = 0.0
+			V2Sfx.play("turret_spin_down", hit_point())
+		elif state == SHOOT:
+			var at := ap.current_animation_position
+			if at >= GATLING[2] and _passes > 0:
+				_passes -= 1
+				ap.seek(at - (GATLING[2] - GATLING[1]), true)
+			elif (at >= GATLING[2] + 0.04 and _passes <= 0) or not ap.is_playing():
+				state = AIM
+				_spin_up = 0.0
+				V2Sfx.play("turret_spin_down", hit_point())
+				V2Sfx.play("turret_tail", hit_point())
+				_cool = randf_range(_spec.cooldown[0], _spec.cooldown[1]) / haste
+				_rest_pose()
 	else:
 		if state != ROAM:
 			state = ROAM
+			if _spin_up > 0.0:
+				V2Sfx.play("turret_spin_down", hit_point())
+		_spin_up = 0.0
 		_aim_err = 9.0
 		_play("Idle")                                  # (its own scan, about the heading it was left at)
 		_tyaw = rotate_toward(_tyaw, _home_yaw, 0.5 * delta)
@@ -1032,7 +1126,9 @@ func _springs(delta: float) -> void:
 			node.transform = f2.mine
 	if kind != "turret" and _shove.length() > 0.01:
 		var p := position + _shove * delta
-		position = _clamp_arena(p) if state != DEAD else Vector3(clampf(p.x, bounds.position.x, bounds.end.x), 0.0, clampf(p.z, bounds.position.y, bounds.end.y))
+		position = _clamp_arena(p) if state != DEAD else Vector3(clampf(p.x, bounds.position.x, bounds.end.x), floor_y, clampf(p.z, bounds.position.y, bounds.end.y))
+		if is_instance_valid(_wreck_body) and state == DEAD:                # (a wreck that is shoved takes its box along)
+			_wreck_body.global_position += Vector3(_shove.x, 0.0, _shove.z) * delta
 		_shove *= exp(-delta * (5.0 if kind == "drone" else 9.0))
 	_flinch = maxf(_flinch - delta * 6.0, 0.0)         # and a short shake
 	_pose()
@@ -1175,6 +1271,7 @@ func _process(delta: float) -> void:
 			_blow_up()                                 # the drone hits the floor
 		_shorts(delta)
 		_springs(delta)
+		_wreck_solid()
 		if _t <= 0.0 and respawns:
 			respawn()
 		elif not respawns and _dead_for > 40.0 and _smoke.emitting:
