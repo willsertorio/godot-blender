@@ -184,6 +184,15 @@ func step_to(goal: Vector3, fight: bool, near: float = 0.3, limit: float = 14.0)
 		stuck = stuck + delta if player.global_position.distance_to(last) < 0.4 * delta else 0.0
 		last = player.global_position
 		if t > limit or stuck > 2.5:
+			if OS.has_environment("V2_BOT_STUCK"):
+				for h in [0.1, 0.5, 1.0, 1.5]:
+					var q := PhysicsRayQueryParameters3D.create(player.global_position + Vector3(0, h, 0), player.global_position + Vector3(0, h, 0) + to.normalized() * 1.5)
+					q.exclude = [player.get_rid()]
+					var res := player.get_world_3d().direct_space_state.intersect_ray(q)
+					if not res.is_empty():
+						var sh := (res.collider as Node).get_child(0) as CollisionShape3D
+						printerr("[bot]   ray at %.1f m: %s at %s, box %s, hit %s" % [h, str((res.collider as Node).get_path()), str((res.collider as Node3D).global_position), str((sh.shape as BoxShape3D).size) if sh != null and sh.shape is BoxShape3D else "?", str(res.position)])
+				printerr("[bot] did not reach %s: at %s (cell %s), %.1f m short" % [str(goal), str(player.global_position), str(V2Dungeon.cell_of(player.global_position)), to.length()])
 			_calm()
 			return false
 	_calm()

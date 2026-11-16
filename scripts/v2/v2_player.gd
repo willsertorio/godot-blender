@@ -94,6 +94,9 @@ var steps := 0                      # footfalls heard so far (the checks)
 var _air := false
 var _rounds := 0
 var _aimed := 0.0                   # 1 = the gun is up at the eye
+var last_aim := Vector3.FORWARD     # where the last round went (for the checks)
+var _shot_off := Vector3.FORWARD    # the pistol's aim (camera frame) when its trigger was pulled
+var _settle := 0.0                  # the pistol's barrel is not yet back where its aim is measured from
 var aim_dot := Vector2(-1, -1)      # where the rounds will go, on the screen (the HUD's cursor); (-1, -1) = hidden
 var shot_times: Array[float] = []    # when each round left (seconds since start): for the gun check
 var worst_bend := 0.0               # largest angle between a round's path and the barrel it left (degrees)
@@ -149,14 +152,21 @@ func _ready() -> void:
 		# view points at the middle of the screen, whatever its place in the picture.
 		var fix := Quaternion.IDENTITY
 		var fire: Dictionary = {}
+		var mean := Vector3.ZERO
+		var idle_len := ap.get_animation("Idle").length
+		ap.play("Idle")
+		for k in 12:
+			ap.seek(idle_len * k / 12.0, true)
+			mean += -(cam.global_transform.affine_inverse() * flash_node.global_transform).basis.z.normalized()
+		# The pistol's view is not turned (its picture stays as it was made: its barrel rests 9 degrees off the
+		# line of sight). Its rounds and its cursor leave the middle of the screen by as much as the barrel has
+		# left its place of rest: at the hip that place is the Idle clip's mean, at the eye the aimed pose.
+		var rest := Quaternion(mean.normalized(), Vector3.FORWARD)
+		ap.play("ADS")
+		ap.seek(ADS_IN[w], true)
+		var rest_aim := Quaternion(-(cam.global_transform.affine_inverse() * flash_node.global_transform).basis.z.normalized(), Vector3.FORWARD)
 		if w in AUTO:
-			var mean := Vector3.ZERO
-			var idle_len := ap.get_animation("Idle").length
-			ap.play("Idle")
-			for k in 12:
-				ap.seek(idle_len * k / 12.0, true)
-				mean += -(cam.global_transform.affine_inverse() * flash_node.global_transform).basis.z.normalized()
-			fix = Quaternion(mean.normalized(), Vector3.FORWARD)
+			fix = rest
 			var spec: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(V2Assets.DIR + "view_" + w + "_clips.json"))
 			fire = spec.get("fire", {})
 		for mi in scene.find_children("*", "MeshInstance3D", true, false):
@@ -165,7 +175,7 @@ func _ready() -> void:
 			if not (n is Light3D):
 				(n as VisualInstance3D).layers = GUN_LAYER
 		_views[w] = {"scene": scene, "ap": ap, "flashes": V2Fx.flashes(scene), "events": V2Assets.flash_events("view_" + w), "ev": {},
-			"kick": scene.find_child("CamKick", true, false), "seat": seat, "fix": fix, "flash": flash_node,
+			"kick": scene.find_child("CamKick", true, false), "seat": seat, "fix": fix, "flash": flash_node, "rest": rest, "rest_aim": rest_aim,
 			"loop": [fire.loop[0] / 24.0, fire.loop[1] / 24.0] if fire.has("loop") else []}
 		scene.visible = w == weapon
 	_ap().play("Idle")
@@ -367,6 +377,8 @@ func act(clip: String) -> void:
 	var from_sprint := busy == "Sprint" and clip != "Sprint"      # anything may interrupt a sprint
 	if busy != "" and not (again or from_aim or from_sprint):
 		return
+	if clip in ["Fire", "ADSFire"] and not (weapon in AUTO):
+		_shot_off = _pistol_off()
 	busy = clip
 	ap.play(clip, 0.06 if from_aim else (0.12 if from_sprint else -1.0))
 	ap.seek(0.0, true)
@@ -646,6 +658,8 @@ func _process(delta: float) -> void:
 	elif busy == "ADS":                            # AimOut
 		aimed = 1.0 - smoothstep(0.0, ADS_OUT[weapon], ap.current_animation_position)
 	_aimed = move_toward(_aimed, aimed, delta * 8.0)
+	# (out of a sprint, a reload, a draw the gun is still on its way back for a moment)
+	_settle = 0.25 if busy in NO_CURSOR else maxf(_settle - delta, 0.0)
 	(view.scene as Node3D).transform = Transform3D(Basis(Quaternion.IDENTITY.slerp(view.fix, 1.0 - _aimed)), Vector3.ZERO) * view.seat
 	# aiming zooms the world a little (the gun keeps its own field of view); the gun's camera rides on the world's
 	cam.fov = V2Assets.data().camera.fov_h * lerpf(1.0, AIM_ZOOM, smoothstep(0.0, 1.0, _aimed))
@@ -677,7 +691,10 @@ func _process(delta: float) -> void:
 				if weapon in AUTO:
 					_release.call_deferred()               # the gun stops; the reload follows
 		var from := (node as Node3D).global_position
-		var aim := aim_dir()
+		# (the pistol's round leaves as the barrel stood when the trigger was pulled: by the time the clip's flash
+		# comes round, a frame or two later, the muzzle is already on its way up)
+		var aim := aim_dir() if weapon in AUTO else (cam.global_basis * _shot_off).normalized()
+		last_aim = aim
 		var to := cam.global_position + aim * 60.0
 		var q := PhysicsRayQueryParameters3D.create(cam.global_position, to)
 		q.exclude = [get_rid()]
@@ -708,11 +725,33 @@ func _process(delta: float) -> void:
 			view.ev["pos"] = ap.current_animation_position        # (the rounds before this point are not fired again)
 
 
-## Where the next round goes: along the machine gun's barrel (the pistol: the line of sight).
+## Where the next round goes: along the machine gun's barrel. The pistol: the line of sight, turned by as much as
+## its barrel has left its place of rest (the muzzle flips 8.6 degrees up in a shot and is back in a quarter of
+## a second: a second round fired as fast as the gun allows, 0.2 s later, still goes 2.4 degrees high).
 func aim_dir() -> Vector3:
 	if weapon in AUTO:
 		return -(_views[weapon].flash as Node3D).global_basis.z.normalized()
-	return -cam.global_basis.z
+	return (cam.global_basis * _pistol_off()).normalized()
+
+
+## The pistol's aim in the camera's frame: forward, turned by what its barrel is off its place of rest.
+func _pistol_off() -> Vector3:
+	var view: Dictionary = _views[weapon]
+	var ap := view.ap as AnimationPlayer
+	var aimed := busy == "ADSFire" or ap.current_animation == &"AimHold"
+	if _settle > 0.0 or (busy == "ADS" and not aimed) or busy in NO_CURSOR:
+		return Vector3.FORWARD                         # (on its way up or down, or out of a sprint: no place of rest to measure from)
+	var barrel := -(cam.global_transform.affine_inverse().basis * (view.flash as Node3D).global_basis).z.normalized()
+	var off: Vector3 = ((view.rest_aim if aimed else view.rest) as Quaternion) * barrel
+	var ang := off.angle_to(Vector3.FORWARD)
+	if ang > deg_to_rad(12.0):
+		return Vector3.FORWARD                         # (a clip fading into another has swung the gun away)
+	# The gun's breathing and the walk's bob (up to 0.8 degrees) do not move the aim: a round fired at rest goes to
+	# the middle of the screen, as it always did with this gun. Only the kick of a shot does.
+	var keep := maxf(ang - deg_to_rad(1.2), 0.0)
+	if keep <= 0.0:
+		return Vector3.FORWARD
+	return Vector3.FORWARD.slerp(off.normalized(), keep / ang)
 
 
 ## The cursor rides on the barrel: it climbs and jumps with the recoil, and sways a little with the gun.

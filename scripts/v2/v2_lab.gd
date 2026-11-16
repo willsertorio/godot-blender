@@ -334,6 +334,27 @@ func _gun_test() -> void:
 	var ok := true
 	var centre := Vector2(get_viewport().get_visible_rect().size / 2.0)
 	await _wait(0.5)
+	# the pistol: its cursor rests in the middle, jumps up with the muzzle in a shot and is back before the next
+	var p_rest := player.aim_dot.distance_to(centre)
+	var p_high := centre.y
+	var p_first := 99.0
+	player.shot_times.clear()
+	_press(MOUSE_BUTTON_LEFT, true)
+	await get_tree().process_frame
+	_press(MOUSE_BUTTON_LEFT, false)
+	var pt := 0.0
+	while pt < 0.6:
+		await get_tree().process_frame
+		pt += get_process_delta_time()
+		if player.shot_times.size() == 1 and p_first > 90.0:
+			p_first = rad_to_deg(player.last_aim.angle_to(-player.cam.global_basis.z))
+		if player.aim_dot.x >= 0.0:
+			p_high = minf(p_high, player.aim_dot.y)
+	var p_back := player.aim_dot.distance_to(centre)
+	var pa := p_rest < 14.0 and centre.y - p_high > 40.0 and p_back < 14.0 and p_first < 1.0
+	ok = ok and pa
+	print("[gun] pistol: cursor in the middle, kicks with the shot, comes back: ", "PASS" if pa else "FAIL",
+		" (%.1f px off at rest, %.0f px up in the shot, %.1f px off 0.6 s later; the round left %.2f degrees off the line of sight)" % [p_rest, centre.y - p_high, p_back, p_first])
 	player.switch_weapon()                             # the machine gun
 	await _until(func() -> bool: return player.busy == "", 4.0)
 	await _wait(0.4)

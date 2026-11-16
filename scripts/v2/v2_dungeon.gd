@@ -22,7 +22,7 @@ const DOOR_H := 2.6
 # pass between) and what stands along its walls. All pieces of assets/models/v2/set.glb (v2/scripts/set_*.py).
 const THEMES := {
 	"lab": {"walls": ["wall_plain", "wall_plain", "wall_plain", "wall_plain", "wall_screen", "wall_screen", "wall_service"], "services": 0.15,
-		"stand": ["tank", "tank", "column_tall", "barrier"], "along": ["console", "console", "locker", "tank", "charging_dock", "shelving"],
+		"stand": ["tank", "tank", "column_tall", "barrier"], "along": ["console", "console", "locker", "charging_dock", "shelving", "shelving"],
 		"small": ["drum", "crate"], "accent": Vector3(0.05, 0.4, 0.46), "light": Color(0.93, 0.98, 1.0)},
 	"storage": {"walls": ["wall_plain", "wall_plain", "wall_plain", "wall_plain", "wall_plain", "wall_service"], "services": 0.1,
 		"stand": ["crate_stack", "crate_stack", "drum_stack", "barrier", "column_tall"], "along": ["shelving", "shelving", "crate_stack", "drum_stack", "locker", "crate", "drum"],
@@ -31,7 +31,7 @@ const THEMES := {
 		"stand": ["server_rack", "server_rack", "column_tall"], "along": ["server_rack", "server_rack", "server_rack", "console", "locker", "charging_dock"],
 		"small": ["crate"], "accent": Vector3(0.06, 0.16, 0.6), "light": Color(0.9, 0.95, 1.0)},
 	"power": {"walls": ["wall_plain", "wall_plain", "wall_plain", "wall_plain", "wall_plain", "wall_service", "wall_service"], "services": 0.35,
-		"stand": ["power_core", "power_core", "drum_stack", "column_tall"], "along": ["pipe_riser", "pipe_riser", "charging_dock", "tank", "locker", "drum"],
+		"stand": ["power_core", "power_core", "drum_stack", "column_tall"], "along": ["pipe_riser", "pipe_riser", "charging_dock", "locker", "drum", "drum_stack"],
 		"small": ["drum", "drum", "crate"], "accent": Vector3(0.6, 0.1, 0.03), "light": Color(1.0, 0.96, 0.9)},
 	"workshop": {"walls": ["wall_plain", "wall_plain", "wall_plain", "wall_plain", "wall_plain", "wall_service", "wall_screen"], "services": 0.2,
 		"stand": ["barrier", "crate_stack", "barrier", "column_tall", "drum"], "along": ["workbench", "workbench", "shelving", "charging_dock", "locker", "crate"],
@@ -507,6 +507,10 @@ func _against(what: String, c: Vector2i, d: Vector2i, room_id: int, rng: RandomN
 	var side := Vector3(-d.y, 0, d.x)
 	var spec: Array = DECO_BOX[what]
 	var yaw := atan2(-out.x, -out.z)
+	# (What stands against a wall must leave the middle of its cell free: the robots and the bot walk there. A
+	# specimen tank, 1.5 m deep, reached to 15 cm from it and closed the cell: tanks stand free now, and nothing
+	# deeper than 1.3 m goes against a wall.)
+	assert((spec[0] as Vector3).z <= 1.3, what + " is too deep to stand against a wall")
 	var reach := CELL / 2.0 - (0.0 if what == "pipe_riser" else 0.24) - float(spec[2])
 	var room_for := maxf((CELL - (spec[0] as Vector3).x) / 2.0 - 0.3, 0.0)
 	var slide := rng.randf_range(-room_for, room_for)
@@ -616,6 +620,8 @@ func _stand(what: String, at: Vector3, yaw: float, room_id: int) -> void:
 	var size: Vector3 = spec[0]
 	_solid(area.node, size, at + basis * (spec[1] as Vector3) + Vector3(0, size.y / 2.0, 0), yaw)
 	(area.props as Array).append([what, Transform3D(basis, at)])
+	if OS.has_environment("V2_STAND"):
+		printerr("[stand] %s at %.2f %.2f yaw %.0f room %d" % [what, at.x, at.z, rad_to_deg(yaw), room_id])
 
 
 # ---------------------------------------------------------------------------------------------- questions

@@ -647,7 +647,6 @@ func to_title() -> void:
 
 
 func _hud_update(delta: float) -> void:
-	var size := get_viewport().get_visible_rect().size
 	_hp_fill.offset_right = _hp_fill.offset_left + 240.0 * player.hp / V2Player.MAX_HP
 	_hp_fill.color = V2Ui.GREEN if player.hp > 35.0 else V2Ui.RED
 	_hp_text.text = "%d" % int(ceil(player.hp))
@@ -670,7 +669,7 @@ func _hud_update(delta: float) -> void:
 	for k in 4:
 		(_from_bars[k] as ColorRect).color.a = player.hurt_flash * 0.75 if (k == side and state == PLAYING) else 0.0
 	_low_hp.color.a = clampf((35.0 - player.hp) / 35.0, 0.0, 1.0) * (0.1 + 0.05 * sin(elapsed * 5.0)) if state == PLAYING else (0.1 if state == LOST else 0.0)
-	var dot := player.aim_dot if player.weapon in V2Player.AUTO else size / 2.0
+	var dot := player.aim_dot                              # (both guns: the cursor rides on the barrel)
 	_dot.visible = state == PLAYING and dot.x >= 0.0 and not (player.busy in V2Player.NO_CURSOR) and not _map.visible
 	_dot.position = dot - Vector2(2, 2)
 	_dot.color = Color(1.0, 0.25, 0.15) if player.hit_confirm > 0.0 else Color(1, 1, 1, 0.9)

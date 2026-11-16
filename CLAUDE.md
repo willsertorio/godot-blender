@@ -165,7 +165,15 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
   and jumps with the recoil; `aim_dir`, `aim_dot`). In Blender the gun is held toed in (barrel 6 degrees left of and
   4 above the line of sight), so tracers to the screen's middle looked bent: the whole view is turned about the eye
   until the barrel is parallel to the line of sight (`fix`, found from the Idle clip; faded out while aiming).
-  The pistol still shoots at the middle of the screen.
+  **The pistol's cursor kicks too** (`_pistol_off`): its view is not turned (its barrel rests 9.5 degrees off the
+  line of sight, and its picture stays as made); its aim is the line of sight turned by what the barrel is off its
+  place of rest (the Idle clip's mean at the hip, the aimed pose at the eye: `rest`, `rest_aim`). The first 1.2
+  degrees do not count (breathing, the walk's bob: a round at rest goes to the middle of the screen, as before).
+  The muzzle flips 8.6 degrees in a shot and is back after 0.25 s, so only a second round at the gun's fastest
+  (0.2 s) goes high, by about a degree. **The round takes the aim of the moment the trigger was pulled**
+  (`_shot_off`, set in `act`): the clip's flash comes a frame or two later, when the muzzle is already rising (the
+  check caught it: the round left 7.8 degrees high). No aim offset while the gun is busy with something else or
+  for 0.25 s after (`_settle`).
   The gun and arms are drawn by **their own camera** (`view_cam`, `GUN_LAYER`) into a transparent SubViewport laid
   over the world, under the HUD: a wall cannot cut into the gun, and the world camera zooms while aiming
   (`AIM_ZOOM` 0.78, mouse slowed to match) without the gun growing. Same world: the lab lets the lights of the
@@ -248,7 +256,8 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
   headless has no meshes, so walls do not block anything in this test);
   `xvfb-run -a godot --rendering-driver opengl3 --path . -- --gun-test` (real events: machine gun held 2.5 s = no gap
   between rounds, stops on release; rounds leave along the barrel, cursor in the middle at rest and climbing in
-  fire; C aims and the view zooms, fire while aiming; the gun on its own camera; X crouches; a sprint ends when
+  fire; the pistol's cursor in the middle at rest, up in a shot, back after it, its round along the line of sight;
+  C aims and the view zooms, fire while aiming; the gun on its own camera; X crouches; a sprint ends when
   the player stops; the gun's and the player's sound keys were played);
   `xvfb-run -a godot --rendering-driver opengl3 --path . -- --input-test` (real mouse / key events through the
   viewport: look, fire, aim, reload, inspect, camera kick). The capture tour drives the player by code, so it passed
@@ -291,8 +300,7 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
 - Learned: "hidden by scale 0" breaks Godot's glTF import (node comes in at scale 1): export hides at 0.001.
   A fine weave seen at arm's length beats against the pixel grid even with mipmaps: the glove fabrics are sampled
   with a mip bias. A directional light with shadows on came out about half as bright again as without.
-- Not done yet: a browser build of V2; the pistol has no cursor recoil (it shoots at the middle of the screen: the
-  user called its firing good); music (the user: not now); V1 (its Quaternius art, enemies and UI) still runs with `-- --v1`;
+- Not done yet: a browser build of V2; music (the user: not now); the title still shows the concept room (the user: not yet); V1 (its Quaternius art, enemies and UI) still runs with `-- --v1`;
   its generator is what the V2 game builds on.
   User decisions: realistic recorded sound, CC0, one consistent line, no music for now; no browser build of V2 for now (`tools/export_web.sh` is untested with V2);
   studio rooms in the lab; the game has PLAY and LAB and is the generated dungeon of the GDD in a new modular kit (the concept room is not in it);
@@ -338,6 +346,12 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   so every check and the bot run headless. `path(a, b)` = cells through open doorways; `arena(area, margin)`;
   `update()` hides areas more than `SEEN` (28 m) away and lets the player's area's lights reach the gun.
   `V2_TRIS=1` in the environment prints each area's triangles and pieces.
+- **What stands against a wall may be 1.3 m deep at most** (`_against` asserts it): the specimen tank, 1.5 m deep
+  plus its gap, reached to 15 cm from the middle of its cell, where the robots and the bot walk; the bot hung in
+  seed 18 for the whole of its 15 minutes. Tanks stand free (the `stand` lists) now. Found by the balance run:
+  **a bot run that takes several times longer than the others is stuck, not slow** (`V2_BOT_STUCK=1` prints where
+  it stands and what box is in front of it; `V2_STAND=1` prints every piece placed; both on stderr: a headless
+  run that is killed loses what it printed to stdout).
 - Dressing (**user: denser big rooms, some grime, a colour per theme, corridor variants: "ok"**): a theme has an
   `accent` (the paint of the line round the room: a strip on `wall_plinth` and one at the foot of `wall_upper`,
   material `EAccent`, recoloured per theme by `V2Assets.accent`: lab teal, storage ochre, server blue, power red,
@@ -390,6 +404,10 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   later**). Seeds 10 to 18, with the robots above: **threat 0: 9 wins in 9** (the bot's lowest health after a room
   23 to 70; 70 to 87 % of its rounds hitting), **threat 2: 6 in 9, threat 4: 3 in 9** (threat 2 was measured with
   the climb at 1.5 robots and 8 % a level, where threat 4 gave 2 in 9; it is a little gentler now).
+  **On the environment set, dressed** (same seeds, the pistol's kick in): **threat 0: 8 in 9, threat 2: 7 in 9,
+  threat 4: 3 in 9**: the same within what nine runs can tell (the lowest health after a room at threat 0: 48 to
+  65). Seed 17 is lost at threat 0 and 2 with 36 to 52 % of the rounds hitting where the others have 70 to 93 %:
+  somewhere in it the bot fires at a robot it sees and cannot hit (not looked into).
   History: with the first robots (100 / 60 / 110 health, 0.6 kept) it was 11 in 12, 9 in 9, 7 in 9, and 5 in 9 at
   threat 6, and the user found the game too easy.
   **What went wrong on the way (it cost four tuning rounds):** the bot aimed the camera at a robot while the
