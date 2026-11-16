@@ -322,6 +322,9 @@ func _box_mesh(parent: Node3D, size: Vector3, at: Vector3, mat: Material, layer:
 	mi.material_override = mat
 	mi.position = at
 	mi.layers = layer
+	# (no shadow: the light comes straight down, and an open leaf, inside the wall, threw a soft-edged band of
+	# shadow onto the wall's face beside the doorway, which shimmered as the player moved)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	parent.add_child(mi)
 	return mi
 

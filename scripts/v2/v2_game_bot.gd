@@ -420,6 +420,28 @@ func test() -> void:
 	var clear_now := space.intersect_ray(PhysicsRayQueryParameters3D.create(V2Dungeon.center(door.a) + off, V2Dungeon.center(door.b) + off))
 	ok = _check("door: shut it blocks, E opens it", shut_blocks and not hit.is_empty() and bool(door.open) and clear_now.is_empty() and dungeon.passable(door.a, door.b),
 		"shut: no path %s, a ray stopped %s; opened %s, the ray passes %s" % [shut_blocks, not hit.is_empty(), door.open, clear_now.is_empty()]) and ok
+	# --- no reload at a run; footsteps at the pace of the walk the view shows (two a second)
+	player.select_weapon("rifle")
+	await _wait(0.8)
+	player.busy = ""
+	player.mag.rifle = 10
+	player.reserve = 60
+	player._running = true
+	var refused := not player.reload()
+	player._running = false
+	var allowed := player.reload()
+	await _wait(3.0)
+	var before_steps: int = player.steps
+	player.auto_move = Vector3(0, 0, -1)
+	var yaw_was := player._yaw
+	for leg in 2:                                          # (there and back, so as to stay in the room; a turn costs a step)
+		await _wait(2.0)
+		player._yaw += PI
+	player.auto_move = Vector3.ZERO
+	player._yaw = yaw_was
+	var paced: int = player.steps - before_steps
+	ok = _check("no reload at a run; footsteps two a second at a walk", refused and allowed and paced >= 5 and paced <= 9,       # (by distance, as before, it was 17)
+		"R at a run refused: %s, standing: %s; %d footsteps in 4 s of walking" % [str(refused), str(allowed), paced]) and ok
 	# --- robots: a wreck stays a wreck; the score
 	var first: V2Robot = game.robots[0]
 	first.hit(9999.0)

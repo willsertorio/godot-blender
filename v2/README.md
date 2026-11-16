@@ -150,3 +150,13 @@ blender -b v2/scene.blend -P v2/scripts/render.py -- out.png 96 100 view=rifle  
   with the Standard view transform (that is how the gloves' wrong tints in Godot were found).
 - Stages: 1 room + lighting, 2 weapon views + gloved hands, 3 robots, 4 animation + effects, 5 in Godot as the V2 lab
   (export_godot.py; the Godot side is described in CLAUDE.md).
+
+## The dungeon kit's second set (room themes)
+
+`build_kit.py` also builds 36 pieces added after the first play test (the map was too plain and empty): more room and
+corridor walls, floors, ceilings, equipment and cover (crate stacks, drums, racks, a generator, shelving, a bench, a
+power core, ...) and four small things. `Part.tube(p0, p1, r)` and `Part.cone(...)` were added for pipes and cones.
+Rules learned: never two materials in one plane (it flickers in the game: the doorway's lining was flush with the
+wall's opening); flat things on the floor at z 0.008 or higher (the tiles' joints end at 0.004); bare metal the size of
+a duct or a shelf comes out near black in the game: use `PaintGrey`. Look at new pieces with
+`tools/v2_kit_sheet.gd` before placing them.

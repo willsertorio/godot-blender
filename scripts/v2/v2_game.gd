@@ -21,15 +21,16 @@ const SCORE := {"turret": 100, "drone": 150, "spider": 200}
 # The robots of the dungeon against the lab's. A run meets fifteen or more of them, several at a time, and health
 # does not come back: tuned on bot runs (tools/v2_bot.sh; CLAUDE.md has the numbers).
 #   [aim lag in seconds (the lab: 0.3), damage x, pauses between bursts /, health (the lab: 150 / 80 / 180)]
-const TOUGH := {"spider": [0.14, 1.0, 1.0, 100.0], "drone": [0.28, 1.0, 1.0, 60.0], "turret": [0.28, 1.0, 1.0, 110.0]}
+const TOUGH := {"spider": [0.14, 1.0, 1.35, 150.0], "drone": [0.2, 1.0, 1.35, 85.0], "turret": [0.2, 1.0, 1.35, 170.0]}
 # How many of the robots the generator scatters are kept: a share of each room's, at most two in a room next to
 # the start. (Its numbers were for V1's weaker hostiles: 22 a dungeon at threat 0.) The generator always runs at
 # threat 0 and the game scales with the threat level (MORE, HP_PER_THREAT, _kit_weight), so that a seed's
 # dungeon is the same at every level but for that.  [share kept, the most in one room]
-const CROWD := [0.6, 3]
-const MORE := 1.5                   # robots added to the dungeon per mission completed
-const HP_PER_THREAT := 0.08         # robots' health: + this per mission completed
+const CROWD := [0.75, 4]
+const MORE := 1.0                   # robots added to the dungeon per mission completed
+const HP_PER_THREAT := 0.06         # robots' health: + this per mission completed
 const SCORE_PER_THREAT := 0.25      # a kill's worth: + this per mission completed
+const HEAR := 24.0                  # a robot this near hears the player's gun and comes
 const GATHER := 9                   # a robot comes to look at the player who is down from at most this many cells away
 const RING := [0.0, 50.0, -50.0, 100.0, -100.0, 150.0, -150.0]      # where they stand round the player (degrees from where the player faces)
 const DEATH_WAIT := [3.4, 9.0]      # seconds from going down to the options: at the earliest, at the latest
@@ -83,6 +84,7 @@ var _map: V2Map
 var _tick := 0.0
 var _bot: Node
 var _death_t := 0.0
+var _rounds_heard := 0
 var _seen_t := 0.0
 var _watchers: Array = []
 var _rng := RandomNumberGenerator.new()
@@ -533,8 +535,12 @@ func _process(delta: float) -> void:
 func _robots_tick() -> void:
 	var at := player.global_position
 	var my_cell := V2Dungeon.cell_of(at)
+	var gunfire := player._rounds != _rounds_heard         # the player has fired since the last tick
+	_rounds_heard = player._rounds
 	for r in robots:
 		var d := r.global_position.distance_to(at)
+		if gunfire and d < HEAR and r.state != V2Robot.DEAD:
+			r.alerted = true
 		var area := dungeon.area_at(r.global_position)
 		r.active = d < 34.0
 		r.visible = area < 0 or (dungeon.areas[area].node as Node3D).visible
@@ -547,7 +553,7 @@ func _robots_tick() -> void:
 				_set_layer(r, dungeon.areas[area].layer)
 			continue
 		# it has seen the player (or heard a door) and they are somewhere else now: after them, through open doorways
-		if r.state == V2Robot.ROAM and r.alerted and r._unseen > 2.5 and here >= 0 and area != here:
+		if r.state == V2Robot.ROAM and r.alerted and r._unseen > 1.2 and here >= 0 and area != here:
 			var cells := dungeon.path(V2Dungeon.cell_of(r.global_position), my_cell)
 			if cells.size() >= 2 and cells.size() <= CHASE:
 				var way: Array = []
