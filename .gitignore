@@ -11,3 +11,4 @@ captures/
 *.blend1
 .DS_Store
 __pycache__/
+v2/renders/set/

@@ -442,6 +442,33 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
 - Static state survives a scene change (`V2Fx._marks`, `V2Sfx.root`, the game's `missions`): every scene's `_ready`
   sets the roots and calls `V2Fx.reset()`.
 
+## The environment set (waiting for the user's approval; not in the game yet)
+
+**User, after the themed kit: "the elements in the map are poorly designed", go back to Blender, more realistic,
+from references.** The 24 reference sheets are in `v2/reference/set/` (01 to 24: three wall panels, the doorway,
+three floor tiles, two ceiling panels, a corridor section, a column, crate, drum, barrier, specimen tank, server
+rack, power core, console, locker, shelving, workbench, charging dock, pipe riser, exit portal, loot crates and med
+kits, ammunition box).
+- `v2/scripts/setlib.py`: on top of `v2lib`: `Part` (boxes, cylinders, plates cut to an outline: `plate_xz/xy/yz`,
+  `band_xz` for arches, `louvres`, `grid_*`, `bolt`), `pipe` (straight runs with round elbows), `cable`, `ring`,
+  `handle`, `valve_wheel`, `text`, outlines (`chamfer`, `rounded`, `rect`), placements `T(loc, rx, ry, rz)`; the
+  set's materials by short name (`mat("white")` ...: the robots' worn paint and steel, plus hazard stripes, a
+  display, the portal's field, perforated sheet, card); the studio (`studio`, `shoot`: one asset alone, two views).
+- `v2/scripts/set_structure.py`, `set_cover.py`, `set_equipment.py`, `set_pickups.py`: one function per asset,
+  registered with `@asset(name, views=..., res=..., hide=...)`; 33 assets with their variants.
+- `blender -b -P v2/scripts/build_set.py [-- --only=a,b] [--render]` -> `v2/set.blend` (all, 8 m apart) and
+  `v2/renders/set/<name>_a.png`, `_b.png` (git-ignored); `python3 -I v2/scripts/set_sheet.py` -> the sheets
+  `v2/renders/set_sheet_<n>.jpg`. One asset builds and renders in a few seconds: look at each against its reference.
+- Learned: `Vector.slerp` returns unit vectors (the first pipe elbows were a metre wide); the shader's bevel must
+  reach further than the parts' modelled bevels or it finds no edge to wear (pointiness does not work on boxes:
+  every vertex is a corner); two bars laid over each other in one plane render black where they meet (a cross is
+  one outline); a concave outline as one face can fill wrongly (arches are bands of quads); a part seen from below
+  needs the studio's lights below, one seen from above needs less light or its colours bleach.
+- Sizes chosen for the sheet (to settle when the set goes into the game's 4 m grid): wall panel 2 x 3 m, floor tile
+  1 x 2 m, ceiling panel 2 x 2 m, corridor section 4 x 3.4 x 4 m, doorway opening 2.4 x 2.6 m, column 3.4 m high
+  (its height is a parameter). The med kit follows the reference (red case, white cross), not the green cross of
+  the round before: ask.
+
 ## Conventions (fixed on day one; do not drift)
 
 - Units: 1 Blender unit = 1 m. Blender is Z-up, Godot is Y-up. Blender +Y (forward) becomes Godot -Z
