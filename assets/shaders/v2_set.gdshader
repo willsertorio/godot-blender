@@ -12,8 +12,9 @@ render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_burley, specular_sc
 // colour is worked out in linear here and handed back as sRGB (as v2_worn.gdshader does).
 uniform sampler2D tex_albedo : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D tex_normal : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
-uniform sampler2D tex_rough : hint_default_white, filter_linear_mipmap_anisotropic, repeat_enable;
-uniform sampler2D tex_imperfections : hint_default_black, filter_linear_mipmap_anisotropic, repeat_enable;
+// (four lookups a pixel: colour, normal, and the imperfections map twice. It had six, all anisotropic, on every wall and
+// floor of a Retina screen: the roughness map and the streaks' own lookup went; only colour and normal are anisotropic)
+uniform sampler2D tex_imperfections : hint_default_black, filter_linear_mipmap, repeat_enable;
 uniform vec3 tint = vec3(0.76, 0.77, 0.76);
 uniform vec3 wear_color = vec3(0.17, 0.17, 0.18);
 uniform float tile = 0.9;               // metres per repeat of the paint set
@@ -68,10 +69,10 @@ void fragment() {
 	}
 	vec4 at = texture(tex_albedo, plane(p));
 	vec3 alb = pow(at.rgb, vec3(2.2)) * base;
-	float rough = mix(rough_range.x, rough_range.y, texture(tex_rough, plane(p)).r);
 	vec3 imp = texture(tex_imperfections, plane(tri_pos / 0.7 + vec3(0.13))).rgb;            // fine: R scratches, G smudges, B dirt
-	vec3 imp_big = texture(tex_imperfections, plane(tri_pos / 2.6 + vec3(0.41))).rgb;        // broad patches
-	vec3 streak = texture(tex_imperfections, plane(tri_pos * vec3(1.9, 0.3, 1.9) + vec3(0.7))).rgb;      // stretched down the walls
+	// broad patches, stretched down the walls (on floors and ceilings y is the normal: they stay round)
+	vec3 imp_big = texture(tex_imperfections, plane(tri_pos * vec3(0.6, 0.22, 0.6) + vec3(0.41))).rgb;
+	float rough = mix(rough_range.x, rough_range.y, 0.35 + 0.5 * imp.g);
 	float ao = COLOR.r;
 	float edge = COLOR.g;
 
@@ -82,7 +83,7 @@ void fragment() {
 	wm = clamp(wm, 0.0, 1.0);
 
 	// dirt: patches and streaks, the crevices, the floor
-	float dirt = smoothstep(0.25, 0.75, streak.b * 0.7 + imp_big.b * 0.6) * smudge * 0.55;
+	float dirt = smoothstep(0.25, 0.75, imp_big.b * 1.3) * smudge * 0.55;
 	dirt += (1.0 - smoothstep(0.1, 0.85, ao)) * cavity;
 	float low = clamp(1.0 - obj_pos.y / grime_height, 0.0, 1.0) * (0.35 + 0.9 * imp_big.b) * grime * (1.0 - 0.7 * max(up, 0.0));
 	dirt = clamp(dirt + low, 0.0, 1.0);

@@ -72,6 +72,7 @@ func _ready() -> void:
 	_perf_log = "--perf" in args
 	if _low:
 		get_viewport().msaa_3d = Viewport.MSAA_DISABLED
+	_render_setup()
 	_quick = "--quick" in args
 	_door_only = "--doors" in args
 	for a in args:
@@ -249,7 +250,7 @@ func _perf_update(delta: float) -> void:
 		Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0,
 		get_viewport().get_visible_rect().size.x, get_viewport().get_visible_rect().size.y,
 		RenderingServer.get_video_adapter_name()]
-	_perf.text = _perf_line + "\nF3 hides this"
+	_perf.text = _perf_line + "\n" + _render_text() + " (F4 changes it)   F3 hides this"
 	if _perf_log:
 		print("[perf] room %d  " % (current + 1), _perf_line)
 	_perf_t = 0.0
@@ -286,6 +287,13 @@ func _unhandled_input(event: InputEvent) -> void:
 				robots[current].set_ai(robots[current].state == V2Robot.PREVIEW)
 			KEY_BACKSPACE:                                  # back to the title (Play / Lab)
 				get_tree().change_scene_to_file("res://scenes/v2_title.tscn")
+			KEY_F4:                                         # the 3D picture's size (V2World.RENDER_ROWS)
+				_render_next()
+				_perf.visible = true
+				_perf_t = 0.0
+				_perf_frames = 0
+				_perf_worst = 0.0
+				_perf.text = _render_text() + " ..."
 			KEY_F3:
 				_perf.visible = not _perf.visible
 				_perf_t = 0.0

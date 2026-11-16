@@ -159,7 +159,6 @@ static func _set_material(mat_name: String) -> Material:
 		m.shader = load("res://assets/shaders/v2_set.gdshader")
 		m.set_shader_parameter("tex_albedo", _tex("PaintedPlaster017", "color"))
 		m.set_shader_parameter("tex_normal", _tex("PaintedPlaster017", "normal"))
-		m.set_shader_parameter("tex_rough", _tex("PaintedPlaster017", "rough"))
 		m.set_shader_parameter("tex_imperfections", load("res://assets/textures/military/_detail/imperfections.png"))
 		m.set_shader_parameter("tint", sp[0])
 		m.set_shader_parameter("wear_color", sp[1])

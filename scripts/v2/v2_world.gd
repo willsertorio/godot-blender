@@ -22,11 +22,42 @@ const NO_SHADOW := ["Floor", "Wall", "Ceiling", "Trim", "Cable", "TrayCable", "L
 	"CoveLights", "LightStrips", "Screens", "Signs", "StatusLights", "Drains", "Bubbles", "Hazard",
 	"StudioFloor", "StudioWalls", "StudioCeiling", "StudioLight", "StudioTrim"]
 
+# How many rows of pixels the 3D picture is drawn with, at most (0 = as many as the window has). A Retina display
+# gives the window 2560 x 1600 pixels: four times the 1280 x 720 the frame rate was first measured at, each with
+# 4x anti-aliasing. The picture is drawn smaller and stretched; the HUD stays at the window's pixels. F4 steps
+# through these in the game and the lab (static: the choice lasts over scene changes).
+const RENDER_ROWS := [1080, 900, 720, 0]
+static var render_rows := 1080
+
 var rooms: Array[Node3D] = []
 var _low := false                 # --quality=low: no shadows, no glow, no MSAA
 var _room_lights: Array = []        # per room: its omni and spot lights
 var _gun_room := -1
 var _concept := false             # the detailed room of the Blender scene instead of the studio
+
+
+## The 3D picture's size (see RENDER_ROWS): set now and whenever the window changes size.
+func _render_setup() -> void:
+	_render_apply()
+	if not get_window().size_changed.is_connected(_render_apply):
+		get_window().size_changed.connect(_render_apply)
+
+
+func _render_apply() -> void:
+	var rows := float(get_window().size.y)
+	get_viewport().scaling_3d_scale = 1.0 if render_rows == 0 or rows <= render_rows else clampf(render_rows / rows, 0.35, 1.0)
+
+
+func _render_next() -> void:
+	render_rows = RENDER_ROWS[(RENDER_ROWS.find(render_rows) + 1) % RENDER_ROWS.size()]
+	_render_apply()
+
+
+## For the F3 line: what the 3D picture is drawn at.
+func _render_text() -> String:
+	var win := get_window().size
+	var k := get_viewport().scaling_3d_scale
+	return "3D %d x %d%s" % [roundi(win.x * k), roundi(win.y * k), "" if k >= 0.999 else " of %d x %d" % [win.x, win.y]]
 
 
 ## `ambient`: the even light from all sides; `floor_light`: the light straight down. The lab's numbers are the

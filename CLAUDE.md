@@ -396,6 +396,16 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   triangles (225 floor tiles of 292, service wall panels of 4,900), what stands in it 16 to 136 thousand; all of an
   area is drawn as soon as a corner of it is in view. Frame rate on a real GPU: **not measured** (F3 in the game);
   if it is too low: fewer service panels, tiles of 2 x 2 m, `SEEN` lower.
+- **Frame rate on the user's M1: 50 fps** (full screen, 252 draw calls, 472k triangles), measured after the set went
+  in. The window on a Retina display is 2560 x 1600 pixels, four times the 1280 x 720 of the 77 fps measured
+  earlier, so the cost was taken to be pixels, not triangles (24 million triangles a second is little for that
+  GPU). Done for it: the 3D picture is drawn with at most 1080 rows and stretched (`V2World.RENDER_ROWS`,
+  `_render_setup`; **F4** steps through 1080 / 900 / 720 / the window's own; the HUD keeps the window's pixels;
+  `scaling_3d_scale` does work in Compatibility 4.3, checked); `v2_set.gdshader` does four texture lookups a pixel
+  instead of six (no roughness map, streaks from the broad-patch lookup, only colour and normal anisotropic); the
+  directional shadow is filtered with 5 samples instead of 13. **F3 now also shows** the 3D picture's size and,
+  where the driver reports them, the time spent drawing on the CPU and the GPU and in the game's code: read those
+  before cutting anything else. Not measured again yet (the user's next run).
 - Map (`scripts/v2/v2_map.gd`, Tab; the game goes on): rooms entered, robots still working in each (red number),
   corridors walked, doorways (amber shut / green open / grey no door), the exit once its room was entered, the
   player. Scaled to the whole dungeon, so the empty part of the panel says how much is left.

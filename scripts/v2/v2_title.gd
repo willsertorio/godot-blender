@@ -33,6 +33,7 @@ func _ready() -> void:
 	V2Sfx.root = self
 	V2Sfx.enabled = not ("--no-sound" in args)
 	_low = "--quality=low" in args
+	_render_setup()
 	_concept = true
 	_environment()
 	var room := _room_shell(0, "Room")

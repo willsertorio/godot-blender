@@ -100,6 +100,10 @@ func _ready() -> void:
 	_low = "--quality=low" in args
 	if _low:
 		get_viewport().msaa_3d = Viewport.MSAA_DISABLED
+	_render_setup()
+	RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), true)
+	# (the one shadow falls straight down from a soft light: five samples a pixel look the same as thirteen here)
+	RenderingServer.directional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_LOW)
 	var capture := ""
 	var part := ""
 	var bot := 0
@@ -588,6 +592,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			_perf.text = "measuring ..."
 			_perf_t = 0.0
 			_perf_n = 0
+		elif event.keycode == KEY_F4:                      # the 3D picture's size: 1080 / 900 / 720 rows / the window's
+			_render_next()
+			_perf.visible = true
+			_perf.text = _render_text() + " ..."
+			_perf_t = 0.0
+			_perf_n = 0
 		elif event.keycode == KEY_TAB and state == PLAYING:
 			_map.visible = not _map.visible                # (the game goes on behind it)
 
@@ -671,9 +681,14 @@ func _hud_update(delta: float) -> void:
 		_perf_t += delta
 		_perf_n += 1
 		if _perf_t >= 1.0:
-			_perf.text = "%.0f fps (%.1f ms)   draw calls %d   triangles %dk   video memory %.0f MB   F3 hides this" % [_perf_n / _perf_t, 1000.0 * _perf_t / _perf_n,
+			var vp := get_viewport().get_viewport_rid()
+			var gpu := RenderingServer.viewport_get_measured_render_time_gpu(vp)
+			var cpu := RenderingServer.viewport_get_measured_render_time_cpu(vp) + RenderingServer.get_frame_setup_time_cpu()
+			_perf.text = "%.0f fps (%.1f ms)   %s (F4 changes it)   draw calls %d   triangles %dk   video memory %.0f MB%s   F3 hides this" % [
+				_perf_n / _perf_t, 1000.0 * _perf_t / _perf_n, _render_text(),
 				Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1000.0,
-				Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0]
+				Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0,
+				"   drawing: cpu %.1f ms, gpu %.1f ms   game code %.1f ms" % [cpu, gpu, 1000.0 * Performance.get_monitor(Performance.TIME_PROCESS)] if gpu > 0.0 or cpu > 0.0 else ""]
 			_perf_t = 0.0
 			_perf_n = 0
 
