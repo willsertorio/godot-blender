@@ -1,8 +1,9 @@
 extends V2World
-## The title: PLAY generates a dungeon and enters play (scenes/v2_game.tscn), LAB opens the test lab
-## (scenes/v2_lab.tscn: the three studio rooms with one robot each, for looking at the animations).
-## Behind the menu: the concept room of the Blender scene.
-## Command-line options meant for the lab or the game skip the menu:
+## The title, after the UI concept (v2/reference/ui/screens/Main.png): a white page, PROJECT / FIREWALL, a cyan
+## bar, PRESS ENTER pulsing. Nothing else: no menu. Enter, any other key or a click starts a run
+## (scenes/v2_game.tscn). Not on the page, for whoever works on the game: L opens the test lab
+## (scenes/v2_lab.tscn: three studio rooms with one robot each); Backspace there comes back here.
+## Command-line options meant for the lab or the game skip the title:
 ##   -- --lab, --enemy-test, --gun-test, --input-test, --capture=DIR, --perf, --preview, --concept   -> the lab
 ##   -- --play, --game-test, --bot[=N], --game-capture=DIR                                          -> the game
 ##   -- --v1                                                                                        -> the V1 game
@@ -11,7 +12,7 @@ const GAME := "res://scenes/v2_game.tscn"
 const LAB_ARGS := ["--lab", "--enemy-test", "--gun-test", "--input-test", "--perf", "--preview", "--concept", "--doors", "--quick"]
 const GAME_ARGS := ["--play", "--game-test"]
 
-var _cam: Camera3D
+var _press: Label
 var _t := 0.0
 
 
@@ -32,24 +33,8 @@ func _ready() -> void:
 	V2Fx.reset()
 	V2Sfx.root = self
 	V2Sfx.enabled = not ("--no-sound" in args)
-	_low = "--quality=low" in args
 	_render_setup()
-	_concept = true
-	_environment()
-	var room := _room_shell(0, "Room")
-	var robot := V2Robot.new()
-	room.add_child(robot)
-	robot.setup("spider")
-	robot.set_ai(false)
-	robot.auto = false
-	robot.play("Idle")
-	robot._label.visible = false
-	_set_layer(room, _layer(0))
-	_cam = Camera3D.new()
-	_cam.fov = 62.0
-	add_child(_cam)
-	_cam.make_current()
-	_menu()
+	_page()
 	V2Sfx.ambience("room_tone")
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	for a in args:
@@ -57,39 +42,64 @@ func _ready() -> void:
 			_shot(a.trim_prefix("--title-capture="))
 
 
-func _menu() -> void:
+func _page() -> void:
 	var ui := CanvasLayer.new()
 	ui.layer = 5
 	add_child(ui)
-	V2Ui.rect(ui, Color(0.02, 0.03, 0.045, 0.72), 0.0, 0.0, 0.0, 0.0, 520.0, 4000.0)
-	V2Ui.rect(ui, V2Ui.CYAN, 0.0, 0.0, 520.0, 0.0, 2.0, 4000.0)
-	V2Ui.label(ui, "PROJECT", 0.0, 0.0, 60.0, 90.0, 30, V2Ui.CYAN, true)
-	V2Ui.label(ui, "FIREWALL", 0.0, 0.0, 60.0, 124.0, 58, Color(0.95, 0.98, 1.0), true)
-	V2Ui.label(ui, "A new dungeon every run. Find the exit portal.", 0.0, 0.0, 62.0, 204.0, 17, Color(0.72, 0.8, 0.86))
-	V2Ui.button(ui, "PLAY", 0.0, 0.0, 200.0, 270.0, func() -> void: get_tree().change_scene_to_file(GAME), 280.0)
-	V2Ui.button(ui, "LAB", 0.0, 0.0, 200.0, 334.0, func() -> void: get_tree().change_scene_to_file(LAB), 280.0)
-	V2Ui.button(ui, "QUIT", 0.0, 0.0, 200.0, 398.0, func() -> void: get_tree().quit(), 280.0)
-	V2Ui.label(ui, "PLAY: eight to twelve rooms joined by corridors and doors,\nrobots, supply crates, one exit portal. Each mission completed\nmakes the next dungeon harder.\nLAB: three test rooms, one robot each, to try the guns and\nwatch the animations (M: clip preview, N: next clip).",
-		0.0, 0.0, 62.0, 470.0, 14, Color(0.62, 0.7, 0.76))
-	V2Ui.label(ui, "WASD move  ·  mouse look  ·  LMB fire  ·  C or RMB aim  ·  R reload\nQ or 1 / 2 switch gun  ·  E open  ·  H med kit  ·  Tab map\nShift sprint  ·  X crouch  ·  Space jump  ·  Esc menu  ·  F3 frame rate",
-		0.0, 1.0, 62.0, -96.0, 14, Color(0.62, 0.7, 0.76))
+	V2Ui.full(ui, UIPalette.FACILITY_WHITE)
+	var stack := V2Ui.column(null, 22)
+	stack.alignment = BoxContainer.ALIGNMENT_CENTER
+	stack.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ui.add_child(stack)
+	var project := V2Ui.text(stack, "PROJECT", "semibold", 18, UIPalette.GRAPHITE, 0.6)
+	project.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var logo := V2Ui.text(stack, "FIREWALL", "c_extrabold", 168, UIPalette.GRAPHITE, 0.01)
+	logo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# (the concept's line height 0.88: the label's own box is taller than the letters, so it is cut to their height)
+	logo.clip_contents = false
+	logo.custom_minimum_size = Vector2(0, 168 * 0.88)
+	logo.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	logo.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	var holder := Control.new()
+	holder.custom_minimum_size = Vector2(0, 168 * 0.72)
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stack.remove_child(logo)
+	holder.add_child(logo)
+	logo.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	logo.offset_top = -52.0
+	logo.offset_bottom = 28.0
+	stack.add_child(holder)
+	var bar := V2Ui.rect(stack, UIPalette.CYAN, 120, 6)
+	bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_press = V2Ui.text(ui, "PRESS ENTER", "bold", 16, UIPalette.GRAPHITE_SECONDARY, 0.5)
+	_press.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_press.anchor_right = 1.0
+	_press.anchor_top = 1.0
+	_press.anchor_bottom = 1.0
+	_press.offset_top = -112.0 - 20.0
+	_press.offset_bottom = -112.0
 
 
 func _process(delta: float) -> void:
-	if _cam == null:
+	if _press == null:
 		return
 	_t += delta
-	# the camera drifts across the room's front, looking at the robot in the middle of the hall
-	var at := Vector3(1.0 + sin(_t * 0.11) * 2.2, 1.5 + sin(_t * 0.17) * 0.12, 1.4)
-	_cam.look_at_from_position(at, Vector3(-0.6, 1.0, -5.5), Vector3.UP)
+	# 1.0 -> 0.25 -> 1.0 over 1.8 s, eased in and out
+	_press.modulate.a = 0.625 + 0.375 * cos(_t * TAU / 1.8)
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _press == null:
+		return
 	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_P]:
-			get_tree().change_scene_to_file(GAME)
-		elif event.keycode == KEY_L:
+		if event.keycode == KEY_L:
 			get_tree().change_scene_to_file(LAB)
+		elif not (event.keycode in [KEY_ESCAPE, KEY_F3, KEY_F4, KEY_META, KEY_CTRL, KEY_ALT, KEY_SHIFT]):
+			V2Sfx.play("ui")
+			get_tree().change_scene_to_file(GAME)
+	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		V2Sfx.play("ui")
+		get_tree().change_scene_to_file(GAME)
 
 
 func _shot(path: String) -> void:

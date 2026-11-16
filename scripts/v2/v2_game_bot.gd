@@ -740,6 +740,77 @@ func marks(dir: String) -> void:
 	get_tree().quit()
 
 
+## The screens of the UI concept (-- --game-capture=DIR --part=ui, at --resolution 1440x810: its pictures are
+## v2/reference/ui/screens/*.png): the HUD at a door (the prompt), with the machine gun, hit and low, reloading,
+## aiming; the map after three rooms; Signal lost. (Mission complete is the tour's last picture.)
+func ui(dir: String) -> void:
+	DirAccess.make_dir_recursive_absolute(dir)
+	for r in game.robots:
+		r.process_mode = Node.PROCESS_MODE_DISABLED
+	await _wait(1.0)
+	var di := -1
+	for i in dungeon.doors.size():
+		if dungeon.doors[i].door and di < 0:
+			di = i
+	var door: Dictionary = dungeon.doors[di]
+	var inward := Vector3(-door.dir.x, 0, -door.dir.y)
+	var aside := Vector3(-inward.z, 0, inward.x)
+	player.kits = 3
+	_look_at((door.at as Vector3) + inward * 2.0 + aside * 0.7, (door.at as Vector3) + Vector3(0, 1.35, 0) - aside * 0.5)
+	await _wait(0.8)
+	await _shot(dir, "HudExplore")
+	# the machine gun, a hit from ahead and to the left, low health, one kit
+	player.switch_weapon()
+	await _until(func() -> bool: return player.busy == "", 4.0)
+	player.kits = 1
+	player.mag.rifle = 24
+	player.hp = 62.0
+	await _wait(0.3)
+	player.hurt(25.0, player.global_position + player.global_basis * Vector3(-3.0, 0, -4.0))
+	await _frame()
+	await _frame()
+	await _shot(dir, "HudCombat")
+	await _wait(1.2)
+	await _shot(dir, "HudLow")
+	player.mag.rifle = 6
+	await _wait(0.2)
+	await _shot(dir, "HudLowMagazine")
+	player.act("ReloadTactical")
+	await _wait(0.5)
+	await _shot(dir, "HudReload")
+	await _until(func() -> bool: return player.busy == "", 5.0)
+	player.use_kit()
+	await _frame()
+	await _frame()
+	await _frame()
+	await _shot(dir, "HudHeal")
+	game.say("+60 rifle ammo", "ammo_rifle")
+	await _wait(0.4)
+	await _shot(dir, "HudPickup")
+	# the map after three rooms
+	var order: Array = _room_order()
+	for k in 3:
+		var id: int = order[k]
+		if not game.explored.has(id):
+			game.explored[id] = true
+			game.order[id] = game.explored.size()
+	var r2: DungeonGen.Room = gen.rooms[order[1]]
+	teleport(r2.center() + Vector3(1.0, 0, 0.6), 35.0)
+	await _wait(0.6)
+	game._map.visible = true
+	await _wait(0.5)
+	await _shot(dir, "Map")
+	game._map.visible = false
+	# Signal lost
+	for r in game.robots:
+		r.process_mode = Node.PROCESS_MODE_INHERIT
+	player.hurt(999.0, player.global_position + Vector3(2, 0, -3))
+	await _until(func() -> bool: return game._end != null, 12.0)
+	await _wait(1.5)
+	await _shot(dir, "Failure")
+	get_tree().quit()
+
+
 func capture(dir: String) -> void:
 	DirAccess.make_dir_recursive_absolute(dir)
 	player.invulnerable = true
@@ -752,7 +823,7 @@ func capture(dir: String) -> void:
 	await _shot(dir, "02_start_room")
 	var crate: Dictionary = game.crates[0]
 	var cat: Vector3 = (crate.node as Node3D).global_position
-	_look_at(cat + (crate.node as Node3D).global_basis.z * 2.4 + (crate.node as Node3D).global_basis.x * 0.8, cat + Vector3(0, 0.5, 0))
+	_look_at(cat + (crate.node as Node3D).global_basis.z * 1.9 + (crate.node as Node3D).global_basis.x * 0.5, cat + Vector3(0, 0.5, 0))
 	await _wait(0.5)
 	await _shot(dir, "03_crate")
 	game.open_crate(crate)
@@ -806,7 +877,9 @@ func capture(dir: String) -> void:
 	await _wait(0.8)
 	await _shot(dir, "11_exit_portal")
 	for r in gen.rooms:                                    # the map with everything found
-		game.explored[r.id] = true
+		if not game.explored.has(r.id):
+			game.explored[r.id] = true
+			game.order[r.id] = game.explored.size()
 	for co in gen.corridors:
 		game.walked[co.id] = true
 	game.exit_found = true

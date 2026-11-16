@@ -300,7 +300,7 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
 - Learned: "hidden by scale 0" breaks Godot's glTF import (node comes in at scale 1): export hides at 0.001.
   A fine weave seen at arm's length beats against the pixel grid even with mipmaps: the glove fabrics are sampled
   with a mip bias. A directional light with shadows on came out about half as bright again as without.
-- Not done yet: a browser build of V2; music (the user: not now); the title still shows the concept room (the user: not yet); V1 (its Quaternius art, enemies and UI) still runs with `-- --v1`;
+- Not done yet: a browser build of V2; music (the user: not now); V1 (its Quaternius art, enemies and UI) still runs with `-- --v1`;
   its generator is what the V2 game builds on.
   User decisions: realistic recorded sound, CC0, one consistent line, no music for now; no browser build of V2 for now (`tools/export_web.sh` is untested with V2);
   studio rooms in the lab; the game has PLAY and LAB and is the generated dungeon of the GDD in a new modular kit (the concept room is not in it);
@@ -309,7 +309,7 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
   going down = a fall onto the side, the gun on the floor, the robots coming to look, then the options;
   the map's detail is modelled in Blender from the user's 24 reference sheets (the environment set, approved and in the game);
   robots tougher and more aggressive from the start;
-  no notes on the interface for now; "the gameplay feels really good".
+  the interface is the user's UI concept (ammunition on the HUD, not on the guns); "the gameplay feels really good".
 
 ## V2 game: the generated dungeon (`scripts/v2/v2_game.gd`)
 
@@ -435,10 +435,50 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
 - Map (`scripts/v2/v2_map.gd`, Tab; the game goes on): rooms entered, robots still working in each (red number),
   corridors walked, doorways (amber shut / green open / grey no door), the exit once its room was entered, the
   player. Scaled to the whole dungeon, so the empty part of the panel says how much is left.
-- HUD / screens (`scripts/v2/v2_ui.gd`; headings in Kenney Future: no K or X): health, med kits, gun + rounds, one
-  line (THREAT, ROOMS n / N, hostiles here, the exit), "ROOM n OF N" on entering a new room, a note line, cursor,
-  hurt flash with a bar on the side the hit came from, F3 = frame rate. No prompts, no pause: Esc frees the mouse
-  and shows RESUME / TITLE. End screen: score, robots destroyed, rooms seen, time, the next threat level; AGAIN / TITLE.
+- **UI: the user's concept** (`v2/reference/ui/README.md` = the spec, `screens/*.png` = the targets at 1440 x 810,
+  `tokens.json`; "use it as a starting point and use your best judgement in case you need to cover a corner case").
+  Kit: `assets/ui/fonts` (Barlow, Barlow Condensed: **SIL OFL, not CC0: the user's choice**, `OFL.txt` beside them),
+  `assets/ui/icons` (white SVGs, tinted; mipmaps on in their `.import`), `assets/ui/shaders` (`screen_blur`,
+  `damage_vignette`, `scanlines`), `scripts/v2/ui_palette.gd` (`UIPalette`: the concept's own file, colours and
+  boxes). `V2Ui` (`v2_ui.gd`): `font(weight, size, tracking em)` (tabular figures), `text`, `icon`, `keycap`,
+  `panel`, `row` / `column`, `at(control, ax, ay, x, y)` (pins and grows away from the edge), `full`, `button`.
+  **Canvas 1440 x 810, aspect expand** (`V2World._render_setup` sets the window's content scale; V1 keeps the
+  project's 1280 x 720): a 16:10 screen shows more height, no black bars (the arms hold: checked at 1440 x 900).
+  Layers: gun 1 (V2Player), hit blur + glow 2, HUD 4, map 5, end screens + Esc menu 6.
+  - HUD (`v2_hud.gd`, `V2Hud`): room panel (ROOM nn / tt = rooms entered; hostiles here or "Room clear. Find the
+    exit portal."; exit not located / n rooms away along the room tree / in this room), THREAT and [TAB] MAP
+    chips, health (number, 20 segments, cyan, orange at 40 and under with the border, the blinking cross and
+    "LOW · BREAK LINE OF SIGHT"; lost segments linger as a ghost 0.4 s, healed ones sweep in white), three kit
+    slots, weapon tiles, cursor (ring + dot at `aim_dot`; orange with brackets when the next round would strike a
+    live robot; four ticks on a hit; smaller while aiming, and the panels fade to 40 %), **E OPEN DOOR / OPEN
+    CRATE only within reach** (`game.in_reach`: the concept adds this prompt on purpose, to teach the range; it
+    replaces the GDD's "no interact prompt" for V2), a hit = blur 3 -> 0 in 0.5 s + orange glow on the side it
+    came from + a 90 degree arc toward it. A pickup: a chip at the foot of the screen (`say`).
+    **Ammunition is on the HUD** (**user, mid-task: "no need for that [screens on the guns], let's show
+    ammunition in the HUD"**): a readout above the tiles in the concept's weapon-screen styling: magazine /
+    reserve + a bar, orange at a quarter, RELOAD with a filling bar, "1 · PISTOL" when the machine gun is out of
+    everything; the pistol reads "15 / infinity" (this game's pistol has magazines).
+    Answers to what the concept left open: the kit key cap says H (Q switches gun here); in a corridor the lines
+    speak of the corridor; the cursor rides on the barrel, the prompt stays by the middle.
+  - Map (`v2_map.gd`): the white board with the plan from the layout (entered rooms graphite, numbered in the
+    order found (`game.order`); the current one cyan with the arrow; the rest dashed with "?"; corridors solid
+    between two entered rooms, else dashed; shut doors as bars; orange badges = robots alive in an entered room;
+    the exit's sign once found), ROUTE and KEY cards. In a corridor the arrow stands in a cyan disc. The HUD is
+    hidden while it is open.
+  - End screens (`v2_end.gd`, `V2End`): Mission complete (grey page, split title that jumps every 3.2 s, SCORE /
+    HOSTILES / ROOMS, THREAT nn -> nn, ENTER DATASPACE nn / STOP HERE) and Signal lost (the view blurred 4.5 and
+    washed, dark edges, an orange band, scan lines; RE-ASSEMBLE = a new dungeon at the same threat / STOP HERE).
+    Enter = the first button. Signal lost comes after the fall and the robots gathering, as before.
+  - Title (`v2_title.gd`): the white page, PROJECT / FIREWALL, PRESS ENTER; any key or a click starts a run.
+    **No menu: the lab is on L** (not shown), `--lab` as before. Esc in the game: a small glass card, RESUME /
+    STOP HERE ("the run keeps going").
+  - F3 (frame rate) sits under the room panel. Pictures of all of it: `--game-capture=DIR --part=ui` at
+    `--resolution 1440x810` (HudExplore, HudCombat, HudLow, HudLowMagazine, HudReload, HudHeal, HudPickup, Map,
+    Failure; Mission complete is the tour's `13_won`), `--title --title-capture=FILE`.
+  - Learned: `set_anchors_preset` on a control already in the tree keeps its (zero) size: use
+    `set_anchors_and_offsets_preset` (everything pinned to the right or the bottom was off screen); the blur
+    shader's `textureLod` on the screen texture works in Compatibility; a Button's own icon is drawn at the
+    texture's size (the words and icon are children of the button); headless `--play` prints nothing useful.
 - Props (from the set): loot crates `loot_crate` (health), `loot_crate_olive` (ammunition), `loot_crate_green` (a
   med kit), lid under `Crate_Lid` (found with `find_child("Crate_Lid*")`: Blender numbers the duplicates), the
   lid's cyan lamp goes dark when opened; what a crate or a wreck leaves: `ammo_box`, `medkit_white` (health),
@@ -724,7 +764,7 @@ renderable-light cap is raised to 96 with distance culling in `main.gd` (Compati
   freed object can compare equal to null. Use `is_instance_valid()`. GDScript lambdas capture locals by value.
 - One change, then capture, check, and move to the next. Commit after each working milestone.
 - GDD gaps are intentional; do not "fix" them: no pause, no interact prompt, ADS slowdown untaught,
-  enemies undodgeable.
+  enemies undodgeable. (V2: the user's UI concept adds the interact prompt and dims the HUD while aiming.)
 
 ## Status
 

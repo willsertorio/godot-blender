@@ -38,6 +38,11 @@ var _concept := false             # the detailed room of the Blender scene inste
 
 ## The 3D picture's size (see RENDER_ROWS): set now and whenever the window changes size.
 func _render_setup() -> void:
+	# (the UI concept's canvas: its pixel values are at 1440 x 810; a taller window shows more, it is not letterboxed)
+	var win := get_window()
+	win.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
+	win.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
+	win.content_scale_size = Vector2i(1440, 810)
 	_render_apply()
 	if not get_window().size_changed.is_connected(_render_apply):
 		get_window().size_changed.connect(_render_apply)

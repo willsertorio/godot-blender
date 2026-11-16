@@ -53,6 +53,7 @@ var score := 0
 var elapsed := 0.0
 var here := -1                      # the area (room or corridor) the player is in
 var explored: Dictionary = {}       # room id -> true
+var order: Dictionary = {}          # room id -> 1, 2, 3 ... as they were entered
 var walked: Dictionary = {}         # corridor id -> true
 var exit_found := false
 var crates: Array = []              # {node, lid, light, what, open}
@@ -60,25 +61,15 @@ var pickups: Array = []             # {node, what, t, y}
 var seed_used := 0
 var _props: Node3D
 var _exit_xf := Transform3D.IDENTITY   # the gate's frame (world): the player is through it when inside its opening
-var _ui: CanvasLayer
-var _hp_fill: ColorRect
-var _hp_text: Label
-var _kits_text: Label
-var _gun_text: Label
-var _ammo_text: Label
-var _goal_text: Label
-var _note_text: Label
-var _note_t := 0.0
-var _banner: Label
-var _banner_t := 0.0
-var _dot: ColorRect
-var _flash: ColorRect
-var _low_hp: ColorRect
-var _from_bars: Array = []
+var _ui: CanvasLayer                 # the HUD's layer (4): over the 3D view, the gun (1) and the hit effects (2)
+var _fx: CanvasLayer
+var hud: V2Hud
+var ending := false                  # an end screen is up
 var _perf: Label
 var _perf_t := 0.0
 var _perf_n := 0
 var _menu: Control
+var _top: CanvasLayer
 var _end: Control
 var _map: V2Map
 var _tick := 0.0
@@ -371,26 +362,50 @@ func drop(what: String, at: Vector3, delay: float = 0.0) -> void:
 func _take(p: Dictionary) -> bool:
 	var ok := false
 	var note := ""
+	var icon := ""
 	match String(p.what):
 		"ammo":
 			ok = player.add_ammo(60)
-			note = "Ammunition +60"
+			note = "+60 rifle ammo"
+			icon = "ammo_rifle"
 		"health":
 			ok = player.add_health(35.0)
-			note = "Health +35"
+			note = "+35 health"
+			icon = "health_cross"
 		"kit":
 			ok = player.add_kit()
-			note = "Med kit (H)"
+			note = "Health kit stored"
+			icon = "health_kit"
 	if ok:
 		V2Sfx.play("pickup")
-		say(note)
+		say(note, icon)
 	return ok
 
 
-func say(text: String) -> void:
-	if _note_text != null:
-		_note_text.text = text
-		_note_t = 2.2
+func say(text: String, icon_name: String = "", warn: bool = false) -> void:
+	if hud != null:
+		hud.say(text, icon_name, warn)
+
+
+## What E would open from where the player stands: "door", "crate" or "" (the HUD's prompt).
+func in_reach() -> String:
+	var at := player.global_position
+	var door := dungeon.door_near(at, REACH)
+	var best := REACH
+	var what := ""
+	if door >= 0:
+		var d: Vector3 = dungeon.doors[door].at
+		best = Vector2(at.x - d.x, at.z - d.z).length()
+		what = "door"
+	for c in crates:
+		if not c.open and at.distance_to((c.node as Node3D).global_position) < best:
+			best = at.distance_to((c.node as Node3D).global_position)
+			what = "crate"
+	return what
+
+
+func map_open() -> bool:
+	return _map != null and _map.visible
 
 
 ## What a wreck leaves: med kits thin out as the threat level climbs (weight 4 falling to 1).
@@ -516,8 +531,7 @@ func _process(delta: float) -> void:
 		if a.room:
 			if not explored.has(a.id):                     # a room entered for the first time counts
 				explored[a.id] = true
-				_banner.text = "ROOM %d OF %d" % [explored.size(), gen.rooms.size()]
-				_banner_t = 2.4
+				order[a.id] = explored.size()              # (the map numbers the rooms as they were found)
 			if int(a.id) == gen.exit_room:
 				exit_found = true
 		else:
@@ -603,41 +617,43 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 # ---------------------------------------------------------------------------------------------- HUD and screens
+## The screens of the UI concept (v2/reference/ui/README.md), on their layers: the gun is drawn on layer 1
+## (V2Player), then the hit's blur and glow (2), the HUD (4), the map (5), the end screens and the Esc menu (6).
 func _hud() -> void:
+	_fx = CanvasLayer.new()
+	_fx.layer = 2
+	add_child(_fx)
 	_ui = CanvasLayer.new()
-	_ui.layer = 5
+	_ui.layer = 4
 	add_child(_ui)
-	_low_hp = V2Ui.full(_ui, Color(0.8, 0.05, 0.02, 0.0))
-	_flash = V2Ui.full(_ui, Color(1.0, 0.1, 0.05, 0.0))
-	for spec in [[-90.0, -150.0, 180.0, 6.0], [150.0, -90.0, 6.0, 180.0], [-90.0, 144.0, 180.0, 6.0], [-156.0, -90.0, 6.0, 180.0]]:
-		_from_bars.append(V2Ui.rect(_ui, Color(1.0, 0.2, 0.12, 0.0), 0.5, 0.5, spec[0], spec[1], spec[2], spec[3]))      # ahead, right, behind, left
-	_dot = V2Ui.rect(_ui, Color(1, 1, 1, 0.9), 0.0, 0.0, 0, 0, 4, 4)
-	V2Ui.label(_ui, "HEALTH", 0.0, 1.0, 26.0, -62.0, 13, Color(0.7, 0.8, 0.86))
-	V2Ui.rect(_ui, Color(0, 0, 0, 0.55), 0.0, 1.0, 24.0, -42.0, 244.0, 18.0)
-	_hp_fill = V2Ui.rect(_ui, V2Ui.GREEN, 0.0, 1.0, 26.0, -40.0, 240.0, 14.0)
-	_hp_text = V2Ui.label(_ui, "100", 0.0, 1.0, 278.0, -46.0, 18)
-	_kits_text = V2Ui.label(_ui, "", 0.0, 1.0, 26.0, -88.0, 14, V2Ui.GREEN)
-	_gun_text = V2Ui.label(_ui, "", 1.0, 1.0, -26.0, -88.0, 14, Color(0.7, 0.8, 0.86), false, HORIZONTAL_ALIGNMENT_RIGHT)
-	_ammo_text = V2Ui.label(_ui, "", 1.0, 1.0, -26.0, -66.0, 34, Color(0.95, 0.98, 1.0), false, HORIZONTAL_ALIGNMENT_RIGHT)
-	_goal_text = V2Ui.label(_ui, "", 0.0, 0.0, 26.0, 20.0, 15, V2Ui.CYAN)
-	_perf = V2Ui.label(_ui, "", 0.0, 0.0, 26.0, 46.0, 14, Color(1.0, 0.9, 0.5))
-	_perf.visible = false
-	_note_text = V2Ui.label(_ui, "", 0.5, 1.0, 0.0, -150.0, 17, Color(0.95, 0.98, 1.0), false, HORIZONTAL_ALIGNMENT_CENTER)
-	_banner = V2Ui.label(_ui, "", 0.5, 0.0, 0.0, 90.0, 40, Color(0.95, 0.98, 1.0), true, HORIZONTAL_ALIGNMENT_CENTER)
+	hud = V2Hud.new()
+	_ui.add_child(hud)
+	hud.setup(self, _fx)
+	_perf = hud.perf
+	var map_layer := CanvasLayer.new()
+	map_layer.layer = 5
+	add_child(map_layer)
 	_map = V2Map.new()
 	_map.game = self
 	_map.visible = false
-	_ui.add_child(_map)
-	# Esc: the mouse is free; the way back
+	map_layer.add_child(_map)
+	_top = CanvasLayer.new()
+	_top.layer = 6
+	add_child(_top)
+	# Esc: the mouse is free; the way back (the run keeps going: there is no pause)
 	_menu = Control.new()
-	_menu.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_menu.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_menu.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_menu.visible = false
-	_ui.add_child(_menu)
-	V2Ui.rect(_menu, Color(0.02, 0.03, 0.045, 0.8), 0.5, 0.5, -180.0, -110.0, 360.0, 200.0)
-	V2Ui.label(_menu, "The game goes on: there is no pause.", 0.5, 0.5, 0.0, -96.0, 13, Color(0.7, 0.78, 0.84), false, HORIZONTAL_ALIGNMENT_CENTER)
-	V2Ui.button(_menu, "RESUME", 0.5, 0.5, 0.0, -60.0, func() -> void: Input.mouse_mode = Input.MOUSE_MODE_CAPTURED)
-	V2Ui.button(_menu, "TITLE", 0.5, 0.5, 0.0, 4.0, to_title)
+	_top.add_child(_menu)
+	V2Ui.full(_menu, Color(0, 0, 0, 0.45))
+	var card := V2Ui.panel(_menu, UIPalette.hud_panel(true), [28, 22, 28, 26])
+	V2Ui.at(card, 0.5, 0.5, 0.0, 0.0)
+	var col := V2Ui.column(card, 16)
+	V2Ui.text(col, "THE RUN KEEPS GOING", "bold", 12, UIPalette.LABEL, 0.24)
+	var buttons := V2Ui.row(col, 12)
+	V2Ui.button(buttons, "RESUME", func() -> void: Input.mouse_mode = Input.MOUSE_MODE_CAPTURED, UIPalette.CYAN, "chevron_right")
+	V2Ui.button(buttons, "STOP HERE", to_title)
 
 
 func to_title() -> void:
@@ -646,33 +662,13 @@ func to_title() -> void:
 	get_tree().change_scene_to_file(TITLE)
 
 
+func again() -> void:
+	get_tree().reload_current_scene()
+
+
 func _hud_update(delta: float) -> void:
-	_hp_fill.offset_right = _hp_fill.offset_left + 240.0 * player.hp / V2Player.MAX_HP
-	_hp_fill.color = V2Ui.GREEN if player.hp > 35.0 else V2Ui.RED
-	_hp_text.text = "%d" % int(ceil(player.hp))
-	_kits_text.text = ("MED KITS  %d   (H)" % player.kits) if player.kits > 0 else ""
-	_gun_text.text = "MACHINE GUN" if player.weapon == "rifle" else "PISTOL"
-	_ammo_text.text = ("%d / %d" % [player.mag.rifle, player.reserve]) if player.weapon == "rifle" else ("%d" % player.mag.pistol)
-	_ammo_text.add_theme_color_override("font_color", V2Ui.RED if player.mag[player.weapon] <= 3 else Color(0.95, 0.98, 1.0))
-	var hostiles := alive_in(here)
-	_goal_text.text = "THREAT %d   ·   ROOMS %d / %d   ·   %s   ·   %s   ·   Tab: map" % [missions, explored.size(), gen.rooms.size(),
-		("%d hostile%s here" % [hostiles, "" if hostiles == 1 else "s"]) if hostiles > 0 else "clear here",
-		"the exit portal is in this room" if (exit_found and here >= 0 and dungeon.areas[here].room and int(dungeon.areas[here].id) == gen.exit_room)
-		else ("exit found: see the map" if exit_found else "find the exit portal")]
-	_note_t -= delta
-	_note_text.modulate.a = clampf(_note_t, 0.0, 1.0)
-	_banner_t -= delta
-	_banner.modulate.a = clampf(_banner_t, 0.0, 1.0) * clampf((2.4 - _banner_t) * 4.0, 0.0, 1.0)
-	_flash.color.a = player.hurt_flash * 0.3
-	var to := player.hurt_from - player.global_position
-	var side := wrapi(int(round(angle_difference(player._yaw, atan2(-to.x, -to.z)) / (-PI / 2.0))), 0, 4)      # 0 ahead, 1 right, 2 behind, 3 left
-	for k in 4:
-		(_from_bars[k] as ColorRect).color.a = player.hurt_flash * 0.75 if (k == side and state == PLAYING) else 0.0
-	_low_hp.color.a = clampf((35.0 - player.hp) / 35.0, 0.0, 1.0) * (0.1 + 0.05 * sin(elapsed * 5.0)) if state == PLAYING else (0.1 if state == LOST else 0.0)
-	var dot := player.aim_dot                              # (both guns: the cursor rides on the barrel)
-	_dot.visible = state == PLAYING and dot.x >= 0.0 and not (player.busy in V2Player.NO_CURSOR) and not _map.visible
-	_dot.position = dot - Vector2(2, 2)
-	_dot.color = Color(1.0, 0.25, 0.15) if player.hit_confirm > 0.0 else Color(1, 1, 1, 0.9)
+	hud.update(delta)
+	hud.visible = not _map.visible                         # (the map has the screen to itself)
 	_menu.visible = state == PLAYING and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE and _bot == null
 	if _map.visible:
 		_map.queue_redraw()
@@ -687,27 +683,14 @@ func _hud_update(delta: float) -> void:
 				_perf_n / _perf_t, 1000.0 * _perf_t / _perf_n, _render_text(),
 				Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1000.0,
 				Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0,
-				"   drawing: cpu %.1f ms, gpu %.1f ms   game code %.1f ms" % [cpu, gpu, 1000.0 * Performance.get_monitor(Performance.TIME_PROCESS)] if gpu > 0.0 or cpu > 0.0 else ""]
+				"\ndrawing: cpu %.1f ms, gpu %.1f ms   game code %.1f ms" % [cpu, gpu, 1000.0 * Performance.get_monitor(Performance.TIME_PROCESS)] if gpu > 0.0 or cpu > 0.0 else ""]
 			_perf_t = 0.0
 			_perf_n = 0
 
 
 func _end_screen() -> void:
-	_end = Control.new()
-	_end.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_end.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_ui.add_child(_end)
-	var won := state == WON
-	V2Ui.full(_end, Color(0.02, 0.03, 0.045, 0.8 if won else 0.5))      # (lost: the robots standing over the player stay in sight)
-	_end.modulate.a = 0.0
-	create_tween().tween_property(_end, "modulate:a", 1.0, 0.6)
-	V2Ui.label(_end, "MISSION COMPLETE" if won else "MISSION FAILED", 0.5, 0.5, 0.0, -190.0, 44, V2Ui.VIOLET if won else V2Ui.RED, true, HORIZONTAL_ALIGNMENT_CENTER)
-	V2Ui.label(_end, "You reached the exit portal." if won else "You went down %s." % ("in a room" if here >= 0 and dungeon.areas[here].room else "in a corridor"),
-		0.5, 0.5, 0.0, -128.0, 17, Color(0.8, 0.86, 0.9), false, HORIZONTAL_ALIGNMENT_CENTER)
-	var lines := "Score  %d%s\nRobots destroyed  %d of %d\nRooms seen  %d of %d\nTime  %d:%02d\n%s" % [score,
-		("   (all missions  %d)" % total_score) if total_score != score else "", kills, robots.size(), explored.size(), gen.rooms.size(),
-		int(elapsed) / 60, int(elapsed) % 60,
-		("Next dungeon: threat level %d (more robots, tougher, fewer med kits, kills worth more)" % missions) if won else ("Threat level %d" % missions)]
-	V2Ui.label(_end, lines, 0.5, 0.5, 0.0, -88.0, 18, Color(0.95, 0.98, 1.0), false, HORIZONTAL_ALIGNMENT_CENTER)
-	V2Ui.button(_end, "AGAIN", 0.5, 0.5, -150.0, 80.0, func() -> void: get_tree().reload_current_scene())
-	V2Ui.button(_end, "TITLE", 0.5, 0.5, 150.0, 80.0, to_title)
+	ending = true
+	_ui.visible = false
+	_end = V2End.new()
+	_top.add_child(_end)
+	(_end as V2End).setup(self, state == WON, hud.blur)
