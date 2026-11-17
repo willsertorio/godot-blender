@@ -27,7 +27,9 @@ const NO_SHADOW := ["Floor", "Wall", "Ceiling", "Trim", "Cable", "TrayCable", "L
 # 4x anti-aliasing. The picture is drawn smaller and stretched; the HUD stays at the window's pixels. F4 steps
 # through these in the game and the lab (static: the choice lasts over scene changes).
 const RENDER_ROWS := [1080, 900, 720, 0]
-static var render_rows := 1080
+## The browser build starts at 900 rows and 2x anti-aliasing: in Chrome on an M1 the game ran at 33 fps at
+## 1080 rows with 4x, and stuttered in combat.
+static var render_rows := 900 if OS.has_feature("web") else 1080
 
 var rooms: Array[Node3D] = []
 var _low := false                 # --quality=low: no shadows, no glow, no MSAA
@@ -79,6 +81,8 @@ func _render_setup() -> void:
 	win.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
 	win.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
 	win.content_scale_size = Vector2i(1440, 810)
+	if OS.has_feature("web") and get_viewport().msaa_3d > Viewport.MSAA_2X:
+		get_viewport().msaa_3d = Viewport.MSAA_2X
 	_render_apply()
 	if not get_window().size_changed.is_connected(_render_apply):
 		get_window().size_changed.connect(_render_apply)
