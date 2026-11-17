@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Making of · Project Firewall</title>
+<meta name="description" content="How Project Firewall was made: from a one-day neon prototype to a modelled facility, the Blender-to-browser pipeline, and the conversation that built it.">
+<link rel="icon" href="img/icon.png">
+<link rel="stylesheet" href="css/site.css">
+<link rel="stylesheet" href="css/making-of.css">
+</head>
+<body>
+<header class="site-head"><div class="wrap">
+  <a class="brand" href="index.html"><small>PROJECT</small><b>FIREWALL</b></a>
+  <nav class="nav" aria-label="Site">
+    <a href="index.html#play">Play</a>
+    <a href="design.html">Design</a>
+    <a href="assets.html">Assets</a>
+    <a href="making-of.html" aria-current="page">Making of</a>
+  </nav>
+</div></header>
+
+<main>
+<section class="page-head">
+  <div class="wrap">
+    <p class="kicker">Making of</p>
+    <h1>Eight days,<br>two versions</h1>
+    <hr class="rule">
+    <p class="lede">The whole game was built in one long conversation between its designer and Claude, working in a cloud container with Godot 4.3 and Blender 4.2. Every model is a Python script run in Blender, and the rules were checked by headless tests and bots that play whole runs.</p>
+  </div>
+</section>
+
+<section class="timeline-sec">
+  <div class="wrap">
+    <h2>Timeline</h2>
+    <hr class="rule">
+    <ol class="timeline">
+      <li>
+        <p class="when">Day 1 · 10 Nov</p>
+        <h3>Version 1 in a day</h3>
+        <p>Scaffold, then the greybox loop: dungeon generator, controller, doors, pistol, exit portal, title and end screens, with a generator check and a bot that walks every dungeon. The same day: the neon environment kit, three enemies with telegraphs, 31 sounds, loot and difficulty, HUD and map, and a working web export.</p>
+        <p class="muted small">Later that day the art direction moved to two CC0 Quaternius packs, with gloved first-person arms.</p>
+      </li>
+      <li>
+        <p class="when">Day 2 · 11 Nov</p>
+        <h3>Guns, hands and robots from scratch</h3>
+        <p>A pistol and a rifle modelled in Blender, an armoured glove and sleeve rigged and posed on each grip, fire and reload animations; then a ceiling turret, a drone and a spider, each with idle, shoot, move and death clips, brought into the game.</p>
+      </li>
+      <li>
+        <p class="when">Day 3 · 12 Nov</p>
+        <h3>Version 2 starts in Blender</h3>
+        <p>A graphics pass on version 1 (baked wear masks, worn-paint shader, HDRI reflections), then version 1 was frozen. Version 2 began as one detailed concept scene rendered in Cycles: the lab room, then the pistol in two gloved hands, then the three robots.</p>
+        <figure class="shot"><img src="img/concept_room_stage1.jpg" alt="Stage 1 of the concept: the empty lab room rendered in Blender" loading="lazy"></figure>
+      </li>
+      <li>
+        <p class="when">Day 4 · 13 Nov</p>
+        <h3>Rigs and animation</h3>
+        <p>Rigged arms kept in both weapon views; 8 pistol clips and 9 machine-gun clips baked with the hands re-solved on every frame; the robots put on joints and animated with broad, exaggerated motion; an effects pass and the Firefight stills. That evening, the V2 lab ran in Godot.</p>
+        <figure class="shot"><img src="img/firefight_pistol.jpg" alt="The Firefight still: pistol view, spider, drone and turret firing in the lab" loading="lazy"></figure>
+      </li>
+      <li>
+        <p class="when">Days 5–6 · 14–15 Nov</p>
+        <h3>The lab: robots that fight back</h3>
+        <p>Robots as enemies that aim with their barrels, worn paint from the baked masks, colours matched to the Blender render, the gun on its own camera, crouch, reacting wrecks, the drone's spin-out, and a sound system built from real CC0 recordings mixed by loudness.</p>
+        <figure class="shot"><img src="img/godot_spider_shoot.jpg" alt="The same room in Godot: the spider firing at the player" loading="lazy"></figure>
+      </li>
+      <li>
+        <p class="when">Day 6–7 · 15–16 Nov</p>
+        <h3>Back to the design document</h3>
+        <p>The game returned to the brief's loop: a generated dungeon of 8 to 12 rooms, threat scaling, a bot that plays whole runs to measure balance. The first modular kit was rejected as poorly designed; an environment set of 33 assets was modelled from 24 reference sheets and approved. The interface was rebuilt after the designer's UI concept.</p>
+        <figure class="shot"><img src="img/set_sheet_2.jpg" alt="Approval sheet of environment set pieces rendered in Blender" loading="lazy"></figure>
+      </li>
+      <li>
+        <p class="when">Day 8 · 17 Nov</p>
+        <h3>The first minute</h3>
+        <p>A training room with a caged dummy that reacts to each hit, menu music, a run that opens out of the title's white, a gatling turret, solid wrecks to jump over, and spiders whose feet stay planted when they are shot.</p>
+        <figure class="shot"><img src="img/training.jpg" alt="The training room: a dummy spider in its cage" loading="lazy" onerror="this.parentElement.remove()"></figure>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>From Blender to the browser</h2>
+    <hr class="rule">
+    <div class="pipe" role="list">
+      <div role="listitem"><b>Blender script</b><span>Every model, rig and clip is Python (<code>v2/scripts/</code>), so a change is a re-run, not a hand edit.</span></div>
+      <div role="listitem"><b>glb export</b><span>Geometry and one baked animation, no images; a clip table, a baked wear mask (or wear in vertex colours) and a material table.</span></div>
+      <div role="listitem"><b>Godot</b><span>Rebuilds each material by name from the table: box-projected scanned textures, worn paint, gloves projected from the rest pose.</span></div>
+      <div role="listitem"><b>Web export</b><span>GL Compatibility renderer, no threads: runs from any static host, like this one.</span></div>
+    </div>
+    <p class="muted">The <a href="assets.html">3D gallery</a> reads the same glbs and the same material table, with the game's shaders ported to three.js.</p>
+    <div class="grid-2 compare">
+      <figure><img class="shot" src="img/concept_scene.jpg" alt="Blender Cycles render of the concept room" loading="lazy"><figcaption>Blender, Cycles: the target.</figcaption></figure>
+      <figure><img class="shot" src="img/godot_pistol_fire.jpg" alt="Godot render of the same room in the lab" loading="lazy"><figcaption>Godot, real time: the lab tuned against it, zone by zone.</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section id="conversation">
+  <div class="wrap">
+    <h2>The conversation</h2>
+    <hr class="rule">
+    <div id="traj">
+      <p class="note">The conversation log will appear here once it has been exported.</p>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="site-foot"><div class="wrap">
+  <span>Project Firewall · made with Godot and Blender, in conversation with Claude.</span>
+  <span><a href="licenses.csv">Full credits</a></span>
+</div></footer>
+<script type="module" src="js/making-of.js"></script>
+</body>
+</html>

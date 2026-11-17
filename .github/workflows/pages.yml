@@ -1,0 +1,75 @@
+# Builds the showcase site (tools/build_site.sh: the game's web export, the 3D gallery, the pages) and
+# publishes it with GitHub Pages. One-time setup: Settings -> Pages -> Source: "GitHub Actions".
+name: Site
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: 4.3-stable
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Godot
+        id: godot-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-${{ env.GODOT_VERSION }}-web-templates
+
+      - name: Download Godot and the web export template
+        if: steps.godot-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/godot && cd ~/godot
+          curl -sSLO "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
+          unzip -q "Godot_v${GODOT_VERSION}_linux.x86_64.zip" && rm "Godot_v${GODOT_VERSION}_linux.x86_64.zip"
+          curl -sSLO "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_export_templates.tpz"
+          # only what the "Web (site)" preset uses (no threads, release)
+          unzip -q "Godot_v${GODOT_VERSION}_export_templates.tpz" templates/web_nothreads_release.zip templates/version.txt
+          rm "Godot_v${GODOT_VERSION}_export_templates.tpz"
+
+      - name: Install Godot
+        run: |
+          V=$(cat ~/godot/templates/version.txt)
+          mkdir -p ~/.local/share/godot/export_templates/$V
+          cp ~/godot/templates/* ~/.local/share/godot/export_templates/$V/
+          sudo ln -sf ~/godot/Godot_v${GODOT_VERSION}_linux.x86_64 /usr/local/bin/godot
+          godot --version
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build the site
+        run: tools/build_site.sh
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

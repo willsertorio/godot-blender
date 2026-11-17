@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Design · Project Firewall</title>
+<meta name="description" content="The game design document of Project Firewall, section by section, with notes on how each rule was built and what changed.">
+<link rel="icon" href="img/icon.png">
+<link rel="stylesheet" href="css/site.css">
+<link rel="stylesheet" href="css/design.css">
+</head>
+<body>
+<header class="site-head"><div class="wrap">
+  <a class="brand" href="index.html"><small>PROJECT</small><b>FIREWALL</b></a>
+  <nav class="nav" aria-label="Site">
+    <a href="index.html#play">Play</a>
+    <a href="design.html" aria-current="page">Design</a>
+    <a href="assets.html">Assets</a>
+    <a href="making-of.html">Making of</a>
+  </nav>
+</div></header>
+
+<main>
+<section class="page-head">
+  <div class="wrap">
+    <p class="kicker">Game design document</p>
+    <h1>Design</h1>
+    <hr class="rule">
+    <p class="lede">The brief the game was built from, unchanged, on the left. On the right, <strong>as built</strong>: how each rule was implemented in the current version, and where the game departs from the document on purpose.</p>
+    <nav class="toc" aria-label="Sections">
+      <a href="#concept">Concept</a><a href="#mechanic">Core mechanic</a><a href="#loop">1 · Loop</a><a href="#controls">2 · Controls</a>
+      <a href="#rules">3 · Mechanics</a><a href="#pillars">4 · Pillars</a><a href="#hud">5 · HUD</a><a href="#numbers">Numbers</a>
+    </nav>
+  </div>
+</section>
+
+<div class="wrap gdd-doc">
+
+  <div class="gdd-row" id="concept">
+    <div class="gdd">
+      <h2>Concept</h2>
+      <p>Project Firewall — a first-person corridor shooter in which the player infiltrates a procedurally assembled dataspace, clears hostile constructs, loots containers for health and ammunition, and reaches the exit portal in the final room before their health runs out.</p>
+      <p>Minimalist neon cyberspace seen through a first-person view: dark walls traced with glowing grid lines, geometric enemies in a single hostile colour, and luminous pickups standing out against the floor.</p>
+      <p>A session is one generated dungeon of eight to twelve rooms. It ends when the player steps into the exit portal — a success — or when their health reaches zero — a failure — and either way the end screen shows a score and offers another, harder run.</p>
+    </div>
+    <aside class="built">
+      <p class="tag">As built</p>
+      <p><b>The dataspace became a facility.</b> The first version followed the neon brief; the current one is a worn white research facility, modelled in Blender from 24 reference sheets. The single hostile colour survives as the robots' red eyes, glow and muzzle flashes.</p>
+      <p>Eight to twelve rooms exactly: the generator draws <code>randi_range(8, 12)</code>.</p>
+      <figure class="shot"><img src="img/hud_explore.jpg" alt="The game's HUD while exploring: room panel, health, weapons" loading="lazy"></figure>
+    </aside>
+  </div>
+
+  <div class="gdd-row" id="mechanic">
+    <div class="gdd">
+      <h2>The core mechanic</h2>
+      <p>The generated dungeon. Every run builds a fresh dataspace from a random arrangement of rooms joined by corridors and doors, then scatters hostile constructs, loot and one exit portal through it. The player clears room by room, spending health and ammunition to do it, and loots containers and fallen enemies to survive long enough to reach the exit. Having no two runs share a layout is the hook, and the opposition and the payout both scale with every mission completed.</p>
+    </div>
+    <aside class="built">
+      <p class="tag">As built</p>
+      <ul>
+        <li>4 m cells; rooms 3 to 6 cells a side; straight corridors one cell wide; the room graph is a tree grown from the start room, and the exit sits in the deepest room. Doors on about half the doorways.</li>
+        <li>Each room gets one of five themes (lab, storage, server, power, workshop) that deals its wall panels, equipment and accent colour.</li>
+        <li>Rooms and corridors are built from the 44-piece <a href="assets.html#wall_plain">environment set</a>, merged into two meshes per area.</li>
+        <li>A seed reproduces a dungeon exactly; the threat level changes only the robots, their health and the loot odds.</li>
+      </ul>
+    </aside>
+  </div>
+
+  <div class="gdd-row" id="loop">
+    <div class="gdd">
+      <h2>1. Core gameplay loop</h2>
+      <ol>
+        <li>Player reads the title screen and presses its single button to generate a dungeon and enter play.</li>
+        <li>Player walks the generated rooms and corridors, counting each new room against a total of eight to twelve.</li>
+        <li>Player shoots hostile constructs with the pistol or the rifle, spending health and ammunition to clear each room.</li>
+        <li>Player loots containers and fallen enemies for restored health, carried health kits and rifle ammunition.</li>
+        <li>Player opens the doors between rooms and reads the map to pick a route toward the exit portal in the final room.</li>
+        <li>Player's run ends one of two ways: reaching the exit portal marks the mission complete, and losing all health ends the run in failure.</li>
+        <li>Player reads the score and enemies killed, then plays again against a harder dungeon or stops; the game has no final ending, only a difficulty that keeps climbing with each completed mission.</li>
+      </ol>
+    </div>
+    <aside class="built">
+      <p class="tag">As built</p>
+      <ul>
+        <li>The title is a white page with <em>PRESS ENTER</em>; any key or click starts. Its letters fade into white and the dungeon comes up out of the same white.</li>
+        <li><b>Added: a training room.</b> The first run of a sitting opens locked in with a caged dummy robot: hit it aiming with the pistol, then the machine gun, take a med kit from a crate, and E opens the door.</li>
+        <li>The HUD counts <em>ROOM nn / tt</em> and says how far the exit is along the room tree once it has been found.</li>
+      </ul>
+    </aside>
+  </div>
+
+  <div class="gdd-row" id="controls">
+    <div class="gdd">
+      <h2>2. Controls</h2>
+      <ul>
+        <li><b>Keyboard</b> — WASD move in four directions, R reload the rifle, E interact with doors and containers, Q spend a carried health kit, 1 and 2 switch between the pistol and the rifle, Tab toggle the map.</li>
+        <li><b>Mouse</b> — move to look, left button fire, right button aim down sights; the view locks to the mouse while playing.</li>
+        <li>Aiming down sights slows movement as well as tightening the shot, and nothing on screen teaches it — the one effect the player has to discover.</li>
+      </ul>
+    </div>
+    <aside class="built">
+      <p class="tag">As built</p>
+      <ul>
+        <li>The med kit moved to <kbd>H</kbd>: <kbd>Q</kbd> switches guns (as do <kbd>1</kbd> <kbd>2</kbd>).</li>
+        <li><kbd>C</kbd> also aims, for trackpads with no right button.</li>
+        <li>Added: <kbd>Shift</kbd> sprint, <kbd>Space</kbd> jump, <kbd>X</kbd> crouch, <kbd>F</kbd> inspect, <kbd>T</kbd> reload from empty. Both guns reload.</li>
+      </ul>
+    </aside>
+  </div>
+
+  <div class="gdd-row" id="rules">
+    <div class="gdd">
+      <h2>3. Mechanics and rules</h2>
+      <p><b>Movement.</b> The player walks the dungeon on a flat grid, stopped only by walls and closed doors. Aiming down sights slows the walk.</p>
+      <p><b>Weapons.</b> The pistol fires single shots and never runs out of ammunition; the rifle fires automatically but drains a finite reserve that must be found, and only the rifle reloads.</p>
+      <p><b>Aiming down sights.</b> It tightens the shot's spread and narrows the view, and it slows movement while held.</p>
+      <p><b>Line of sight.</b> A shot hits only the first hostile along a clear line, and walls break both eyes and bullets. Hostiles attack under the same rule, so without a clear line no damage passes in either direction.</p>
+      <p><b>Doors.</b> Some corridor chokepoints hold a door that blocks movement, bullets and sight until the player opens it with the interact key while standing close enough, and an opened door stays open.</p>
+      <p><b>Loot.</b> Interact on a closed container opens it onto one of three payoffs — a carried health kit, rifle ammunition, or immediate health — and some fallen enemies drop the same.</p>
+      <p><b>Health kits.</b> The player can carry up to three kits and spends one on command to heal; picking up another refills a slot. Health and ammunition also restore instantly on pickup.</p>
+      <p><b>Enemies.</b> Three kinds of hostile constructs differ by motion and range: a stationary turret that shoots from across a room, a fast brawler that closes to melee, and a hovering pursuer in between.</p>
+      <p><b>Exit.</b> The exit portal waits in the final room and stepping into it ends the run in success; reaching zero health ends it in failure.</p>
+      <p><b>Difficulty.</b> Every completed mission makes the next dungeon's hostiles tougher and more numerous and thins the health kits on offer, and the climb resets when the game is reloaded because nothing is saved.</p>
+    </div>
+    <aside class="built">
+      <p class="tag">As built</p>
+      <ul>
+        <li><b>Weapons.</b> Pistol: 34 damage, 15-round magazines, never out of magazines. Machine gun: 12 a round, 30 in the magazine plus 60 carried (up to 240); its rounds leave along the barrel, which climbs during a burst.</li>
+        <li><b>Aiming</b> zooms the world camera (the gun stays the same size: it is drawn by its own camera) and slows the walk.</li>
+        <li><b>Line of sight</b> is a ray for every round and every robot's look; robots fire real rounds from their barrels.</li>
+        <li><b>Doors</b> open with E within 2.4 m, any door, any time; amber lamp shut, green open.</li>
+        <li><b>Loot.</b> Crates: ammunition +60, health +35, or a med kit. 35 % of wrecks leave something on the player's side.</li>
+        <li><b>Kits.</b> Up to three, H heals 40. No health regeneration.</li>
+        <li><b>Enemies.</b> Turret = a ceiling <a href="assets.html#turret">gatling</a> on a rail; brawler = the four-legged <a href="assets.html#spider">spider</a>; pursuer = the <a href="assets.html#drone">drone</a>. Spider and drone hunt along the dungeon's paths when they hear gunfire or a door.</li>
+        <li><b>Difficulty.</b> Per mission: one more robot, +6 % robot health, med kits rarer, kills worth +25 %. Resets at the title.</li>
+      </ul>
+    </aside>
+  </div>
+
+  <div class="gdd-row" id="pillars">
+    <div class="gdd">
+      <h2>4. Experience pillars</h2>
+      <h3>Onboarding</h3>
+      <p>The title screen lists every control in two short lines and offers a single button, so a player is inside a dungeon on one click with no choices to make. What the game never teaches is that aiming down sights also slows movement, and how close the player must stand before the interact key will answer — the second shows no prompt and is only felt by trial.</p>
+      <h3>Enemies</h3>
+      <p>Three hostiles, differentiated by motion and range, and none of them is a projectile to dodge: each damages the player the instant line of sight is clear and its timer elapses, so the only defences are killing first, breaking the sight line or putting a door between. The game never lets a shot be dodged, which is the gap a richer enemy aims to fix.</p>
+      <h3>Rewards and power-ups</h3>
+      <p>Score is awarded only for killing hostiles, and the three types pay by the danger they pose, so the game pays for aggression and nothing else. Loot pays the two resources a run spends — health and rifle ammunition — restored on the spot or stocked as carryable kits. There are no power-ups that strengthen the player mid-run; every reward restores or scores rather than upgrades.</p>
+      <h3>Progression</h3>
+      <p>Nothing carries between sessions except difficulty: complete a mission and the next dungeon raises hostile health and numbers while it thins the kits, then resets when the page reloads. There is no currency, no unlocks and no player growth, so the pull across runs is a higher score on a harder layout, not a build. Difficulty climbs only with missions completed, not with how well any one was fought, so a player who scrapes through faces the same next dungeon as one who dominated it.</p>
+    </div>
+    <aside class="built">
+      <p class="tag">As built</p>
+      <ul>
+        <li><b>Onboarding changed on purpose:</b> the training room teaches aiming, both guns, kits and doors, and an <em>E OPEN DOOR / OPEN CRATE</em> prompt appears only within reach, which teaches the range. Aiming's slowdown is still untaught.</li>
+        <li><b>Enemies:</b> the robots aim where the player was a fraction of a second ago (0.14 to 0.2 s), so moving across their line makes them miss. That is the "richer enemy" the document asks for.</li>
+        <li><b>Rewards</b> as written: score is kills only.</li>
+        <li><b>Progression</b> as written: the threat level is the only thing that carries, and only within a sitting.</li>
+      </ul>
+      <figure class="shot"><img src="img/hud_combat.jpg" alt="Combat HUD: the cursor turns orange with brackets over a live robot" loading="lazy"></figure>
+    </aside>
+  </div>
+
+  <div class="gdd-row" id="hud">
+    <div class="gdd">
+      <h2>5. Interface and HUD</h2>
+      <h3>In play</h3>
+      <ul>
+        <li><b>Health</b> — whether this is the room to fall back, spend a kit, or push through.</li>
+        <li><b>Ammo and reserve</b> — whether the rifle can still carry the next room or the pistol must.</li>
+        <li><b>Health kit count</b> — whether to spend a kit now or save it for the exit room.</li>
+        <li><b>Which weapon is active</b> — whether the trigger is the one that runs dry or the one that never does.</li>
+        <li><b>Room count and exit proximity</b> — how deep into the dungeon the player is and whether the goal is near.</li>
+        <li><b>Crosshair</b> — where the next shot will land and when a hostile is lined up.</li>
+        <li><b>Damage flash</b> — that health was just lost and the player should break line of sight now.</li>
+        <li><b>The objective line</b> — what the run is actually for at the moment the player decides where to go next.</li>
+        <li><b>Map toggle</b> — which rooms are explored, which hold hostiles, and where the exit sits once its room is found — the whole routing decision.</li>
+      </ul>
+      <h3>Menus</h3>
+      <ul>
+        <li><b>Title screen</b> — every control in two short lines plus one launch button, because there is nothing to pick before a run.</li>
+        <li><b>End screen</b> — win or loss, the score, enemies killed and rooms explored, and a play-again button; the decision is another, harder run or stop. The score is a single kill total, so reaching the exit and staying alive are counted but never valued.</li>
+        <li><b>No pause control</b> — the only way to stop mid-run is to leave the tab, and the game never tells the player that.</li>
+      </ul>
+    </div>
+    <aside class="built">
+      <p class="tag">As built</p>
+      <ul>
+        <li>Every element is there, styled after the project's own UI concept: health in 20 segments (orange at 40 and under), three kit slots, weapon tiles with a magazine / reserve readout, room panel with the objective line, threat chip.</li>
+        <li>The cursor rides on the barrel, turns orange with brackets when the next round would strike a live robot, and ticks on a hit.</li>
+        <li>A hit blurs the view and an arc points to where it came from.</li>
+        <li>Esc shows a small card, RESUME / STOP HERE, over a run that keeps going: still no pause.</li>
+      </ul>
+      <figure class="shot"><img src="img/hud_map.jpg" alt="The Tab map: entered rooms numbered, robots alive per room, the route" loading="lazy"></figure>
+    </aside>
+  </div>
+
+  <div class="gdd-row" id="numbers">
+    <div class="gdd">
+      <h2>Numbers</h2>
+      <p>Measured with a bot that plays whole runs headless (it clears every room, aims better than a person on a trackpad and uses no cover), nine seeds per threat level:</p>
+      <div class="table-scroll"><table>
+        <thead><tr><th>Threat level</th><th>Runs won</th></tr></thead>
+        <tbody><tr><td>0</td><td class="num">9 of 9</td></tr><tr><td>2</td><td class="num">8 of 9</td></tr><tr><td>4</td><td class="num">7 of 9</td></tr></tbody>
+      </table></div>
+      <p class="small muted">Read these as how the levels compare, not as how hard a run feels.</p>
+    </div>
+    <aside class="built">
+      <div class="table-scroll"><table>
+        <thead><tr><th>Robot</th><th>Health</th><th>Behaviour</th></tr></thead>
+        <tbody>
+          <tr><td>Spider</td><td class="num">150</td><td>Walks cell to cell, turns by stepping, hunts along paths.</td></tr>
+          <tr><td>Drone</td><td class="num">85</td><td>Chases, hovers lower in doorways; shot down, it spins out and explodes (up to 40 damage within 3.5 m).</td></tr>
+          <tr><td>Turret</td><td class="num">170</td><td>Hangs on a rail; winds up 0.85 s, then 16 to 20 rounds at 11 a second.</td></tr>
+        </tbody>
+      </table></div>
+      <p class="small muted">Health at threat 0; +6 % per level.</p>
+    </aside>
+  </div>
+
+</div>
+</main>
+
+<footer class="site-foot"><div class="wrap">
+  <span>The game design document is reproduced as written; "as built" notes describe the current version of the game.</span>
+  <span><a href="licenses.csv">Full credits</a></span>
+</div></footer>
+</body>
+</html>

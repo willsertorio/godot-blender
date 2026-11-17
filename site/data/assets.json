@@ -1,0 +1,115 @@
+{
+  "groups": [
+    {
+      "id": "robots",
+      "title": "Robots",
+      "blurb": "The three hostiles. Each is modelled, rigged with joint empties and animated in Blender; the game plays the same clips and adds aim, hit reactions and wrecks on top.",
+      "items": [
+        {
+          "id": "spider", "name": "Spider", "file": "spider.glb", "kind": "robot", "clip": "Walk",
+          "script": "v2/scripts/build_robots.py, anim_robots.py",
+          "text": "A four-legged walker with a twin-gun turret. It walks the dungeon cell to cell, turns by stepping, and its feet are re-solved every frame so they stay planted when it is shot. Turn is played backwards for a right turn."
+        },
+        {
+          "id": "drone", "name": "Drone", "file": "drone.glb", "kind": "robot", "clip": "Fly",
+          "script": "v2/scripts/build_robots.py, anim_robots.py",
+          "text": "A twin-rotor drone with a gun slung under its body. Shot down, it spins out of control for a few seconds, falls and explodes where it lands."
+        },
+        {
+          "id": "turret", "name": "Ceiling turret", "file": "turret.glb", "kind": "robot", "clip": "Aim",
+          "script": "v2/scripts/build_robots.py, anim_robots.py",
+          "text": "Hangs from a rail in the ceiling. In the game it is a gatling: it winds up for 0.85 s, then fires 16 to 20 rounds from the firing part of its Shoot clip."
+        }
+      ]
+    },
+    {
+      "id": "weapons",
+      "title": "Weapons and hands",
+      "blurb": "The two first-person views: gun, gloved hands and sleeves, posed and animated together. The arms are rigged (MakeHuman CC0 base mesh and skeleton); the gloves are modelled on them. Open them in the player's view to see them as the game frames them.",
+      "items": [
+        {
+          "id": "view_pistol", "name": "Pistol", "file": "view_pistol.glb", "kind": "view", "clip": "Inspect",
+          "script": "v2/scripts/build_pistol.py, build_viewmodel.py, hands.py, anim_pistol.py",
+          "text": "Service pistol with a reflex sight and a weapon light; 15 rounds, unlimited magazines. Slide, trigger and magazine are animated parts; the hands are re-solved on every frame of every clip."
+        },
+        {
+          "id": "view_rifle", "name": "Machine gun", "file": "view_rifle.glb", "kind": "view", "clip": "Inspect",
+          "script": "v2/scripts/build_rifle.py, build_viewmodel.py, hands.py, anim_rifle.py",
+          "text": "Machine gun with a holographic sight and a status screen; 30-round magazine. Fire is five rounds of climb then five that loop while the trigger is held; two reloads (tactical, and from empty with the bolt catch)."
+        }
+      ]
+    },
+    {
+      "id": "structure",
+      "title": "Environment set: structure",
+      "blurb": "The modular kit every dungeon is assembled from: 4 m cells, 2 x 3 m wall panels, 1 x 2 m floor tiles, 2 x 2 m ceiling panels. Wear and dirt are baked into the vertex colours and drawn by the paint shader.",
+      "items": [
+        { "id": "wall_plain", "name": "Wall panel", "file": "set.glb", "node": "wall_plain", "kind": "piece", "text": "The plain 2 x 3 m wall panel." },
+        { "id": "wall_screen", "name": "Wall panel, display", "file": "set.glb", "node": "wall_screen", "kind": "piece", "text": "Wall panel with a recessed display (animated in the game)." },
+        { "id": "wall_service", "name": "Wall panel, services", "file": "set.glb", "node": "wall_service", "kind": "piece", "text": "Wall panel with conduits, boxes and a vent." },
+        { "id": "wall_upper", "name": "Upper wall", "file": "set.glb", "node": "wall_upper", "kind": "piece", "text": "The 1.8 m band above the panels (game-only piece)." },
+        { "id": "wall_plinth", "name": "Plinth", "file": "set.glb", "node": "wall_plinth", "kind": "piece", "text": "The 0.4 m skirting with the room's accent line (game-only piece)." },
+        { "id": "door", "name": "Doorway", "file": "set.glb", "node": "door", "kind": "piece", "text": "The full doorway as designed: 2.4 x 2.6 m opening, sliding leaves, status lamp." },
+        { "id": "door_frame", "name": "Door frame", "file": "set.glb", "node": "door_frame", "kind": "piece", "text": "The doorway split for the game: frame..." },
+        { "id": "door_leaf_l", "name": "Door leaf", "file": "set.glb", "node": "door_leaf_l", "kind": "piece", "text": "...and a sliding leaf (amber lamp shut, green open)." },
+        { "id": "door_surround", "name": "Door surround", "file": "set.glb", "node": "door_surround", "kind": "piece", "text": "The surround on the room side of a doorway." },
+        { "id": "floor_plain", "name": "Floor tile", "file": "set.glb", "node": "floor_plain", "kind": "piece", "text": "1 x 2 m floor tile." },
+        { "id": "floor_grating", "name": "Floor grating", "file": "set.glb", "node": "floor_grating", "kind": "piece", "text": "Grating over a service trench." },
+        { "id": "floor_hazard", "name": "Hazard tile", "file": "set.glb", "node": "floor_hazard", "kind": "piece", "text": "Laid in front of every doorway and under the exit." },
+        { "id": "ceiling_light", "name": "Ceiling light", "file": "set.glb", "node": "ceiling_light", "kind": "piece", "text": "2 x 2 m ceiling panel with a light fitting.", "below": true },
+        { "id": "ceiling_services", "name": "Ceiling services", "file": "set.glb", "node": "ceiling_services", "kind": "piece", "text": "Ceiling panel with ducts and cable trays.", "below": true },
+        { "id": "ceiling_plain", "name": "Ceiling panel", "file": "set.glb", "node": "ceiling_plain", "kind": "piece", "text": "The plain ceiling panel (game-only piece).", "below": true },
+        { "id": "corridor", "name": "Corridor", "file": "set.glb", "node": "corridor", "kind": "piece", "text": "4 m corridor section with a wire tray and a rail." },
+        { "id": "corridor_b", "name": "Corridor B", "file": "set.glb", "node": "corridor_b", "kind": "piece", "text": "Variant with a display and a duct." },
+        { "id": "corridor_c", "name": "Corridor C", "file": "set.glb", "node": "corridor_c", "kind": "piece", "text": "Variant with three pipes and a valve." },
+        { "id": "column", "name": "Column", "file": "set.glb", "node": "column", "kind": "piece", "text": "3.4 m column." },
+        { "id": "column_tall", "name": "Tall column", "file": "set.glb", "node": "column_tall", "kind": "piece", "text": "5.2 m, the rooms' height (game-only piece)." }
+      ]
+    },
+    {
+      "id": "equipment",
+      "title": "Environment set: equipment and cover",
+      "blurb": "What stands in the rooms. Each room theme (lab, storage, server, power, workshop) picks its own; nothing against a wall is deeper than 1.3 m, so robots and the player can always pass.",
+      "items": [
+        { "id": "crate", "name": "Crate", "file": "set.glb", "node": "crate", "kind": "piece", "text": "Cover-height crate." },
+        { "id": "crate_stack", "name": "Crate stack", "file": "set.glb", "node": "crate_stack", "kind": "piece", "text": "" },
+        { "id": "drum", "name": "Drum", "file": "set.glb", "node": "drum", "kind": "piece", "text": "" },
+        { "id": "drum_stack", "name": "Drums", "file": "set.glb", "node": "drum_stack", "kind": "piece", "text": "" },
+        { "id": "barrier", "name": "Barrier", "file": "set.glb", "node": "barrier", "kind": "piece", "text": "Low barrier for cover." },
+        { "id": "tank", "name": "Specimen tank", "file": "set.glb", "node": "tank", "kind": "piece", "text": "Its liquid takes the room theme's colour in the game." },
+        { "id": "server_rack", "name": "Server rack", "file": "set.glb", "node": "server_rack", "kind": "piece", "text": "" },
+        { "id": "power_core", "name": "Power core", "file": "set.glb", "node": "power_core", "kind": "piece", "text": "" },
+        { "id": "console", "name": "Console", "file": "set.glb", "node": "console", "kind": "piece", "text": "" },
+        { "id": "locker", "name": "Locker", "file": "set.glb", "node": "locker", "kind": "piece", "text": "" },
+        { "id": "shelving", "name": "Shelving", "file": "set.glb", "node": "shelving", "kind": "piece", "text": "" },
+        { "id": "workbench", "name": "Workbench", "file": "set.glb", "node": "workbench", "kind": "piece", "text": "" },
+        { "id": "charging_dock", "name": "Charging dock", "file": "set.glb", "node": "charging_dock", "kind": "piece", "text": "" },
+        { "id": "pipe_riser", "name": "Pipe riser", "file": "set.glb", "node": "pipe_riser", "kind": "piece", "text": "" },
+        { "id": "training_cage", "name": "Training cage", "file": "set.glb", "node": "training_cage", "kind": "piece", "text": "Holds the training dummy in the first room: bars 0.84 m apart that stop the player but not bullets." }
+      ]
+    },
+    {
+      "id": "pickups",
+      "title": "Exit, loot and pickups",
+      "blurb": "What a run is for: crates to open, what they give, and the portal in the deepest room.",
+      "items": [
+        { "id": "exit_portal", "name": "Exit portal", "file": "set.glb", "node": "exit_portal", "kind": "piece", "text": "Stands free in the middle of the deepest room; stepping in completes the mission." },
+        { "id": "loot_crate", "name": "Loot crate (health)", "file": "set.glb", "node": "loot_crate", "kind": "piece", "text": "E opens it; the lid's cyan lamp goes dark." },
+        { "id": "loot_crate_olive", "name": "Loot crate (ammunition)", "file": "set.glb", "node": "loot_crate_olive", "kind": "piece", "text": "" },
+        { "id": "loot_crate_green", "name": "Loot crate (med kit)", "file": "set.glb", "node": "loot_crate_green", "kind": "piece", "text": "" },
+        { "id": "medkit", "name": "Med kit", "file": "set.glb", "node": "medkit", "kind": "piece", "text": "Carried (up to three), used with H for +40." },
+        { "id": "medkit_white", "name": "Health pack", "file": "set.glb", "node": "medkit_white", "kind": "piece", "text": "+35 health on pickup." },
+        { "id": "ammo_box", "name": "Ammunition box", "file": "set.glb", "node": "ammo_box", "kind": "piece", "text": "+60 machine-gun rounds." },
+        { "id": "ammo_box_shut", "name": "Ammunition box, shut", "file": "set.glb", "node": "ammo_box_shut", "kind": "piece", "text": "" }
+      ]
+    },
+    {
+      "id": "scenes",
+      "title": "Concept scene",
+      "blurb": "Where V2 started: one detailed lab room built and rendered in Blender as the target look, before anything was taken into Godot. It is now the title screen's backdrop.",
+      "items": [
+        { "id": "room", "name": "Concept lab room", "file": "room.glb", "kind": "scene", "script": "v2/scripts/build_room.py", "text": "Walls, floor tiles, mezzanine and stairs, specimen tanks, cable trays and ceiling lights, exported from v2/scene.blend." }
+      ]
+    }
+  ]
+}

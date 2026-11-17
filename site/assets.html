@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assets · Project Firewall</title>
+<meta name="description" content="Every model of Project Firewall in 3D: robots, weapons and hands, the environment set and the concept room, with their animations.">
+<link rel="icon" href="img/icon.png">
+<link rel="stylesheet" href="css/site.css">
+<link rel="stylesheet" href="css/gallery.css">
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.min.js", "three/addons/": "./vendor/three/addons/" } }
+</script>
+</head>
+<body class="gallery-page">
+<header class="site-head"><div class="wrap">
+  <a class="brand" href="index.html"><small>PROJECT</small><b>FIREWALL</b></a>
+  <nav class="nav" aria-label="Site">
+    <a href="index.html#play">Play</a>
+    <a href="design.html">Design</a>
+    <a href="assets.html" aria-current="page">Assets</a>
+    <a href="making-of.html">Making of</a>
+  </nav>
+</div></header>
+
+<main class="gallery">
+  <aside class="g-list" aria-label="Models">
+    <label class="g-pick"><span class="kicker">Model</span>
+      <select id="pick"></select>
+    </label>
+    <div id="list"></div>
+  </aside>
+
+  <div class="g-stage">
+    <canvas id="view" aria-label="3D view of the selected model"></canvas>
+    <div class="g-loading" id="loading" hidden><span></span>Loading model</div>
+
+    <div class="g-bar g-top">
+      <div class="seg" id="modes" role="group" aria-label="Shading">
+        <button data-mode="lit" aria-pressed="true">Textured</button>
+        <button data-mode="clay">Clay</button>
+        <button data-mode="wire">Wireframe</button>
+      </div>
+      <div class="seg" id="cams" role="group" aria-label="Camera" hidden>
+        <button data-cam="player" aria-pressed="true">Player's view</button>
+        <button data-cam="orbit">Orbit</button>
+      </div>
+      <button class="icon-btn" id="reset" title="Reset the camera" aria-label="Reset the camera">⟲</button>
+    </div>
+
+    <div class="g-bar g-bottom" id="anim" hidden>
+      <button class="icon-btn" id="playpause" aria-label="Pause">❚❚</button>
+      <div class="clips" id="clips" role="group" aria-label="Animation clips"></div>
+      <label class="speed">Speed
+        <select id="speed"><option>0.25</option><option>0.5</option><option selected>1</option><option>2</option></select>
+      </label>
+      <div class="scrub"><input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Clip time"><span id="time" class="mono">0.00 s</span></div>
+    </div>
+    <p class="g-hint">Drag to orbit · scroll or pinch to zoom · right-drag to pan</p>
+  </div>
+
+  <aside class="g-info" id="info" aria-live="polite">
+    <p class="kicker" id="i-group"></p>
+    <h2 id="i-name"></h2>
+    <hr class="rule">
+    <p id="i-text"></p>
+    <dl class="facts" id="i-facts"></dl>
+    <p class="small muted" id="i-script"></p>
+  </aside>
+</main>
+
+<footer class="site-foot"><div class="wrap">
+  <span>Modelled in Blender 4.2 from Python scripts, shown here with three.js; materials ported from the game's Godot shaders.</span>
+  <span>Textures: <a href="https://ambientcg.com">ambientCG</a> (CC0). Arms: MakeHuman base mesh (CC0). <a href="licenses.csv">All credits</a></span>
+</div></footer>
+
+<script type="module" src="js/gallery.js"></script>
+</body>
+</html>
