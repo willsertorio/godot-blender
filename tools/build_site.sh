@@ -12,7 +12,7 @@ GLTF="${GLTF_TRANSFORM:-npx --yes @gltf-transform/cli@4.1.1}"
 mkdir -p "$OUT" && touch build/.gdignore   # Godot must not import the built site
 # keep the game export between page-only builds
 find "$OUT" -mindepth 1 -maxdepth 1 ! -name play -exec rm -rf {} +
-cp -r site/. "$OUT"/ && rm -f "$OUT/README.md"
+cp -r site/. "$OUT"/ && rm -f "$OUT/README.md" "$OUT/.gdignore"
 
 # fonts: the game's UI fonts (SIL OFL 1.1, licence file alongside)
 mkdir -p "$OUT/fonts"
