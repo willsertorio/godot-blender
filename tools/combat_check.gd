@@ -49,6 +49,15 @@ func wait_damage(timeout: float) -> float:
 	return -1.0
 
 
+## Aim exactly at a point with the view kick settled (recoil punch would lift the next shot).
+func aim(at: Vector3) -> void:
+	p.punch = Vector2.ZERO
+	p._punch_vel = Vector2.ZERO
+	p._shake = 0.0
+	p.look_at_point(at)
+	p._update_head(0.0)
+
+
 func clear_enemies() -> void:
 	for e in get_root().get_tree().get_nodes_in_group("hostiles"):
 		e.queue_free()
@@ -79,7 +88,7 @@ func _run() -> void:
 	print("turret: lock timer, damage, line of sight")
 	await reset_player(near)
 	var t: Enemy = main.spawn_enemy("turret", Vector3(8, 0, 2.5), 0)
-	p.look_at_point(t.eye_position())
+	aim(t.eye_position())
 	var dt := await wait_damage(4.0)
 	ok(dt > 0.0, "turret damages the player with clear sight (after %.2fs)" % dt)
 	ok(dt >= t.fire_time - 0.05, "no damage before the lock timer (%.2fs >= %.2fs)" % [dt, t.fire_time])
@@ -97,7 +106,7 @@ func _run() -> void:
 	await reset_player(near)
 	ok(await wait_damage(3.0) < 0.0, "a wall between them: no damage for 3 s")
 	var hp_before: float = t.hp
-	p.look_at_point(t.eye_position())
+	aim(t.eye_position())
 	p.weapons.cooldown = 0.0
 	p.weapons.try_fire()
 	await frames(2)
@@ -110,7 +119,7 @@ func _run() -> void:
 	p.invulnerable = true
 	var shots := 0
 	while is_instance_valid(t) and not t.dead and shots < 10:
-		p.look_at_point(t.eye_position())
+		aim(t.eye_position())
 		p.weapons.cooldown = 0.0
 		if p.weapons.try_fire():
 			shots += 1
@@ -126,7 +135,7 @@ func _run() -> void:
 	a.frozen = true
 	b.frozen = true
 	await frames(3)
-	p.look_at_point(a.eye_position())
+	aim(a.eye_position())
 	p.weapons.cooldown = 0.0
 	p.weapons.try_fire()
 	await frames(2)

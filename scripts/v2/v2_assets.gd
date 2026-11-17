@@ -1,0 +1,411 @@
+class_name V2Assets
+## V2 assets in Godot: the glbs carry no images; every material is rebuilt by name from
+## assets/models/v2/materials.json (written by v2/scripts/export_godot.py) + assets/textures/v2.
+
+const DIR := "res://assets/models/v2/"
+const TEX := "res://assets/textures/v2/"
+const SPECIAL := {  # materials that are procedural in Blender
+	"TankLiquid": {"color": Color(0.2, 0.62, 0.68, 0.45), "rough": 0.08, "emit": Color(0.16, 0.5, 0.55), "energy": 1.3},
+	"DarkGlass": {"color": Color(0.03, 0.05, 0.07, 0.75), "rough": 0.05},
+	# the studio test room (v2/scripts/build_studio.py); its floor is v2_grid.gdshader
+	"StudioWall": {"color": Color(0.80, 0.81, 0.82), "rough": 0.9},
+	"StudioDark": {"color": Color(0.13, 0.14, 0.16), "rough": 0.6},
+	"StudioBlock": {"color": Color(0.50, 0.53, 0.57), "rough": 0.75},
+	"StudioLight": {"color": Color(1, 1, 1), "rough": 0.5, "emit": Color(0.97, 0.98, 1.0), "energy": 2.6},
+	# the game's props (v2/scripts/build_props.py): the exit gate's light strips; its field is v2_field.gdshader
+	"Seam": {"color": Color(0.085, 0.09, 0.1), "rough": 0.92},        # the floor tiles' joints (build_kit.py)
+	# the kit's second set (themes): paint, stores
+	"CoreGlow": {"color": Color(0.05, 0.1, 0.13), "rough": 0.3, "emit": Color(0.3, 0.75, 1.0), "energy": 1.5},      # the power core
+	"PaintGrey": {"color": Color(0.6, 0.62, 0.66), "rough": 0.5},      # (ducts, hatches, shelving: bare metal that size comes out black indoors)
+	"PaintBlue": {"color": Color(0.16, 0.33, 0.6), "rough": 0.55},
+	"PaintOrange": {"color": Color(0.85, 0.42, 0.1), "rough": 0.55},
+	"PaintGreen": {"color": Color(0.2, 0.42, 0.28), "rough": 0.55},
+	"Cardboard": {"color": Color(0.62, 0.5, 0.36), "rough": 0.9},
+	"ExitLight": {"color": Color(0.05, 0.03, 0.08), "rough": 0.5, "emit": Color(0.71, 0.55, 1.0), "energy": 3.0},
+}
+
+# The environment set (v2/scripts/setlib.py, export_set.py): its painted materials are v2_set.gdshader, which
+# reads the wear from the meshes' vertex colours. [tint, wear colour (both linear, the Blender numbers), smudge, chips]
+const SET_PAINT := {
+	"EPaint": [Vector3(0.76, 0.77, 0.76), Vector3(0.17, 0.17, 0.18), 0.75, 0.05],
+	"EPaintFloor": [Vector3(0.4, 0.41, 0.42), Vector3(0.2, 0.2, 0.21), 0.7, 0.04],     # the floor tiles: the walls' paint under the lamps bleached
+	"EAccent": [Vector3(0.08, 0.36, 0.42), Vector3(0.5, 0.5, 0.5), 0.4, 0.1],            # the line of colour round a room (see `accent`)
+	"EPaintGrey": [Vector3(0.15, 0.16, 0.17), Vector3(0.42, 0.42, 0.42), 0.4, 0.05],
+	"EPaintDark": [Vector3(0.07, 0.075, 0.082), Vector3(0.5, 0.5, 0.5), 0.3, 0.05],
+	"EPaintBlueGrey": [Vector3(0.36, 0.41, 0.44), Vector3(0.2, 0.2, 0.21), 0.5, 0.05],
+	"EPaintRed": [Vector3(0.5, 0.035, 0.025), Vector3(0.45, 0.45, 0.45), 0.35, 0.16],
+	"EPaintOlive": [Vector3(0.3, 0.3, 0.12), Vector3(0.5, 0.5, 0.5), 0.75, 0.2],
+	"EPaintGreen": [Vector3(0.16, 0.22, 0.13), Vector3(0.5, 0.5, 0.5), 0.75, 0.2],
+	"EPaintBand": [Vector3(0.5, 0.08, 0.05), Vector3(0.17, 0.17, 0.18), 0.2, 0.25],
+	"EPipe": [Vector3(0.62, 0.64, 0.65), Vector3(0.28, 0.28, 0.29), 0.45, 0.05],
+	"EHazard": [Vector3(1, 1, 1), Vector3(0.3, 0.3, 0.31), 0.4, 0.14],
+}
+# its other materials: colour (as it should look), roughness, metallic; emit + energy for what glows
+const SET_PLAIN := {
+	"ESteel": {"color": Color(0.5, 0.51, 0.53), "rough": 0.42, "metal": 0.55},
+	"EDarkSteel": {"color": Color(0.13, 0.135, 0.15), "rough": 0.5, "metal": 0.4},
+	"ERubber": {"color": Color(0.035, 0.035, 0.04), "rough": 0.85},
+	"ECable": {"color": Color(0.04, 0.04, 0.045), "rough": 0.6},
+	"ECableRed": {"color": Color(0.5, 0.08, 0.06), "rough": 0.6},
+	"ECableTan": {"color": Color(0.62, 0.48, 0.3), "rough": 0.6},
+	"EGlass": {"color": Color(0.06, 0.1, 0.1), "rough": 0.08, "metal": 0.3},
+	"ETankGlass": {"color": Color(0.8, 0.95, 0.93, 0.2), "rough": 0.03},
+	"ELiquid": {"color": Color(0.16, 0.3, 0.28), "rough": 0.15, "emit": Color(0.2, 0.5, 0.46), "energy": 0.5},
+	"EMesh": {"color": Color(0.09, 0.09, 0.1), "rough": 0.55, "metal": 0.3},
+	"ECard": {"color": Color(0.5, 0.39, 0.25), "rough": 0.9},
+	"EBrass": {"color": Color(0.8, 0.6, 0.25), "rough": 0.3, "metal": 0.6},
+	"ECopper": {"color": Color(0.75, 0.4, 0.22), "rough": 0.3, "metal": 0.6},
+	"EInk": {"color": Color(0.1, 0.09, 0.08), "rough": 0.8},
+	"ECross": {"color": Color(0.9, 0.9, 0.88), "rough": 0.5},
+	"ECyan": {"color": Color(0.0, 0.05, 0.06), "rough": 0.4, "emit": Color(0.15, 0.95, 0.9), "energy": 2.6},
+	"EOrange": {"color": Color(0.06, 0.02, 0.0), "rough": 0.4, "emit": Color(1.0, 0.42, 0.08), "energy": 2.6},
+	"ELedGreen": {"color": Color(0.0, 0.06, 0.02), "rough": 0.4, "emit": Color(0.2, 1.0, 0.4), "energy": 2.4},
+	"ELedRed": {"color": Color(0.06, 0.0, 0.0), "rough": 0.4, "emit": Color(1.0, 0.1, 0.06), "energy": 2.4},
+	"ELedBlue": {"color": Color(0.0, 0.0, 0.06), "rough": 0.4, "emit": Color(0.2, 0.45, 1.0), "energy": 2.4},
+	"ELight": {"color": Color(1, 1, 1), "rough": 0.5, "emit": Color(0.9, 0.97, 1.0), "energy": 2.8},
+	"ECoreGlow": {"color": Color(0.03, 0.08, 0.1), "rough": 0.3, "emit": Color(0.3, 0.9, 0.95), "energy": 2.2},
+}
+
+# Surfaces that sparkle in the game as the Blender numbers have them (a polished, strongly normal-mapped metal
+# throws single bright pixels that crawl as the player walks: the walkway grating did, and it read as a flickering
+# light under the doors): [metallic, roughness (x the map), normal strength] used instead.
+const CALM := {"Grating": [0.45, 1.0, 0.45], "WallPanel": [0.0, 0.8, 0.45]}
+
+# Wear of the guns' and robots' paint (the numbers of the Blender materials: v2/scripts/build_*.py), drawn by
+# v2_worn.gdshader from the asset's baked mask. [wear, wear colour (linear), wear metallic, cavity, grunge]
+const WEAR := {
+	"PSlide": [0.55, Vector3(0.22, 0.23, 0.25), 0.6, 0.7, 0.16], "PFrame": [0.5, Vector3(0.6, 0.6, 0.6), 1.0, 0.6, 0.0],
+	"PBlack": [0.9, Vector3(0.6, 0.6, 0.6), 1.0, 0.3, 0.0],
+	"RfWhite": [0.55, Vector3(0.22, 0.23, 0.25), 0.6, 0.7, 0.16], "RfShell2": [0.5, Vector3(0.2, 0.21, 0.23), 0.6, 0.7, 0.16],
+	"RfGrey": [0.5, Vector3(0.6, 0.6, 0.6), 1.0, 0.6, 0.0], "RfDark": [0.35, Vector3(0.3, 0.31, 0.33), 1.0, 0.5, 0.0],
+	"RfBlack": [0.3, Vector3(0.45, 0.45, 0.45), 1.0, 0.3, 0.0], "RfTan": [0.3, Vector3(0.7, 0.66, 0.58), 1.0, 0.5, 0.0],
+	"RfPod": [0.0, Vector3(0.5, 0.5, 0.5), 1.0, 0.5, 0.0],
+	"RArmor": [0.7, Vector3(0.16, 0.17, 0.18), 0.8, 0.7, 0.18], "RFrame": [0.6, Vector3(0.55, 0.55, 0.55), 1.0, 0.4, 0.0],
+}
+
+static var _data: Dictionary = {}
+static var _mats: Dictionary = {}
+
+
+static func data() -> Dictionary:
+	if _data.is_empty():
+		_data = JSON.parse_string(FileAccess.get_file_as_string(DIR + "materials.json"))
+	return _data
+
+
+static func _tex(set_name: String, kind: String) -> Texture2D:
+	var path := "%s%s_%s.jpg" % [TEX, set_name, kind]
+	return load(path) if ResourceLoader.exists(path) else null
+
+
+## Blender's colour numbers are linear; a Godot Color is sRGB.
+static func _c(v: Array, a: float = 1.0) -> Color:
+	var c := Color(v[0], v[1], v[2]).linear_to_srgb()
+	c.a = a
+	return c
+
+
+static func _worn(mat_name: String, d: Dictionary, asset: String) -> ShaderMaterial:
+	var w: Array = WEAR[mat_name]
+	var m := ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/v2_worn.gdshader")
+	m.set_shader_parameter("tex_albedo", _tex(d.set, "color"))
+	m.set_shader_parameter("tex_normal", _tex(d.set, "normal"))
+	m.set_shader_parameter("tex_rough", _tex(d.set, "rough"))
+	m.set_shader_parameter("tex_imperfections", load("res://assets/textures/military/_detail/imperfections.png"))
+	m.set_shader_parameter("tex_mask", load(DIR + asset + "_mask.png"))
+	m.set_shader_parameter("tint", Vector3(d.tint[0], d.tint[1], d.tint[2]))
+	m.set_shader_parameter("tile", float(d.scale))
+	m.set_shader_parameter("detail", 0.12 if asset.begins_with("view_") else 0.7)
+	m.set_shader_parameter("rough_range", Vector2(d.rough[0], d.rough[1]))
+	m.set_shader_parameter("metallic", float(d.metallic))
+	m.set_shader_parameter("normal_strength", minf(d.normal, 2.0))
+	m.set_shader_parameter("wear", w[0])
+	m.set_shader_parameter("wear_color", w[1])
+	m.set_shader_parameter("wear_metal", w[2])
+	m.set_shader_parameter("cavity", w[3])
+	m.set_shader_parameter("grunge", w[4])
+	return m
+
+
+static func _flash(core: bool) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/v2_flash.gdshader")
+	m.set_shader_parameter("core", core)
+	return m
+
+
+static func _glove(mesh_key: String, sleeve: bool) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/v2_glove.gdshader")
+	m.set_shader_parameter("knit_albedo", _tex("Fabric045", "color"))
+	m.set_shader_parameter("knit_normal", _tex("Fabric045", "normal"))
+	m.set_shader_parameter("leather_albedo", _tex("Rubber004", "color"))
+	var box: Dictionary = data().gloves.get(mesh_key, {"min": [0, 0, 0], "size": [1, 1, 1]})
+	m.set_shader_parameter("box_min", Vector3(box.min[0], box.min[1], box.min[2]))
+	m.set_shader_parameter("box_size", Vector3(box.size[0], box.size[1], box.size[2]))
+	if sleeve:
+		m.set_shader_parameter("sleeve", 1.0)
+		m.set_shader_parameter("knit_tint", Color(0.11, 0.12, 0.14))
+		m.set_shader_parameter("knit_scale", 0.16)
+	return m
+
+
+## The Godot material for a Blender material name (cached; gloves are per mesh: they carry their box; worn paint
+## is per asset: it reads that asset's mask).
+static func _set_material(mat_name: String) -> Material:
+	if SET_PAINT.has(mat_name):
+		var sp: Array = SET_PAINT[mat_name]
+		var m := ShaderMaterial.new()
+		m.shader = load("res://assets/shaders/v2_set.gdshader")
+		m.set_shader_parameter("tex_albedo", _tex("PaintedPlaster017", "color"))
+		m.set_shader_parameter("tex_normal", _tex("PaintedPlaster017", "normal"))
+		m.set_shader_parameter("tex_imperfections", load("res://assets/textures/military/_detail/imperfections.png"))
+		m.set_shader_parameter("tint", sp[0])
+		m.set_shader_parameter("wear_color", sp[1])
+		m.set_shader_parameter("smudge", sp[2])
+		m.set_shader_parameter("chips", sp[3])
+		m.set_shader_parameter("stripes", 1.0 if mat_name == "EHazard" else 0.0)
+		return m
+	if mat_name == "EScreen" or mat_name == "EPanelScreen":
+		var sm := ShaderMaterial.new()
+		sm.shader = load("res://assets/shaders/v2_screen.gdshader")
+		if mat_name == "EPanelScreen":                     # the wall panel's: big, dim, greener
+			sm.set_shader_parameter("tint", Vector3(0.3, 0.6, 0.52))
+			sm.set_shader_parameter("cells", 4.0)
+			sm.set_shader_parameter("strength", 0.45)
+		return sm
+	if mat_name == "EPortal":
+		var pm := ShaderMaterial.new()
+		pm.shader = load("res://assets/shaders/v2_portal.gdshader")
+		return pm
+	var d: Dictionary = SET_PLAIN[mat_name]
+	var s := StandardMaterial3D.new()
+	s.albedo_color = d.color
+	s.roughness = d.rough
+	s.metallic = d.get("metal", 0.0)
+	if d.color.a < 1.0:
+		s.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	if d.has("emit"):
+		s.emission_enabled = true
+		s.emission = d.emit
+		s.emission_energy_multiplier = d.energy
+	return s
+
+
+## The accent paint in another colour (linear, as the Blender tints): a room theme's line.
+static func accent(tint: Vector3) -> Material:
+	var key := "EAccent#%s" % str(tint)
+	if not _mats.has(key):
+		var m := _set_material("EAccent") as ShaderMaterial
+		m.set_shader_parameter("tint", tint)
+		_mats[key] = m
+	return _mats[key]
+
+
+static func material(mat_name: String, mesh_key: String = "", asset: String = "") -> Material:
+	if SET_PAINT.has(mat_name) or SET_PLAIN.has(mat_name) or mat_name in ["EScreen", "EPanelScreen", "EPortal"]:
+		if not _mats.has(mat_name):
+			_mats[mat_name] = _set_material(mat_name)
+		return _mats[mat_name]
+	if WEAR.has(mat_name) and asset != "" and ResourceLoader.exists(DIR + asset + "_mask.png"):
+		var wkey := mat_name + "@" + asset
+		if not _mats.has(wkey):
+			_mats[wkey] = _worn(mat_name, data().materials[mat_name], asset)
+			_mats[wkey].resource_name = mat_name
+		return _mats[wkey]
+	if mat_name == "Glove" or mat_name == "JacketSleeve":
+		var key := mat_name + "/" + mesh_key
+		if not _mats.has(key):
+			_mats[key] = _glove(mesh_key, mat_name == "JacketSleeve")
+		return _mats[key]
+	if _mats.has(mat_name):
+		return _mats[mat_name]
+	var d: Dictionary = data().materials.get(mat_name, {})
+	var m: Material
+	if mat_name.begins_with("Flash"):
+		m = _flash(mat_name == "FlashCore")
+	elif mat_name == "StudioFloor":
+		var gr := ShaderMaterial.new()
+		gr.shader = load("res://assets/shaders/v2_grid.gdshader")
+		m = gr
+	elif mat_name == "ExitField":
+		var fl := ShaderMaterial.new()
+		fl.shader = load("res://assets/shaders/v2_field.gdshader")
+		m = fl
+	elif mat_name == "Hazard":
+		var hz := ShaderMaterial.new()
+		hz.shader = load("res://assets/shaders/v2_hazard.gdshader")
+		m = hz
+	else:
+		var s := StandardMaterial3D.new()
+		if SPECIAL.has(mat_name):
+			var sp: Dictionary = SPECIAL[mat_name]
+			s.albedo_color = sp.color
+			s.roughness = sp.rough
+			if sp.color.a < 1.0:
+				s.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			if sp.has("emit"):
+				s.emission_enabled = true
+				s.emission = sp.emit
+				s.emission_energy_multiplier = sp.energy
+		elif d.get("type", "") == "pbr":
+			s.albedo_texture = _tex(d.set, "color")
+			s.albedo_color = _c(d.tint)
+			s.roughness_texture = _tex(d.set, "rough")
+			s.roughness = d.rough[1]
+			s.metallic = d.metallic
+			var n := _tex(d.set, "normal")
+			if n != null:
+				s.normal_enabled = true
+				s.normal_texture = n
+				s.normal_scale = minf(d.normal, 2.0)
+			if CALM.has(mat_name):                      # (see CALM)
+				s.metallic = CALM[mat_name][0]
+				s.roughness = CALM[mat_name][1]
+				s.normal_scale = CALM[mat_name][2]
+			s.uv1_triplanar = true                      # box projection in object space, as in Blender
+			s.uv1_scale = Vector3.ONE / float(d.scale)
+			s.uv1_triplanar_sharpness = 4.0
+			s.vertex_color_use_as_albedo = d.get("vcol", false)
+		elif d.get("type", "") == "plain":
+			s.albedo_color = _c(d.color, d.alpha)
+			s.roughness = d.rough
+			s.metallic = d.metallic
+			if d.emit_strength > 0.0 and (d.emit[0] + d.emit[1] + d.emit[2]) > 0.0:
+				s.emission_enabled = true
+				s.emission = _c(d.emit)
+				# (a faint glow keeps its own strength: the machine gun's screen glass is 0.12)
+				s.emission_energy_multiplier = clampf(d.emit_strength * 0.3, 1.0, 6.0) if d.emit_strength >= 1.0 else d.emit_strength
+			if d.transmission > 0.0:
+				s.albedo_color.a = 0.22
+				s.roughness = 0.05
+			if s.albedo_color.a < 1.0:
+				s.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m = s
+	m.resource_name = mat_name
+	_mats[mat_name] = m
+	return m
+
+
+## A new clip cut out of another: the part from t0 to t1 (seconds). t0 == t1 gives a still pose that loops (a pose
+## to hold, e.g. the aim). Every track gets its value at t0 as the first key, so the cut starts exactly there.
+static func sub_clip(ap: AnimationPlayer, src_name: String, t0: float, t1: float, new_name: String) -> void:
+	var lib := ap.get_animation_library("")
+	if lib.has_animation(new_name) or not ap.has_animation(src_name):
+		return
+	var src := ap.get_animation(src_name)
+	var a := Animation.new()
+	a.length = maxf(t1 - t0, 0.1)
+	if t1 <= t0:
+		a.loop_mode = Animation.LOOP_LINEAR
+	for i in src.get_track_count():
+		var kind := src.track_get_type(i)
+		var first: Variant
+		match kind:
+			Animation.TYPE_POSITION_3D:
+				first = src.position_track_interpolate(i, t0)
+			Animation.TYPE_ROTATION_3D:
+				first = src.rotation_track_interpolate(i, t0)
+			Animation.TYPE_SCALE_3D:
+				first = src.scale_track_interpolate(i, t0)
+			Animation.TYPE_VALUE:
+				first = src.value_track_interpolate(i, t0)
+			_:
+				continue
+		var j := a.add_track(kind)
+		a.track_set_path(j, src.track_get_path(i))
+		a.track_set_interpolation_type(j, src.track_get_interpolation_type(i))
+		a.track_insert_key(j, 0.0, first)
+		for k in src.track_get_key_count(i):
+			var t := src.track_get_key_time(i, k)
+			if t > t0 + 0.001 and t <= t1 + 0.001:
+				a.track_insert_key(j, t - t0, src.track_get_key_value(i, k))
+	lib.add_animation(new_name, a)
+
+
+## Swap every surface of every mesh under `root` for its rebuilt material. asset = the glb's name (for its mask).
+static func apply(root: Node, asset: String = "") -> void:
+	for n in root.find_children("*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		for s in mi.mesh.get_surface_count():
+			var src := mi.mesh.surface_get_material(s)
+			if src != null and src.resource_name != "":
+				# (only meshes that carry the mask's UVs get the worn paint)
+				var am := mi.mesh as ArrayMesh
+				var has_uv: bool = am != null and (am.surface_get_format(s) & Mesh.ARRAY_FORMAT_TEX_UV) != 0
+				mi.set_surface_override_material(s, material(src.resource_name, String(mi.name), asset if has_uv else ""))
+
+
+## When the muzzle flashes of an asset's clips go off: {clip: [[seconds into the clip, flash node name], ...]}.
+## Shots are fired from this list, not from watching the flash meshes: a flash lasts one frame of a 24 fps clip, and a
+## slow frame steps over it.
+static func flash_events(asset: String) -> Dictionary:
+	var spec: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(DIR + asset + "_clips.json"))
+	var out := {}
+	for clip_name in spec.clips:
+		var first: float = spec.clips[clip_name][0]
+		var last: float = spec.clips[clip_name][1]
+		var list: Array = []
+		for flash in spec.get("flashes", {}):
+			for f in spec.flashes[flash]:
+				if f >= first and f <= last:
+					list.append([(f - first) / float(spec.fps), flash])
+		if not list.is_empty():
+			out[clip_name] = list
+	return out
+
+
+## Cut the one baked "Scene" animation into the clips of <asset>_clips.json. Returns the AnimationPlayer.
+static func clips(root: Node, asset: String) -> AnimationPlayer:
+	var ap := root.find_child("AnimationPlayer", true, false) as AnimationPlayer
+	if ap == null:
+		return null
+	var path := DIR + asset + "_clips.json"
+	if not ap.has_animation("Scene") and ap.get_animation_list().size() > 0:      # (whatever the importer called it)
+		ap.get_animation_library("").rename_animation(ap.get_animation_list()[0], "Scene")
+	AnimUtil.split_clips(ap, path)
+	var spec: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
+	for c in spec.loops:
+		if ap.has_animation(c):
+			# A looping clip of n frames lasts n frames: the frame after its last key is its first again. Cut to
+			# the keys alone it is one frame short, and every time round it skipped that frame's worth of motion
+			# (a walking foot jumped 3 cm). The step from the last key back to the first is interpolated.
+			var anim := ap.get_animation(c)
+			anim.loop_mode = Animation.LOOP_LINEAR
+			anim.length = maxf(anim.length, (spec.clips[c][1] - spec.clips[c][0] + 1.0) / float(spec.fps))
+	# Muzzle flashes are shown for one frame by their scale; the importer drops those one-frame keys, so their scale
+	# tracks are rebuilt from the frames listed by the exporter (once per shared library).
+	var lib := ap.get_animation_library("")
+	var flashes: Dictionary = spec.get("flashes", {})
+	if not flashes.is_empty() and not lib.has_meta("flashes_rebuilt"):
+		lib.set_meta("flashes_rebuilt", true)
+		for clip_name in spec.clips:
+			var a := ap.get_animation(clip_name)
+			var first: float = spec.clips[clip_name][0]
+			var last: float = spec.clips[clip_name][1]
+			for flash in flashes:
+				var track := -1
+				var fpath := NodePath()
+				for i in a.get_track_count():
+					var p := a.track_get_path(i)
+					if String(p.get_name(p.get_name_count() - 1)) == flash:
+						fpath = p
+						if a.track_get_type(i) == Animation.TYPE_SCALE_3D:
+							track = i
+				if fpath.is_empty():
+					continue
+				if track < 0:
+					track = a.add_track(Animation.TYPE_SCALE_3D)
+					a.track_set_path(track, fpath)
+				while a.track_get_key_count(track) > 0:
+					a.track_remove_key(track, 0)
+				a.track_set_interpolation_type(track, Animation.INTERPOLATION_NEAREST)
+				a.scale_track_insert_key(track, 0.0, Vector3.ONE * 0.001)
+				for f in flashes[flash]:
+					if f >= first and f <= last:
+						a.scale_track_insert_key(track, (f - first) / float(spec.fps), Vector3.ONE)
+						a.scale_track_insert_key(track, (f + 1.0 - first) / float(spec.fps), Vector3.ONE * 0.001)
+	return ap

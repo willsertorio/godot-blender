@@ -30,7 +30,7 @@ func _init() -> void:
 	lock_range = 22.0
 	sight_range = 30.0
 	eye_height = HOVER
-	anim_names = {"idle": "Idle", "aware": "Look", "move": "Idle", "lock": "Charging", "attack": "Attack", "hit": "Hit", "die": "BackFlip"}
+	anim_names = {"idle": "Idle", "aware": "Idle", "move": "Fly", "lock": "Idle", "attack": "Shoot", "hit": "Idle", "die": "Death"}
 
 
 func _build_visual() -> void:
@@ -41,7 +41,18 @@ func _build_visual() -> void:
 	cs.position.y = HOVER
 	add_child(cs)
 
-	var model := _adopt_model("res://assets/models/pursuer.glb")
+	var model := _adopt_model("res://assets/models/fr2.glb")
+	if model:
+		# FR-2 recon drone: origin at its centre of mass, sensor facing -Z; Death drops it ~2 m.
+		body = model
+		body_offset = 0.0
+		model.position.y = HOVER   # hovering from the start (frozen / dormant drones too)
+		core = null
+		muzzle = model.find_child("Muzzle_L", true, false) as Node3D
+		beam = _make_beam(self)
+		_hover_sfx = Sfx.loop_3d("pursuer_hover", body)
+		return
+	model = _adopt_model("res://assets/models/pursuer.glb")
 	if model:
 		# EyeDrone: 1 m tall with its origin at the base; the code hovers the model's centre.
 		body = model

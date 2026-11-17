@@ -4,8 +4,17 @@ extends Enemy
 ## Telegraph: a thin red targeting laser from `Muzzle` to the player that thickens and
 ## flickers as the lock completes, the head's neon charging, and a rising hum.
 ## Nodes `Head` and `Muzzle` match the hero model contract (CLAUDE.md).
+## Model: AT-9 ceiling turret (blender/at9.blend), hung from the room ceiling; the game turns its `Yaw` and
+## tilts its `Pitch` toward the player (those tracks are stripped from the clips), Shoot plays on each shot,
+## Death drops the drums / gun pods to the floor.
+
+const CEILING := 5.0
+const PITCH_MIN := deg_to_rad(-75.0)
+const PITCH_MAX := deg_to_rad(20.0)
 
 var head: Node3D
+var pitch: Node3D
+var _pitch_rest := 0.0
 var muzzle: Node3D
 var beam: MeshInstance3D
 var _shot_flash := 0.0
@@ -21,10 +30,33 @@ func _init() -> void:
 	lock_range = 34.0
 	sight_range = 34.0
 	eye_height = 1.7
-	anim_names = {"idle": "Idle", "aware": "Look", "move": "Walk", "lock": "Look", "attack": "AttackAuto", "hit": "Hit", "die": "TurnOff"}
+	anim_names = {"idle": "Idle", "aware": "Idle", "move": "Idle", "lock": "Idle", "attack": "Shoot", "hit": "Idle", "die": "Death"}
+	clip_strip = ["Yaw", "Pitch"]
+	death_strip = ["Yaw"]
 
 
 func _build_visual() -> void:
+	var model := _adopt_model("res://assets/models/at9.glb")
+	if model:
+		model.position.y = CEILING
+		head = model.find_child("Yaw", true, false) as Node3D
+		pitch = model.find_child("Pitch", true, false) as Node3D
+		_pitch_rest = pitch.rotation.x
+		muzzle = model.find_child("Muzzle_L", true, false) as Node3D
+		var eye := model.find_child("Eye", true, false) as Node3D
+		eye_height = CEILING - 0.75
+		if eye:
+			model.force_update_transform()
+			eye_height = eye.global_position.y - global_position.y if is_inside_tree() else eye_height
+		var hit := CollisionShape3D.new()
+		var hs := CylinderShape3D.new()
+		hs.radius = 0.65
+		hs.height = 1.25
+		hit.shape = hs
+		hit.position.y = CEILING - 0.65
+		add_child(hit)
+		beam = _make_beam(self)
+		return
 	var cs := CollisionShape3D.new()
 	var shape := CylinderShape3D.new()
 	shape.radius = 0.95
@@ -32,8 +64,7 @@ func _build_visual() -> void:
 	cs.shape = shape
 	cs.position.y = 1.2
 	add_child(cs)
-
-	var model := _adopt_model("res://assets/models/turret.glb")
+	model = _adopt_model("res://assets/models/turret.glb")
 	if model:
 		# The whole walker turns toward the player (its rig has no separate head node).
 		head = model
@@ -86,6 +117,14 @@ func _move(delta: float, los: bool) -> void:
 	if los:
 		var target := player.global_position + Vector3.UP * 1.3
 		var local := head.global_position.direction_to(target)
+		if pitch:
+			# AT-9: yaw the turntable, tilt the housing (clamped to the mount's range).
+			_face(local, head, delta, 4.0)
+			var from := pitch.global_position
+			var d := target - from
+			var elev := clampf(atan2(d.y, Vector2(d.x, d.z).length()), PITCH_MIN, PITCH_MAX)
+			pitch.rotation.x = lerp_angle(pitch.rotation.x, _pitch_rest + elev, 1.0 - exp(-4.0 * delta))
+			return
 		_face(local, head, delta, 6.0 if head != model else 3.0)
 		if head != model:
 			head.rotation.x = lerp_angle(head.rotation.x, asin(clampf(local.y, -1, 1)), 1.0 - exp(-6.0 * delta))

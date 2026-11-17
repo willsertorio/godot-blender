@@ -18,6 +18,6 @@ fi
 rm -rf "$OUT" && mkdir -p "$OUT"
 godot --headless --editor --quit >/dev/null 2>&1 || true   # make sure imports are current
 xvfb-run -a -s "-screen 0 1280x720x24" \
-  godot --rendering-driver opengl3 --resolution 1280x720 --path . -- --seed="$SEED" --capture="$PWD/$OUT" ${CAPTURE_ARGS:-} 2>&1 \
+  godot --rendering-driver opengl3 --resolution 1280x720 --path . -- --v1 --seed="$SEED" --capture="$PWD/$OUT" ${CAPTURE_ARGS:-} 2>&1 \
   | grep -E '^\[|ERROR|SCRIPT' || true
 ls "$OUT"
