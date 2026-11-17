@@ -26,7 +26,7 @@ SECRETS = [
     re.compile(r"\b[A-Za-z0-9+/]{60,}={0,2}"),  # long opaque blobs (base64 signatures etc.)
 ]
 NOISE = ("<system-reminder>", "<command-", "<local-command", "<task-notification", "[SYSTEM NOTIFICATION",
-         "Stop hook feedback", "<bash-", "Caveat:", "<user-prompt-submit-hook>")
+         "Stop hook feedback", "[Request interrupted", "<bash-", "Caveat:", "<user-prompt-submit-hook>")
 
 
 def scrub(text: str, emails: set) -> str:
@@ -100,6 +100,19 @@ def main() -> None:
                 first_ts = first_ts or ts
                 last_ts = ts
             t = d.get("type")
+            att = d.get("attachment") or {}
+            origin = att.get("origin")
+            human = (origin.get("kind") == "human") if isinstance(origin, dict) else "'kind': 'human'" in str(origin)
+            if t == "attachment" and att.get("type") == "queued_command" and att.get("commandMode") == "prompt" and human:
+                # a message the user typed while Claude was working: a turn of its own
+                raw = att.get("prompt", "")
+                text, images = user_text({"content": raw}) if isinstance(raw, list) else (str(raw), 0)
+                text = text.strip()
+                if (text or images) and not text.startswith(NOISE):
+                    cur = {"t": ts, "prompt": scrub(text, emails), "images": images, "midturn": True,
+                           "notes": [], "reply": "", "tools": collections.Counter(), "calls": []}
+                    turns.append(cur)
+                continue
             if t == "user":
                 if d.get("isMeta") or d.get("isCompactSummary") or d.get("isVisibleInTranscriptOnly"):
                     continue
@@ -114,7 +127,7 @@ def main() -> None:
                 turns.append(cur)
             elif t == "assistant" and cur is not None:
                 msg = d.get("message") or {}
-                if msg.get("model"):
+                if msg.get("model") and not msg["model"].startswith("<"):
                     models[msg["model"]] += 1
                 if d.get("gitBranch"):
                     branches[d["gitBranch"]] += 1
@@ -135,7 +148,7 @@ def main() -> None:
     for i, tr in enumerate(turns):
         out_turns.append({
             "n": i + 1, "t": tr["t"], "end": tr.get("end", tr["t"]),
-            "prompt": tr["prompt"], "images": tr["images"],
+            "prompt": tr["prompt"], "images": tr["images"], "midturn": tr.get("midturn", False),
             "reply": clip(tr["reply"], args.reply_chars),
             "notes": tr["notes"][-12:],
             "tools": dict(tr["tools"].most_common()),

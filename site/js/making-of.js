@@ -51,10 +51,10 @@ async function main() {
     d = await r.json();
   } catch { return; }
   box.replaceChildren();
-  const days = (new Date(d.end) - new Date(d.start)) / 86400000;
+  const days = new Set(d.turns.map((t) => t.t.slice(0, 10))).size;   // calendar days with a message
   const stats = el('div', { class: 'stats traj-stats' });
   [[d.turn_count, 'messages from the designer'], [d.tool_calls.toLocaleString('en'), 'tool calls'],
-   [Math.round(days * 10) / 10, 'days'], [Object.keys(d.tools).length, 'kinds of tool']]
+   [days, 'days'], [Object.keys(d.tools).length, 'kinds of tool']]
     .forEach(([v, l]) => stats.append(el('div', {}, el('b', { text: String(v) }), el('span', { text: l }))));
   box.append(stats);
   box.append(el('p', { class: 'muted' },
