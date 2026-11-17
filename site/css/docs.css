@@ -80,3 +80,10 @@ a { color: var(--accent); }
   .turn .t { grid-column: 2; }
   .turn .body { padding-left: 4px; }
 }
+
+/* WORKFLOW */
+.steps { list-style: none; counter-reset: step; padding: 0; margin: 28px 0 0; }
+.steps li { counter-increment: step; position: relative; padding: 0 0 8px 52px; }
+.steps li::before { content: counter(step); position: absolute; left: 0; top: 14px; width: 32px; height: 32px; border-radius: 50%; background: var(--accent-bg); color: var(--accent); font-weight: 600; display: grid; place-items: center; }
+.steps li h2 { margin-top: 12px; border-top: 0; padding-top: 16px; }
+.steps li + li h2 { border-top: 1px solid var(--line); }
