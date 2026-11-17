@@ -11,10 +11,11 @@ python3 -m http.server 8070 -d build/site # then http://localhost:8070
 Publishing: `.github/workflows/pages.yml` runs the build on every push to `main`. One-time setup in the
 repository: Settings -> Pages -> Source: GitHub Actions. The repository must be public on a free plan.
 
-Layout: a documentation page with a left menu (OVERVIEW, GAME, GDD, ASSETS, TRAJECTORY) and no other text.
+Layout: a documentation page with a left menu (OVERVIEW, VIDEO, GAME, GDD, ASSETS, TRAJECTORY) and no other text.
 
 | Path | What |
 |---|---|
+| `video.html` | VIDEO: the gameplay video (Descript embed) |
 | `game.html` | GAME: the "Web (site)" export (`play/`, V2 only) in an iframe |
 | `gdd.html` | GDD: the design document as written (also `docs/gdd.md`) |
 | `index.html` | OVERVIEW: the steps behind the game, from the designer's own account (first page) |
