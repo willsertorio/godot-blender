@@ -98,5 +98,5 @@ a { color: var(--accent); }
 .steps img.strip { margin-top: 0; }
 
 /* VIDEO */
-.doc.video { max-width: 1100px; }
+.video { margin: 0 0 28px; }
 .video iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 6px; background: #000; }

@@ -11,14 +11,13 @@ python3 -m http.server 8070 -d build/site # then http://localhost:8070
 Publishing: `.github/workflows/pages.yml` runs the build on every push to `main`. One-time setup in the
 repository: Settings -> Pages -> Source: GitHub Actions. The repository must be public on a free plan.
 
-Layout: a documentation page with a left menu (OVERVIEW, VIDEO, GAME, GDD, ASSETS, TRAJECTORY) and no other text.
+Layout: a documentation page with a left menu (OVERVIEW, PLAY, GDD, ASSETS, TRAJECTORY) and no other text.
 
 | Path | What |
 |---|---|
-| `video.html` | VIDEO: the gameplay video (Descript embed) |
-| `game.html` | GAME: the "Web (site)" export (`play/`, V2 only) in an iframe |
+| `game.html` | PLAY: the "Web (site)" export (`play/`, V2 only) in an iframe |
 | `gdd.html` | GDD: the design document as written (also `docs/gdd.md`) |
-| `index.html` | OVERVIEW: the steps behind the game, from the designer's own account (first page) |
+| `index.html` | OVERVIEW: the gameplay video (Descript embed) and the steps behind the game, from the designer's own account (first page) |
 | `assets.html`, `js/gallery.js` | ASSETS: three.js viewer; the model list is `data/assets.json` (robots and guns open on Idle) |
 | `js/materials.js` | The game's V2 materials ported from `scripts/v2/v2_assets.gd` and the `v2_*.gdshader` files |
 | `data/materials.json` | Written by `godot --headless -s tools/dump_v2_materials.gd -- site/data/materials.json` (rerun after material changes) |
