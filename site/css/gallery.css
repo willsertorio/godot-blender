@@ -1,9 +1,9 @@
 [hidden] { display: none !important; }
 .gallery { display: grid; grid-template-columns: 220px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); height: 100vh; height: 100dvh; }
-.g-list { border-right: 1px solid var(--line); overflow-y: auto; padding: 12px 8px 24px; }
-.g-list button { display: block; width: 100%; border: 0; background: none; text-align: left; font: 500 14.5px/1.25 "Funnel Display", system-ui, sans-serif; color: var(--ink-2); padding: 6px 10px; border-radius: 6px; cursor: pointer; }
-.g-list button:hover { color: var(--ink); background: rgba(127, 127, 127, 0.1); }
-.g-list button[aria-current="true"] { color: var(--ink); background: var(--accent-bg); }
+.g-list { border-right: 1px solid var(--line); overflow-y: auto; padding: 12px 10px 24px; background: var(--bg); }
+.g-list button { display: block; width: 100%; border: 0; background: none; text-align: left; font: 400 15px/1.3 "Funnel Display", system-ui, sans-serif; color: var(--ink); padding: 7px 10px; margin-bottom: 2px; border-radius: 8px; cursor: pointer; }
+.g-list button:hover { background: var(--hover); }
+.g-list button[aria-current="true"] { color: #FFFFFF; background: var(--accent-bg); }
 .g-list hr { border: 0; border-top: 1px solid var(--line); margin: 8px 10px; }
 .g-pick { display: none; }
 
