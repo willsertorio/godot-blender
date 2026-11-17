@@ -92,3 +92,7 @@ a { color: var(--accent); }
 .steps ul { margin: 0; padding-left: 1.2em; list-style: disc; }
 .steps ul li { margin: 3px 0; }
 .steps h3 + p { margin: 0; }
+.steps .shots { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 14px 0 8px; }
+.steps .shots img { margin: 0; height: 100%; object-fit: cover; }
+.steps .shots img:first-child { grid-column: 1 / -1; height: auto; }
+.steps img.strip { margin-top: 0; }
