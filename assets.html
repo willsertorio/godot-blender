@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assets · Project Firewall</title>
+<link rel="icon" href="img/icon.png">
+<link rel="stylesheet" href="css/docs.css">
+<link rel="stylesheet" href="css/gallery.css">
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.min.js", "three/addons/": "./vendor/three/addons/" } }
+</script>
+</head>
+<body>
+<nav class="side" aria-label="Pages">
+  <a href="index.html">OVERVIEW</a>
+  <a href="game.html">PLAY</a>
+  <a href="gdd.html">GDD</a>
+  <a href="assets.html" aria-current="page">ASSETS</a>
+  <a href="trajectory.html">TRAJECTORY</a>
+</nav>
+<main class="main gallery">
+  <aside class="g-list" aria-label="Models">
+    <select id="pick" class="g-pick" aria-label="Model"></select>
+    <div id="list"></div>
+  </aside>
+  <div class="g-stage">
+    <canvas id="view"></canvas>
+    <div class="g-loading" id="loading" hidden><span></span></div>
+    <div class="g-bar g-top">
+      <div class="seg" id="modes" role="group" aria-label="Shading">
+        <button data-mode="lit" aria-pressed="true">Textured</button>
+        <button data-mode="clay">Clay</button>
+        <button data-mode="wire">Wireframe</button>
+      </div>
+      <div class="seg" id="cams" role="group" aria-label="Camera" hidden>
+        <button data-cam="player" aria-pressed="true">Player's view</button>
+        <button data-cam="orbit">Orbit</button>
+      </div>
+      <button class="icon-btn" id="reset" aria-label="Reset the camera">⟲</button>
+    </div>
+    <div class="g-bar g-bottom" id="anim" hidden>
+      <button class="icon-btn" id="playpause" aria-label="Pause">❚❚</button>
+      <div class="clips" id="clips" role="group" aria-label="Animation clips"></div>
+      <select id="speed" aria-label="Speed"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select>
+      <div class="scrub"><input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Clip time"><span id="time" class="mono">0.00 s</span></div>
+    </div>
+  </div>
+</main>
+<script type="module" src="js/gallery.js"></script>
+</body>
+</html>

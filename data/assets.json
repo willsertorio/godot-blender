@@ -1,0 +1,379 @@
+{
+ "groups": [
+  {
+   "id": "robots",
+   "items": [
+    {
+     "id": "spider",
+     "name": "Spider",
+     "file": "spider.glb",
+     "kind": "robot",
+     "clip": "Idle"
+    },
+    {
+     "id": "drone",
+     "name": "Drone",
+     "file": "drone.glb",
+     "kind": "robot",
+     "clip": "Idle"
+    },
+    {
+     "id": "turret",
+     "name": "Ceiling turret",
+     "file": "turret.glb",
+     "kind": "robot",
+     "clip": "Idle"
+    }
+   ]
+  },
+  {
+   "id": "weapons",
+   "items": [
+    {
+     "id": "view_pistol",
+     "name": "Pistol",
+     "file": "view_pistol.glb",
+     "kind": "view",
+     "clip": "Idle"
+    },
+    {
+     "id": "view_rifle",
+     "name": "Machine gun",
+     "file": "view_rifle.glb",
+     "kind": "view",
+     "clip": "Idle"
+    }
+   ]
+  },
+  {
+   "id": "structure",
+   "items": [
+    {
+     "id": "wall_plain",
+     "name": "Wall panel",
+     "file": "set.glb",
+     "node": "wall_plain",
+     "kind": "piece"
+    },
+    {
+     "id": "wall_screen",
+     "name": "Wall panel, display",
+     "file": "set.glb",
+     "node": "wall_screen",
+     "kind": "piece"
+    },
+    {
+     "id": "wall_service",
+     "name": "Wall panel, services",
+     "file": "set.glb",
+     "node": "wall_service",
+     "kind": "piece"
+    },
+    {
+     "id": "wall_upper",
+     "name": "Upper wall",
+     "file": "set.glb",
+     "node": "wall_upper",
+     "kind": "piece"
+    },
+    {
+     "id": "wall_plinth",
+     "name": "Plinth",
+     "file": "set.glb",
+     "node": "wall_plinth",
+     "kind": "piece"
+    },
+    {
+     "id": "door",
+     "name": "Doorway",
+     "file": "set.glb",
+     "node": "door",
+     "kind": "piece"
+    },
+    {
+     "id": "door_frame",
+     "name": "Door frame",
+     "file": "set.glb",
+     "node": "door_frame",
+     "kind": "piece"
+    },
+    {
+     "id": "door_leaf_l",
+     "name": "Door leaf",
+     "file": "set.glb",
+     "node": "door_leaf_l",
+     "kind": "piece"
+    },
+    {
+     "id": "door_surround",
+     "name": "Door surround",
+     "file": "set.glb",
+     "node": "door_surround",
+     "kind": "piece"
+    },
+    {
+     "id": "floor_plain",
+     "name": "Floor tile",
+     "file": "set.glb",
+     "node": "floor_plain",
+     "kind": "piece"
+    },
+    {
+     "id": "floor_grating",
+     "name": "Floor grating",
+     "file": "set.glb",
+     "node": "floor_grating",
+     "kind": "piece"
+    },
+    {
+     "id": "floor_hazard",
+     "name": "Hazard tile",
+     "file": "set.glb",
+     "node": "floor_hazard",
+     "kind": "piece"
+    },
+    {
+     "id": "ceiling_light",
+     "name": "Ceiling light",
+     "file": "set.glb",
+     "node": "ceiling_light",
+     "kind": "piece",
+     "below": true
+    },
+    {
+     "id": "ceiling_services",
+     "name": "Ceiling services",
+     "file": "set.glb",
+     "node": "ceiling_services",
+     "kind": "piece",
+     "below": true
+    },
+    {
+     "id": "ceiling_plain",
+     "name": "Ceiling panel",
+     "file": "set.glb",
+     "node": "ceiling_plain",
+     "kind": "piece",
+     "below": true
+    },
+    {
+     "id": "corridor",
+     "name": "Corridor",
+     "file": "set.glb",
+     "node": "corridor",
+     "kind": "piece"
+    },
+    {
+     "id": "corridor_b",
+     "name": "Corridor B",
+     "file": "set.glb",
+     "node": "corridor_b",
+     "kind": "piece"
+    },
+    {
+     "id": "corridor_c",
+     "name": "Corridor C",
+     "file": "set.glb",
+     "node": "corridor_c",
+     "kind": "piece"
+    },
+    {
+     "id": "column",
+     "name": "Column",
+     "file": "set.glb",
+     "node": "column",
+     "kind": "piece"
+    },
+    {
+     "id": "column_tall",
+     "name": "Tall column",
+     "file": "set.glb",
+     "node": "column_tall",
+     "kind": "piece"
+    }
+   ]
+  },
+  {
+   "id": "equipment",
+   "items": [
+    {
+     "id": "crate",
+     "name": "Crate",
+     "file": "set.glb",
+     "node": "crate",
+     "kind": "piece"
+    },
+    {
+     "id": "crate_stack",
+     "name": "Crate stack",
+     "file": "set.glb",
+     "node": "crate_stack",
+     "kind": "piece"
+    },
+    {
+     "id": "drum",
+     "name": "Drum",
+     "file": "set.glb",
+     "node": "drum",
+     "kind": "piece"
+    },
+    {
+     "id": "drum_stack",
+     "name": "Drums",
+     "file": "set.glb",
+     "node": "drum_stack",
+     "kind": "piece"
+    },
+    {
+     "id": "barrier",
+     "name": "Barrier",
+     "file": "set.glb",
+     "node": "barrier",
+     "kind": "piece"
+    },
+    {
+     "id": "tank",
+     "name": "Specimen tank",
+     "file": "set.glb",
+     "node": "tank",
+     "kind": "piece"
+    },
+    {
+     "id": "server_rack",
+     "name": "Server rack",
+     "file": "set.glb",
+     "node": "server_rack",
+     "kind": "piece"
+    },
+    {
+     "id": "power_core",
+     "name": "Power core",
+     "file": "set.glb",
+     "node": "power_core",
+     "kind": "piece"
+    },
+    {
+     "id": "console",
+     "name": "Console",
+     "file": "set.glb",
+     "node": "console",
+     "kind": "piece"
+    },
+    {
+     "id": "locker",
+     "name": "Locker",
+     "file": "set.glb",
+     "node": "locker",
+     "kind": "piece"
+    },
+    {
+     "id": "shelving",
+     "name": "Shelving",
+     "file": "set.glb",
+     "node": "shelving",
+     "kind": "piece"
+    },
+    {
+     "id": "workbench",
+     "name": "Workbench",
+     "file": "set.glb",
+     "node": "workbench",
+     "kind": "piece"
+    },
+    {
+     "id": "charging_dock",
+     "name": "Charging dock",
+     "file": "set.glb",
+     "node": "charging_dock",
+     "kind": "piece"
+    },
+    {
+     "id": "pipe_riser",
+     "name": "Pipe riser",
+     "file": "set.glb",
+     "node": "pipe_riser",
+     "kind": "piece"
+    },
+    {
+     "id": "training_cage",
+     "name": "Training cage",
+     "file": "set.glb",
+     "node": "training_cage",
+     "kind": "piece"
+    }
+   ]
+  },
+  {
+   "id": "pickups",
+   "items": [
+    {
+     "id": "exit_portal",
+     "name": "Exit portal",
+     "file": "set.glb",
+     "node": "exit_portal",
+     "kind": "piece"
+    },
+    {
+     "id": "loot_crate",
+     "name": "Loot crate (health)",
+     "file": "set.glb",
+     "node": "loot_crate",
+     "kind": "piece"
+    },
+    {
+     "id": "loot_crate_olive",
+     "name": "Loot crate (ammunition)",
+     "file": "set.glb",
+     "node": "loot_crate_olive",
+     "kind": "piece"
+    },
+    {
+     "id": "loot_crate_green",
+     "name": "Loot crate (med kit)",
+     "file": "set.glb",
+     "node": "loot_crate_green",
+     "kind": "piece"
+    },
+    {
+     "id": "medkit",
+     "name": "Med kit",
+     "file": "set.glb",
+     "node": "medkit",
+     "kind": "piece"
+    },
+    {
+     "id": "medkit_white",
+     "name": "Health pack",
+     "file": "set.glb",
+     "node": "medkit_white",
+     "kind": "piece"
+    },
+    {
+     "id": "ammo_box",
+     "name": "Ammunition box",
+     "file": "set.glb",
+     "node": "ammo_box",
+     "kind": "piece"
+    },
+    {
+     "id": "ammo_box_shut",
+     "name": "Ammunition box, shut",
+     "file": "set.glb",
+     "node": "ammo_box_shut",
+     "kind": "piece"
+    }
+   ]
+  },
+  {
+   "id": "scenes",
+   "items": [
+    {
+     "id": "room",
+     "name": "Concept lab room",
+     "file": "room.glb",
+     "kind": "scene"
+    }
+   ]
+  }
+ ]
+}

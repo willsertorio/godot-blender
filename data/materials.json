@@ -1,0 +1,1973 @@
+{
+ "calm": {
+  "Grating": [
+   0.45,
+   1,
+   0.45
+  ],
+  "WallPanel": [
+   0,
+   0.8,
+   0.45
+  ]
+ },
+ "camera": {
+  "eye": [
+   0.200000002980232,
+   0,
+   1.62000000476837
+  ],
+  "fov_h": 80
+ },
+ "gloves": {
+  "Glove_L_pistol": {
+   "min": [
+    0.158829614520073,
+    -0.32653626799583,
+    0.116504937410355
+   ],
+   "size": [
+    0.339864119887352,
+    0.364658914506435,
+    0.387660354375839
+   ]
+  },
+  "Glove_L_rifle": {
+   "min": [
+    0.158829614520073,
+    -0.32653626799583,
+    0.116504937410355
+   ],
+   "size": [
+    0.339864119887352,
+    0.364658914506435,
+    0.387660354375839
+   ]
+  },
+  "Glove_R_pistol": {
+   "min": [
+    -0.49869373440742,
+    -0.32653626799583,
+    0.116504937410355
+   ],
+   "size": [
+    0.339864149689674,
+    0.364658921957016,
+    0.387660354375839
+   ]
+  },
+  "Glove_R_rifle": {
+   "min": [
+    -0.49869373440742,
+    -0.32653626799583,
+    0.116504937410355
+   ],
+   "size": [
+    0.339864149689674,
+    0.364658921957016,
+    0.387660354375839
+   ]
+  }
+ },
+ "materials": {
+  "Backing": {
+   "alpha": 1,
+   "color": [
+    0.03,
+    0.032,
+    0.035
+   ],
+   "emit": [
+    1,
+    1,
+    1
+   ],
+   "emit_strength": 0,
+   "linked": false,
+   "metallic": 0,
+   "rough": 0.7,
+   "transmission": 0,
+   "type": "plain"
+  },
+  "Bubble": {
+   "alpha": 1,
+   "color": [
+    1,
+    1,
+    1
+   ],
+   "emit": [
+    0.8,
+    0.97,
+    1
+   ],
+   "emit_strength": 0.5,
+   "linked": false,
+   "metallic": 0,
+   "rough": 0.15,
+   "transmission": 0,
+   "type": "plain"
+  },
+  "Cable": {
+   "alpha": 1,
+   "color": [
+    0.02,
+    0.02,
+    0.022
+   ],
+   "emit": [
+    1,
+    1,
+    1
+   ],
+   "emit_strength": 0,
+   "linked": false,
+   "metallic": 0,
+   "rough": 0.55,
+   "transmission": 0,
+   "type": "plain"
+  },
+  "CeilingLight": {
+   "alpha": 1,
+   "color": [
+    1,
+    1,
+    1
+   ],
+   "emit": [
+    0.97,
+    0.985,
+    1
+   ],
+   "emit_strength": 8,
+   "linked": false,
+   "metallic": 0,
+   "rough": 0.5,
+   "transmission": 0,
+   "type": "plain"
+  },
+  "Concrete": {
+   "metallic": 0,
+   "normal": 1,
+   "rough": [
+    0.5,
+    0.85
+   ],
+   "scale": 3,
+   "set": "Concrete034",
+   "tint": [
+    0.74,
+    0.76,
+    0.79
+   ],
+   "type": "pbr",
+   "vcol": false
+  },
+  "CoveLight": {
+   "alpha": 1,
+   "color": [
+    1,
+    1,
+    1
+   ],
+   "emit": [
+    0.85,
+    0.95,
+    1
+   ],
+   "emit_strength": 10,
+   "linked": false,
+   "metallic": 0,
+   "rough": 0.5,
+   "transmission": 0,
+   "type": "plain"
+  },
+  "DarkGlass": {
+   "alpha": 1,
+   "color": [
+    0.02,
+    0.03,
+    0.04
+   ],
+   "emit": [
+    1,
+    1,
+    1
+   ],
+   "emit_strength": 0,
+   "linked": false,
+   "metallic": 0.6,
+   "rough": 0.05,
+   "transmission": 0,
+   "type": "plain"
+  },
+  "DarkSteel": {
+   "metallic": 1,
+   "normal": 1,
+   "rough": [
+    0.35,
+    0.6
+   ],
+   "scale": 1,
+   "set": "Metal032",
+   "tint": [
+    0.16,
+    0.17,
+    0.19
+   ],
+   "type": "pbr",
+   "vcol": false
+  },
+  "FlashCore": {
+   "type": "special"
+  },
+  "FlashFire": {
+   "type": "special"
+  },
+  "FloorPaint": {
+   "alpha": 1,
+   "color": [
+    0.75,
+    0.52,
+    0.03
+   ],
+   "emit": [
+    1,
+    1,
+    1
+   ],
+   "emit_strength": 0,
+   "linked": false,
+   "metallic": 0,
+   "rough": 0.45,
+   "transmission": 0,
+   "type": "plain"
+  },
+  "FloorTile": {
+   "metallic": 0,
+   "normal": 0.22,
+   "rough": [
+    0.03,
+    0.2
+   ],
+   "scale": 2.5,
+   "set": "Concrete034",
+   "tint": [
+    0.66,
+    0.68,
+    0.71
+   ],
+   "type": "pbr",
+   "vcol": true
+  },
+  "Galvanised": {
+   "metallic": 1,
+   "normal": 1,
+   "rough": [
+    0.25,
+    0.5
+   ],
+   "scale": 0.8,
+   "set": "Metal032",
+   "tint": [
+    0.82,
+    0.84,
+    0.86
+   ],
+   "type": "pbr",
+   "vcol": false
+  },
+  "Glove": {
+   "metallic": 0,
+   "normal": 2.5,
+   "rough": [
+    0.75,
+    1
+   ],
+   "scale": 0.11,
+   "set": "Fabric045",
+   "tint": [
+    0.38,
+    0.4,
+    0.43
+   ],
+   "type": "pbr",
+   "vcol": false
+  },
+  "GloveAccent": {
+   "alpha": 1,
+   "color": [
+    0,
+    0.02,
+    0.03
+   ],
+   "emit": [
+    0.15,
+    0.85,
+    1
+   ],
+   "emit_strength": 1.6,
+   "linked": false,
+   "metallic": 0,
+   "rough": 0.5,
+   "transmission": 0,
+   "type": "plain"
+  },
+  "GloveCuff": {
+   "metallic": 0,
+   "normal": 2,
+   "rough": [
+    0.7,
+    1
+   ],
+   "scale": 0.02,
+   "set": "Fabric045",
+   "tint": [
+    0.2,
+    0.21,
+    0.23
+   ],
+   "type": "pbr",
+   "vcol": false
+  },
+  "GlovePad": {
+   "metallic": 0,
+   "normal": 1.5,
+   "rough": [
+    0.4,
+    0.7
+   ],
+   "scale": 0.025,
+   "set": "Rubber004",
+   "tint": [
+    1.76,
+    1.804,
+    1.936
+   ],
+   "type": "pbr",
+   "vcol": false
+  },
+  "Grating": {
+   "metallic": 1,
+   "normal": 1,
+   "rough": [
+    0.3,
+    0.6
+   ],
+   "scale": 0.6,
+   "set": "MetalWalkway010",
+   "tint": [
+    1.6,
+    1.6,
+    1.7
+   ],
+   "type": "pbr",
+   "vcol": false
+  },
+  "Hazard": {
+   "alpha": 1,
+   "color": [
+    0.8,
+    0.8,
+    0.8
+   ],
+   "emit": [
+    1,
+    1,
+    1
+   ],
+   "emit_strength": 0,
+   "linked": true,
+   "metallic": 0,
+   "rough": 0.5,
+   "transmission": 0,
+   "type": "plain"
+  },
+  "JacketSleeve": {
+   "metallic": 0,
+   "normal": 2.5,
+   "rough": [
+    0.8,
+    1
+   ],
+   "scale": 0.16,
+   "set": "Fabric045",
+   "tint": [
+    0.11,
+    0.12,
+    0.14
+   ],
+   "type": "pbr",
+   "vcol": false
+  },
+  "LightStrip": {
+   "alpha": 1,
+   "color": [
+    1,
+    1,
+    1
+   ],
+   "emit": [
+    0.95,
+    0.98,
+    1
+   ],
+   "emit_strength": 30,
+   "linked": false,
+   "metallic": 0,
+   "rough": 0.5,
+   "transmission": 0,
+   "type": "plain"
+  },
+  "PBarrel": {
+   "metallic": 1,
+   "normal": 1,
+   "rough": [
+    0.12,
+    0.3
+   ],
+   "scale": 0.05,
+   "set": "Metal032",
+   "tint": [
+    0.75,
+    0.74,
+    0.72
+   ],
+   "type": "pbr",
+   "vcol": false
+  },
+  "PBlack": {
+   "metallic": 0.6,
+   "normal": 1,
+   "rough": [
+    0.35,
+    0.55
+   ],
+   "scale": 0.06,
+   "set": "Metal032",
+   "tint": [
+    0.05,
+    0.05,
+    0.055
+   ],
+   "type": "pbr",
+   "vcol": false
+  },
+  "PBrass": {
+   "alpha": 1,
+   "color": [
+    0.8,
+    0.58,
+    0.22
+   ],
+   "emit": [
+    1,
+    1,
+    1
+   ],
+   "emit_strength": 0,
+   "linked": false,
+   "metallic": 1,
+   "rough": 0.28,
+   "transmission": 0,
+   "type": "plain"
+  },
+  "PCyan": {
+   "alpha": 1,
+   "color": [
+    0,
+    0.02,
+    0.03
+   ],
+   "emit": [
+    0.15,
+    0.85,
+    1
+   ],
+   "emit_strength": 3,
+   "linked": false,
+   "metallic": 0,
+   "rough": 0.5,
+   "transmission": 0,
+   "type": "plain"
+  },
+  "PDotRed": {
+   "alpha": 1,
+   "color": [
+    0,
+    0,
+    0
+   ],
+   "emit": [
+    1,
+    0.07,
+    0.03
+   ],
+   "emit_strength": 80,
+   "linked": false,
+   "metallic": 0,
+   "rough": 0.5,
+   "transmission": 0,
+   "type": "plain"
+  },
+  "PFrame": {
+   "metallic": 0,
+   "normal": 0.3,
+   "rough": [
+    0.34,
+    0.54
+   ],
+   "scale": 0.12,
+   "set": "PaintedPlaster017",
+   "tint": [
+    0.46,
+    0.475,
+    0.5
+   ],
+   "type": "pbr",
+   "vcol": false
+  },
+  "PGripTex": {
+   "metallic": 0,
+   "normal": 4,
+   "rough": [
+    0.7,
+    0.95
+   ],
+   "scale": 0.012,
+   "set": "Rubber004",
+   "tint": [
+    0.55,
+    0.55,
+    0.55
+   ],
+   "type": "pbr",
+   "vcol": false
+  },
+  "PLens": {
+   "alpha": 1,
+   "color": [
+    0.55,
+    0.8,
+    1
+   ],
+   "emit": [
+    1,
+    1,
+    1
+   ],
+   "emit_strength": 0,
+   "linked": false,
+   "metallic": 0,
+   "rough": 0,
+   "transmission": 1,
+   "type": "plain"
+  },
+  "PLightLens": {
+   "alpha": 1,
+   "color": [
+    0.9,
+    0.95,
+    1
+   ],
+   "emit": [
+    0.9,
+    0.95,
+    1
+   ],
+   "emit_strength": 0.4,
+   "linked": false,
+   "metallic": 0,
+   "rough": 0.05,
+   "transmission": 0.6,
+   "type": "plain"
+  },
+  "PRubber": {
+   "metallic": 0,
+   "normal": 1.5,
+   "rough": [
+    0.6,
+    0.9
+   ],
+   "scale": 0.02,
+   "set": "Rubber004",
+   "tint": [
+    1,
+    1,
+    1
+   ],
+   "type": "pbr",
+   "vcol": false
+  },
+  "PSightDot": {
+   "alpha": 1,
+   "color": [
+    0.85,
+    0.9,
+    0.8
+   ],
+   "emit": [
+    0.6,
+    1,
+    0.6
+   ],
+   "emit_strength": 0.8,
+   "linked": false,
+   "metallic": 0,
+   "rough": 0.4,
+   "transmission": 0,
+   "type": "plain"
+  },
+  "PSlide": {
+   "metallic": 0,
+   "normal": 0.3,
+   "rough": [
+    0.3,
+    0.5
+   ],
+   "scale": 0.16,
+   "set": "PaintedPlaster017",
+   "tint": [
+    0.86,
+    0.87,
+    0.89
+   ],
+   "type": "pbr",
+   "vcol": false
+  },
+  "PSteel": {
+   "metallic": 1,
+   "normal": 1,
+   "rough": [
+    0.28,
+    0.45
+   ],
+   "scale": 0.06,
+   "set": "Metal032",
+   "tint": [
+    0.2,
+    0.2,
+    0.21
+   ],
+   "type": "pbr",
+   "vcol": false
+  },
+  "RArmor": {
+   "metallic": 0,
+   "normal": 0.4,
+   "rough": [
+    0.22,
+    0.42
+   ],
+   "scale": 0.6,
+   "set": "PaintedPlaster017",
+   "tint": [
+    0.9,
+    0.91,
+    0.93
+   ],
+   "type": "pbr",
+   "vcol": false
+  },
+  "RBrass": {
+   "alpha": 1,
+   "color": [
+    0.75,
+    0.55,
+    0.22
+   ],
+   "emit": [
+    1,
+    1,
+    1
+   ],
+   "emit_strength": 0,
+   "linked": false,
+   "metallic": 1,
+   "rough": 0.3,
+   "transmission": 0,
+   "type": "plain"
+  },
+  "RDisc": {
+   "alpha": 0.3,
+   "color": [
+    0.12,
+    0.12,
+    0.13
+   ],
+   "emit": [
+    1,
+    1,
+    1
+   ],
+   "emit_strength": 0,
+   "linked": false,
+   "metallic": 0,
+   "rough": 0.4,
+   "transmission": 0,
+   "type": "plain"
+  },
+  "REye": {
+   "alpha": 1,
+   "color": [
+    0,
+    0,
+    0
+   ],
+   "emit": [
+    1,
+    0.06,
+    0.03
+   ],
+   "emit_strength": 40,
+   "linked": false,
+   "metallic": 0,
+   "rough": 0.5,
+   "transmission": 0,
+   "type": "plain"
+  },
+  "RFrame": {
+   "metallic": 0.7,
+   "normal": 1,
+   "rough": [
+    0.35,
+    0.6
+   ],
+   "scale": 0.3,
+   "set": "Metal032",
+   "tint": [
+    0.09,
+    0.095,
+    0.105
+   ],
+   "type": "pbr",
+   "vcol": false
+  },
+  "RGlow": {
+   "alpha": 1,
+   "color": [
+    0,
+    0,
+    0
+   ],
+   "emit": [
+    1,
+    0.25,
+    0.08
+   ],
+   "emit_strength": 12,
+   "linked": false,
+   "metallic": 0,
+   "rough": 0.5,
+   "transmission": 0,
+   "type": "plain"
+  },
+  "RLens": {
+   "alpha": 1,
+   "color": [
+    0.02,
+    0.02,
+    0.025
+   ],
+   "emit": [
+    1,
+    1,
+    1
+   ],
+   "emit_strength": 0,
+   "linked": false,
+   "metallic": 0.9,
+   "rough": 0.03,
+   "transmission": 0,
+   "type": "plain"
+  },
+  "RRed": {
+   "alpha": 1,
+   "color": [
+    0.5,
+    0.03,
+    0.02
+   ],
+   "emit": [
+    1,
+    1,
+    1
+   ],
+   "emit_strength": 0,
+   "linked": false,
+   "metallic": 0,
+   "rough": 0.35,
+   "transmission": 0,
+   "type": "plain"
+  },
+  "RRubber": {
+   "metallic": 0,
+   "normal": 1.5,
+   "rough": [
+    0.6,
+    0.9
+   ],
+   "scale": 0.1,
+   "set": "Rubber004",
+   "tint": [
+    1,
+    1,
+    1
+   ],
+   "type": "pbr",
+   "vcol": false
+  },
+  "RSteel": {
+   "metallic": 1,
+   "normal": 1,
+   "rough": [
+    0.15,
+    0.35
+   ],
+   "scale": 0.2,
+   "set": "Metal032",
+   "tint": [
+    0.62,
+    0.63,
+    0.65
+   ],
+   "type": "pbr",
+   "vcol": false
+  },
+  "RfBlack": {
+   "metallic": 0.6,
+   "normal": 1,
+   "rough": [
+    0.35,
+    0.55
+   ],
+   "scale": 0.06,
+   "set": "Metal032",
+   "tint": [
+    0.05,
+    0.05,
+    0.055
+   ],
+   "type": "pbr",
+   "vcol": false
+  },
+  "RfBrass": {
+   "alpha": 1,
+   "color": [
+    0.8,
+    0.58,
+    0.22
+   ],
+   "emit": [
+    1,
+    1,
+    1
+   ],
+   "emit_strength": 0,
+   "linked": false,
+   "metallic": 1,
+   "rough": 0.28,
+   "transmission": 0,
+   "type": "plain"
+  },
+  "RfCyan": {
+   "alpha": 1,
+   "color": [
+    0,
+    0.02,
+    0.03
+   ],
+   "emit": [
+    0.15,
+    0.85,
+    1
+   ],
+   "emit_strength": 3.5,
+   "linked": false,
+   "metallic": 0,
+   "rough": 0.5,
+   "transmission": 0,
+   "type": "plain"
+  },
+  "RfDark": {
+   "metallic": 0,
+   "normal": 0.8,
+   "rough": [
+    0.5,
+    0.72
+   ],
+   "scale": 0.05,
+   "set": "Plastic012B",
+   "tint": [
+    0.744,
+    0.792,
+    0.888
+   ],
+   "type": "pbr",
+   "vcol": false
+  },
+  "RfGrey": {
+   "metallic": 0,
+   "normal": 0.3,
+   "rough": [
+    0.35,
+    0.55
+   ],
+   "scale": 0.12,
+   "set": "PaintedPlaster017",
+   "tint": [
+    0.36,
+    0.37,
+    0.39
+   ],
+   "type": "pbr",
+   "vcol": false
+  },
+  "RfGripTex": {
+   "metallic": 0,
+   "normal": 4,
+   "rough": [
+    0.7,
+    0.95
+   ],
+   "scale": 0.012,
+   "set": "Rubber004",
+   "tint": [
+    0.55,
+    0.55,
+    0.55
+   ],
+   "type": "pbr",
+   "vcol": false
+  },
+  "RfLens": {
+   "alpha": 1,
+   "color": [
+    0.6,
+    0.85,
+    0.8
+   ],
+   "emit": [
+    1,
+    1,
+    1
+   ],
+   "emit_strength": 0,
+   "linked": false,
+   "metallic": 0,
+   "rough": 0,
+   "transmission": 1,
+   "type": "plain"
+  },
+  "RfMatte": {
+   "alpha": 1,
+   "color": [
+    0.012,
+    0.012,
+    0.014
+   ],
+   "emit": [
+    1,
+    1,
+    1
+   ],
+   "emit_strength": 0,
+   "linked": false,
+   "metallic": 0,
+   "rough": 0.45,
+   "transmission": 0,
+   "type": "plain"
+  },
+  "RfPod": {
+   "metallic": 0,
+   "normal": 0.3,
+   "rough": [
+    0.32,
+    0.5
+   ],
+   "scale": 0.12,
+   "set": "PaintedPlaster017",
+   "tint": [
+    0.17,
+    0.18,
+    0.2
+   ],
+   "type": "pbr",
+   "vcol": false
+  },
+  "RfReticle": {
+   "alpha": 1,
+   "color": [
+    0,
+    0,
+    0
+   ],
+   "emit": [
+    1,
+    0.06,
+    0.03
+   ],
+   "emit_strength": 9,
+   "linked": false,
+   "metallic": 0,
+   "rough": 0.5,
+   "transmission": 0,
+   "type": "plain"
+  },
+  "RfRubber": {
+   "metallic": 0,
+   "normal": 1.5,
+   "rough": [
+    0.6,
+    0.9
+   ],
+   "scale": 0.02,
+   "set": "Rubber004",
+   "tint": [
+    1,
+    1,
+    1
+   ],
+   "type": "pbr",
+   "vcol": false
+  },
+  "RfScreen": {
+   "alpha": 1,
+   "color": [
+    0,
+    0.01,
+    0.015
+   ],
+   "emit": [
+    0.1,
+    0.6,
+    0.72
+   ],
+   "emit_strength": 0.12,
+   "linked": false,
+   "metallic": 0,
+   "rough": 0.08,
+   "transmission": 0,
+   "type": "plain"
+  },
+  "RfShell2": {
+   "metallic": 0,
+   "normal": 0.3,
+   "rough": [
+    0.32,
+    0.52
+   ],
+   "scale": 0.16,
+   "set": "PaintedPlaster017",
+   "tint": [
+    0.6,
+    0.62,
+    0.65
+   ],
+   "type": "pbr",
+   "vcol": false
+  },
+  "RfSteel": {
+   "metallic": 1,
+   "normal": 1,
+   "rough": [
+    0.28,
+    0.45
+   ],
+   "scale": 0.06,
+   "set": "Metal032",
+   "tint": [
+    0.2,
+    0.2,
+    0.21
+   ],
+   "type": "pbr",
+   "vcol": false
+  },
+  "RfTan": {
+   "metallic": 0.35,
+   "normal": 1,
+   "rough": [
+    0.4,
+    0.62
+   ],
+   "scale": 0.07,
+   "set": "Metal032",
+   "tint": [
+    0.6,
+    0.43,
+    0.25
+   ],
+   "type": "pbr",
+   "vcol": false
+  },
+  "RfWhite": {
+   "metallic": 0,
+   "normal": 0.3,
+   "rough": [
+    0.3,
+    0.5
+   ],
+   "scale": 0.16,
+   "set": "PaintedPlaster017",
+   "tint": [
+    0.86,
+    0.87,
+    0.89
+   ],
+   "type": "pbr",
+   "vcol": false
+  },
+  "ScreenCyan": {
+   "alpha": 1,
+   "color": [
+    0,
+    0.02,
+    0.03
+   ],
+   "emit": [
+    0.15,
+    0.85,
+    1
+   ],
+   "emit_strength": 6,
+   "linked": false,
+   "metallic": 0,
+   "rough": 0.5,
+   "transmission": 0,
+   "type": "plain"
+  },
+  "SignGreen": {
+   "alpha": 1,
+   "color": [
+    0,
+    0.03,
+    0.01
+   ],
+   "emit": [
+    0.2,
+    1,
+    0.45
+   ],
+   "emit_strength": 5,
+   "linked": false,
+   "metallic": 0,
+   "rough": 0.5,
+   "transmission": 0,
+   "type": "plain"
+  },
+  "StatusOrange": {
+   "alpha": 1,
+   "color": [
+    0.03,
+    0.01,
+    0
+   ],
+   "emit": [
+    1,
+    0.45,
+    0.1
+   ],
+   "emit_strength": 8,
+   "linked": false,
+   "metallic": 0,
+   "rough": 0.5,
+   "transmission": 0,
+   "type": "plain"
+  },
+  "Steel": {
+   "metallic": 1,
+   "normal": 1,
+   "rough": [
+    0.3,
+    0.55
+   ],
+   "scale": 1,
+   "set": "Metal032",
+   "tint": [
+    0.62,
+    0.64,
+    0.67
+   ],
+   "type": "pbr",
+   "vcol": false
+  },
+  "TankLight": {
+   "alpha": 1,
+   "color": [
+    1,
+    1,
+    1
+   ],
+   "emit": [
+    0.75,
+    0.95,
+    1
+   ],
+   "emit_strength": 20,
+   "linked": false,
+   "metallic": 0,
+   "rough": 0.5,
+   "transmission": 0,
+   "type": "plain"
+  },
+  "TankLiquid": {
+   "alpha": 1,
+   "color": [
+    0.82,
+    0.96,
+    0.97
+   ],
+   "emit": [
+    1,
+    1,
+    1
+   ],
+   "emit_strength": 0,
+   "linked": false,
+   "metallic": 0,
+   "rough": 0.02,
+   "transmission": 1,
+   "type": "plain"
+  },
+  "WallPanel": {
+   "metallic": 0,
+   "normal": 0.6,
+   "rough": [
+    0.3,
+    0.55
+   ],
+   "scale": 2,
+   "set": "PaintedPlaster017",
+   "tint": [
+    0.9,
+    0.94,
+    1
+   ],
+   "type": "pbr",
+   "vcol": true
+  }
+ },
+ "set_paint": {
+  "EAccent": [
+   [
+    0.0799999982118607,
+    0.360000014305115,
+    0.419999986886978
+   ],
+   [
+    0.5,
+    0.5,
+    0.5
+   ],
+   0.4,
+   0.1
+  ],
+  "EHazard": [
+   [
+    1,
+    1,
+    1
+   ],
+   [
+    0.300000011920929,
+    0.300000011920929,
+    0.310000002384186
+   ],
+   0.4,
+   0.14
+  ],
+  "EPaint": [
+   [
+    0.759999990463257,
+    0.769999980926514,
+    0.759999990463257
+   ],
+   [
+    0.170000001788139,
+    0.170000001788139,
+    0.180000007152557
+   ],
+   0.75,
+   0.05
+  ],
+  "EPaintBand": [
+   [
+    0.5,
+    0.0799999982118607,
+    0.0500000007450581
+   ],
+   [
+    0.170000001788139,
+    0.170000001788139,
+    0.180000007152557
+   ],
+   0.2,
+   0.25
+  ],
+  "EPaintBlueGrey": [
+   [
+    0.360000014305115,
+    0.409999996423721,
+    0.439999997615814
+   ],
+   [
+    0.200000002980232,
+    0.200000002980232,
+    0.209999993443489
+   ],
+   0.5,
+   0.05
+  ],
+  "EPaintDark": [
+   [
+    0.0700000002980232,
+    0.0750000029802322,
+    0.0820000022649765
+   ],
+   [
+    0.5,
+    0.5,
+    0.5
+   ],
+   0.3,
+   0.05
+  ],
+  "EPaintFloor": [
+   [
+    0.400000005960464,
+    0.409999996423721,
+    0.419999986886978
+   ],
+   [
+    0.200000002980232,
+    0.200000002980232,
+    0.209999993443489
+   ],
+   0.7,
+   0.04
+  ],
+  "EPaintGreen": [
+   [
+    0.159999996423721,
+    0.219999998807907,
+    0.129999995231628
+   ],
+   [
+    0.5,
+    0.5,
+    0.5
+   ],
+   0.75,
+   0.2
+  ],
+  "EPaintGrey": [
+   [
+    0.150000005960464,
+    0.159999996423721,
+    0.170000001788139
+   ],
+   [
+    0.419999986886978,
+    0.419999986886978,
+    0.419999986886978
+   ],
+   0.4,
+   0.05
+  ],
+  "EPaintOlive": [
+   [
+    0.300000011920929,
+    0.300000011920929,
+    0.119999997317791
+   ],
+   [
+    0.5,
+    0.5,
+    0.5
+   ],
+   0.75,
+   0.2
+  ],
+  "EPaintRed": [
+   [
+    0.5,
+    0.0350000001490116,
+    0.025000000372529
+   ],
+   [
+    0.449999988079071,
+    0.449999988079071,
+    0.449999988079071
+   ],
+   0.35,
+   0.16
+  ],
+  "EPipe": [
+   [
+    0.620000004768372,
+    0.639999985694885,
+    0.649999976158142
+   ],
+   [
+    0.280000001192093,
+    0.280000001192093,
+    0.28999999165535
+   ],
+   0.45,
+   0.05
+  ]
+ },
+ "set_plain": {
+  "EBrass": {
+   "color": [
+    0.603827297687531,
+    0.318546742200851,
+    0.0508760772645473,
+    1
+   ],
+   "metal": 0.6,
+   "rough": 0.3
+  },
+  "ECable": {
+   "color": [
+    0.00309597514569759,
+    0.00309597514569759,
+    0.00350101478397846,
+    1
+   ],
+   "rough": 0.6
+  },
+  "ECableRed": {
+   "color": [
+    0.214041143655777,
+    0.00719440542161465,
+    0.00489630782976747,
+    1
+   ],
+   "rough": 0.6
+  },
+  "ECableTan": {
+   "color": [
+    0.342391639947891,
+    0.195994153618813,
+    0.0732389539480209,
+    1
+   ],
+   "rough": 0.6
+  },
+  "ECard": {
+   "color": [
+    0.214041143655777,
+    0.125967368483543,
+    0.0508760772645473,
+    1
+   ],
+   "rough": 0.9
+  },
+  "ECopper": {
+   "color": [
+    0.522521495819092,
+    0.132868319749832,
+    0.0396819040179253,
+    1
+   ],
+   "metal": 0.6,
+   "rough": 0.3
+  },
+  "ECoreGlow": {
+   "color": [
+    0.0023219813592732,
+    0.00719440542161465,
+    0.0100228236988187,
+    1
+   ],
+   "emit": [
+    0.0732389539480209,
+    0.787412226200104,
+    0.890005350112915,
+    1
+   ],
+   "energy": 2.2,
+   "rough": 0.3
+  },
+  "ECross": {
+   "color": [
+    0.787412226200104,
+    0.787412226200104,
+    0.748414099216461,
+    1
+   ],
+   "rough": 0.5
+  },
+  "ECyan": {
+   "color": [
+    0,
+    0.00393593916669488,
+    0.00489630782976747,
+    1
+   ],
+   "emit": [
+    0.0196066498756409,
+    0.890005350112915,
+    0.787412226200104,
+    1
+   ],
+   "energy": 2.6,
+   "rough": 0.4
+  },
+  "EDarkSteel": {
+   "color": [
+    0.0153252007439733,
+    0.0163381397724152,
+    0.0196066498756409,
+    1
+   ],
+   "metal": 0.4,
+   "rough": 0.5
+  },
+  "EGlass": {
+   "color": [
+    0.00489630782976747,
+    0.0100228236988187,
+    0.0100228236988187,
+    1
+   ],
+   "metal": 0.3,
+   "rough": 0.08
+  },
+  "EInk": {
+   "color": [
+    0.0100228236988187,
+    0.00854038260877132,
+    0.00719440542161465,
+    1
+   ],
+   "rough": 0.8
+  },
+  "ELedBlue": {
+   "color": [
+    0,
+    0,
+    0.00489630782976747,
+    1
+   ],
+   "emit": [
+    0.0331047587096691,
+    0.170644924044609,
+    0.99999988079071,
+    1
+   ],
+   "energy": 2.4,
+   "rough": 0.4
+  },
+  "ELedGreen": {
+   "color": [
+    0,
+    0.00489630782976747,
+    0.0015479875728488,
+    1
+   ],
+   "emit": [
+    0.0331047587096691,
+    0.99999988079071,
+    0.132868319749832,
+    1
+   ],
+   "energy": 2.4,
+   "rough": 0.4
+  },
+  "ELedRed": {
+   "color": [
+    0.00489630782976747,
+    0,
+    0,
+    1
+   ],
+   "emit": [
+    0.99999988079071,
+    0.0100228236988187,
+    0.00489630782976747,
+    1
+   ],
+   "energy": 2.4,
+   "rough": 0.4
+  },
+  "ELight": {
+   "color": [
+    0.99999988079071,
+    0.99999988079071,
+    0.99999988079071,
+    1
+   ],
+   "emit": [
+    0.787412226200104,
+    0.93310672044754,
+    0.99999988079071,
+    1
+   ],
+   "energy": 2.8,
+   "rough": 0.5
+  },
+  "ELiquid": {
+   "color": [
+    0.0219809431582689,
+    0.0732389539480209,
+    0.0637237876653671,
+    1
+   ],
+   "emit": [
+    0.0331047587096691,
+    0.214041143655777,
+    0.178867474198341,
+    1
+   ],
+   "energy": 0.5,
+   "rough": 0.15
+  },
+  "EMesh": {
+   "color": [
+    0.00854038260877132,
+    0.00854038260877132,
+    0.0100228236988187,
+    1
+   ],
+   "metal": 0.3,
+   "rough": 0.55
+  },
+  "EOrange": {
+   "color": [
+    0.00489630782976747,
+    0.0015479875728488,
+    0,
+    1
+   ],
+   "emit": [
+    0.99999988079071,
+    0.147318974137306,
+    0.00719440542161465,
+    1
+   ],
+   "energy": 2.6,
+   "rough": 0.4
+  },
+  "ERubber": {
+   "color": [
+    0.00270897825248539,
+    0.00270897825248539,
+    0.00309597514569759,
+    1
+   ],
+   "rough": 0.85
+  },
+  "ESteel": {
+   "color": [
+    0.214041143655777,
+    0.223413944244385,
+    0.242866739630699,
+    1
+   ],
+   "metal": 0.55,
+   "rough": 0.42
+  },
+  "ETankGlass": {
+   "color": [
+    0.603827297687531,
+    0.890005350112915,
+    0.848088264465332,
+    0.200000002980232
+   ],
+   "rough": 0.03
+  }
+ },
+ "special": {
+  "Cardboard": {
+   "color": [
+    0.342391639947891,
+    0.214041143655777,
+    0.106539219617844,
+    1
+   ],
+   "rough": 0.9
+  },
+  "CoreGlow": {
+   "color": [
+    0.00393593916669488,
+    0.0100228236988187,
+    0.0153252007439733,
+    1
+   ],
+   "emit": [
+    0.0732389539480209,
+    0.522521495819092,
+    0.99999988079071,
+    1
+   ],
+   "energy": 1.5,
+   "rough": 0.3
+  },
+  "DarkGlass": {
+   "color": [
+    0.0023219813592732,
+    0.00393593916669488,
+    0.00598105788230896,
+    0.75
+   ],
+   "rough": 0.05
+  },
+  "ExitLight": {
+   "color": [
+    0.00393593916669488,
+    0.0023219813592732,
+    0.00719440542161465,
+    1
+   ],
+   "emit": [
+    0.462361305952072,
+    0.263273417949677,
+    0.99999988079071,
+    1
+   ],
+   "energy": 3,
+   "rough": 0.5
+  },
+  "PaintBlue": {
+   "color": [
+    0.0219809431582689,
+    0.088981531560421,
+    0.318546742200851,
+    1
+   ],
+   "rough": 0.55
+  },
+  "PaintGreen": {
+   "color": [
+    0.0331047587096691,
+    0.147318974137306,
+    0.0637237876653671,
+    1
+   ],
+   "rough": 0.55
+  },
+  "PaintGrey": {
+   "color": [
+    0.318546742200851,
+    0.342391639947891,
+    0.393123149871826,
+    1
+   ],
+   "rough": 0.5
+  },
+  "PaintOrange": {
+   "color": [
+    0.692071080207825,
+    0.147318974137306,
+    0.0100228236988187,
+    1
+   ],
+   "rough": 0.55
+  },
+  "Seam": {
+   "color": [
+    0.00785057060420513,
+    0.00854038260877132,
+    0.0100228236988187,
+    1
+   ],
+   "rough": 0.92
+  },
+  "StudioBlock": {
+   "color": [
+    0.214041143655777,
+    0.242866739630699,
+    0.284646689891815,
+    1
+   ],
+   "rough": 0.75
+  },
+  "StudioDark": {
+   "color": [
+    0.0153252007439733,
+    0.0173890963196754,
+    0.0219809431582689,
+    1
+   ],
+   "rough": 0.6
+  },
+  "StudioLight": {
+   "color": [
+    0.99999988079071,
+    0.99999988079071,
+    0.99999988079071,
+    1
+   ],
+   "emit": [
+    0.93310672044754,
+    0.955104529857635,
+    0.99999988079071,
+    1
+   ],
+   "energy": 2.6,
+   "rough": 0.5
+  },
+  "StudioWall": {
+   "color": [
+    0.603827297687531,
+    0.62091588973999,
+    0.638283133506775,
+    1
+   ],
+   "rough": 0.9
+  },
+  "TankLiquid": {
+   "color": [
+    0.0331047587096691,
+    0.342391639947891,
+    0.420033246278763,
+    0.449999988079071
+   ],
+   "emit": [
+    0.0219809431582689,
+    0.214041143655777,
+    0.263273417949677,
+    1
+   ],
+   "energy": 1.3,
+   "rough": 0.08
+  }
+ },
+ "wear": {
+  "PBlack": [
+   0.9,
+   [
+    0.600000023841858,
+    0.600000023841858,
+    0.600000023841858
+   ],
+   1,
+   0.3,
+   0
+  ],
+  "PFrame": [
+   0.5,
+   [
+    0.600000023841858,
+    0.600000023841858,
+    0.600000023841858
+   ],
+   1,
+   0.6,
+   0
+  ],
+  "PSlide": [
+   0.55,
+   [
+    0.219999998807907,
+    0.230000004172325,
+    0.25
+   ],
+   0.6,
+   0.7,
+   0.16
+  ],
+  "RArmor": [
+   0.7,
+   [
+    0.159999996423721,
+    0.170000001788139,
+    0.180000007152557
+   ],
+   0.8,
+   0.7,
+   0.18
+  ],
+  "RFrame": [
+   0.6,
+   [
+    0.550000011920929,
+    0.550000011920929,
+    0.550000011920929
+   ],
+   1,
+   0.4,
+   0
+  ],
+  "RfBlack": [
+   0.3,
+   [
+    0.449999988079071,
+    0.449999988079071,
+    0.449999988079071
+   ],
+   1,
+   0.3,
+   0
+  ],
+  "RfDark": [
+   0.35,
+   [
+    0.300000011920929,
+    0.310000002384186,
+    0.330000013113022
+   ],
+   1,
+   0.5,
+   0
+  ],
+  "RfGrey": [
+   0.5,
+   [
+    0.600000023841858,
+    0.600000023841858,
+    0.600000023841858
+   ],
+   1,
+   0.6,
+   0
+  ],
+  "RfPod": [
+   0,
+   [
+    0.5,
+    0.5,
+    0.5
+   ],
+   1,
+   0.5,
+   0
+  ],
+  "RfShell2": [
+   0.5,
+   [
+    0.200000002980232,
+    0.209999993443489,
+    0.230000004172325
+   ],
+   0.6,
+   0.7,
+   0.16
+  ],
+  "RfTan": [
+   0.3,
+   [
+    0.699999988079071,
+    0.660000026226044,
+    0.579999983310699
+   ],
+   1,
+   0.5,
+   0
+  ],
+  "RfWhite": [
+   0.55,
+   [
+    0.219999998807907,
+    0.230000004172325,
+    0.25
+   ],
+   0.6,
+   0.7,
+   0.16
+  ]
+ }
+}
