@@ -1183,3 +1183,62 @@ func wrecks(dir: String) -> void:
 			", ".join(["turret_spin_up", "turret_shot", "turret_spin_down", "turret_tail"].filter(func(k: String) -> bool: return V2Sfx.heard.has(k)))])
 	get_tree().quit()
 
+
+## Are the drones there, and can they be seen? (-- --game-capture=DIR --part=drones [--seed=N]): prints the robots
+## by kind and, for each drone, where it is, how high, and whether it is drawn; pictures of the first three alive,
+## from 6 m, as the player meets them (the player cannot be hurt; the other robots stand still).
+func drones(dir: String) -> void:
+	DirAccess.make_dir_recursive_absolute(dir)
+	player.invulnerable = true
+	await _wait(1.0)
+	var count := {"spider": 0, "drone": 0, "turret": 0}
+	for r in game.robots:
+		count[r.kind] += 1
+	print("[drones] seed %d: %s" % [game.seed_used, str(count)])
+	if DisplayServer.get_name() == "headless":             # (the count alone)
+		get_tree().quit()
+		return
+	for i in dungeon.doors.size():
+		game.open_door(i)
+	var n := 0
+	for r in game.robots:
+		if r.kind != "drone":
+			continue
+		var cell := V2Dungeon.cell_of(r.global_position)
+		var room := dungeon.room_id_at(r.global_position)
+		# stand in the same room, 6 m away along the longer side
+		var rect: Rect2i = gen.rooms[room].rect if room >= 0 else Rect2i(cell, Vector2i.ONE)
+		var mid := Vector3((rect.position.x + rect.size.x / 2.0) * 4.0, 0, (rect.position.y + rect.size.y / 2.0) * 4.0)
+		var away: Vector3 = mid - (r as V2Robot).global_position
+		away.y = 0.0
+		if away.length() < 1.0:
+			away = Vector3(1, 0, 0)
+		var from: Vector3 = (r as V2Robot).global_position + away.normalized() * 6.0
+		from.x = clampf(from.x, rect.position.x * 4.0 + 1.0, rect.end.x * 4.0 - 1.0)
+		from.z = clampf(from.z, rect.position.y * 4.0 + 1.0, rect.end.y * 4.0 - 1.0)
+		from.y = 0.0
+		_look_at(from, r.hit_point())
+		await _wait(1.5)
+		_look_at(from, r.hit_point())
+		await _wait(0.2)
+		var seen := 0
+		var meshes: Array = (r as V2Robot).find_children("*", "MeshInstance3D", true, false)
+		for m in meshes:
+			if (m as MeshInstance3D).is_visible_in_tree():
+				seen += 1
+		print("[drones] drone in room %d at %s: %.2f m above the floor, state %d, processing %s, node visible %s, %d of %d meshes drawn, layers %d, %.1f m from the player" % [
+			room, str(cell), r.global_position.y, r.state, str(r.is_processing()), str(r.is_visible_in_tree()), seen, meshes.size(),
+			(meshes[0] as MeshInstance3D).layers if meshes.size() > 0 else -1, r.global_position.distance_to(player.global_position)])
+		if n < 3:
+			await _shot(dir, "Drone_%d" % n)
+		if n == 0:                                         # the first one, watched for a while as it fights
+			for k in 5:
+				await _wait(2.5)
+				_look_at(from, r.hit_point())
+				await _wait(0.15)
+				print("[drones]   +%.1f s: state %d, at %s, body %.2f m up, visible %s, %.1f m away, shots %d" % [(k + 1) * 2.65, r.state,
+					str(r.global_position.snapped(Vector3(0.1, 0.1, 0.1))), r.hit_point().y, str(r.is_visible_in_tree()), r.global_position.distance_to(player.global_position), r.shots_fired])
+				await _shot(dir, "Drone_0_later_%d" % k)
+		n += 1
+	get_tree().quit()
+

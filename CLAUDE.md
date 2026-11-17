@@ -495,11 +495,14 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
     washed, dark edges, an orange band, scan lines; RE-ASSEMBLE = a new dungeon at the same threat / STOP HERE).
     Enter = the first button. Signal lost comes after the fall and the robots gathering, as before.
   - Title (`v2_title.gd`): the white page, PROJECT / FIREWALL, PRESS ENTER; any key or a click starts a run.
-    **How a run opens (user's direction)**: the title fades into the grey of the end screens (0.7 s, the music
-    going down with it), the game comes up under the same grey (`V2Game._opening`, a layer 8 veil), the grey lifts
-    off the room in 1.4 s with no gun and no HUD, then the gun comes up (Draw) and is turned over once (Inspect;
-    only on the run that has the training), and only then the keys and the mouse answer (`V2Player.locked`) and
-    the HUD fades in: about 6 s from the key to control. Not for the bot, the checks or the pictures.
+    **How a run opens (user's direction; second round: "the letters all fade into white, and the same white
+    fades out into the game, more slowly")**: the title's letters fade into the page's own white (1.3 s, the music
+    going down with it), the game comes up under the same white (`V2World.open_from`, set by the title;
+    `V2Game._opening`, a layer 8 veil), the white lifts off the room in 3 s with no gun and no HUD (a run started
+    from an end screen opens out of that screen's grey in 1.4 s), then the gun comes up (Draw) and is turned over
+    once (Inspect; only on the run that has the training), and only then the keys and the mouse answer
+    (`V2Player.locked`) and the HUD fades in: about 9 s from the key to control. Not for the bot, the checks or
+    the pictures.
     Frames of it: `-- --title --open-capture=DIR` (`V2World.film`: every frame as a jpg with its milliseconds).
     **No menu: the lab is on L** (not shown), `--lab` as before. Esc in the game: a small glass card, RESUME /
     STOP HERE ("the run keeps going").
@@ -517,8 +520,10 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   `TRAIN_HITS` [3, 6]. Before `build`: `dungeon.locked_room` = the spawn room (**every doorway of it gets a door,
   shut and locked**: `doors[i].locked`, `unlock()`; E there says "Locked · finish the training" and no prompt
   offers it), `dungeon.keep_clear` (nothing is stood round the dummy), the room's crate is made to hold a kit.
-  `_training_spot` = a cell's middle 5 m or more from the player, rather ahead of them, off the doorways and the
-  crate; `_training_build` = a dark plinth with two `floor_hazard` tiles on it and the spider on top
+  `_training_spot` = a cell's middle well away from the room's middle, off the doorways and the crate;
+  **the player appears in front of the dummy, facing it** (user; `_training_start`, `start_at` / `start_yaw`:
+  6 m from it, less in a small room, on the dummy's own row or column of cell middles: cover stands at the
+  cells' corners, so that lane is always open); `_training_build` = a dark plinth with two `floor_hazard` tiles on it and the spider on top
   (`V2Robot.dummy`: it stands in the preview's Idle, a hit jars it on its springs and emits `struck`, it is not
   in `robots`, so no count, no score, no hostile line). **The last round of the rifle step destroys it** (user;
   `V2Robot.finish_off`: the usual burst, Death clip and smoking wreck, solid, on its pad: `floor_y`). A hit counts only **aimed** (`player._aimed` > 0.6) and
@@ -555,6 +560,8 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   fall and the dropped gun, the robots coming to look without firing, sounds;
   `tools/v2_bot.sh [N] [threat] [seed]`; `xvfb-run -a godot --rendering-driver opengl3 --path . --
   --game-capture=DIR [--seed=N]`; `... -- --title-capture=FILE.png`. With `--part=NAME` the capture is one of:
+  `drones` (the robots by kind, and each drone: where, drawn or not, a picture of the first three; headless it
+  prints the count alone: the user asked whether drones appear; seeds 7 and 33 have 6 and 9, all drawn),
   `wrecks` (with `--training`: the dummy destroyed, a spider's and a drone's wreck with their boxes drawn in
   orange, a turret's burst; `--match=turret` = the turret alone),
   `rooms` (every room, or `--match=2,5`, from two corners without gun or HUD: 40 s for two rooms; the quick look

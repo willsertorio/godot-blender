@@ -37,6 +37,10 @@ var _concept := false             # the detailed room of the Blender scene inste
 
 
 ## The 3D picture's size (see RENDER_ROWS): set now and whenever the window changes size.
+## The colour a run opens out of: the title sets its own white before it hands over, so that its page seems to
+## dissolve into the room; a run started from an end screen opens out of that screen's grey.
+static var open_from := UIPalette.COMPLETE_BG
+
 func _render_setup() -> void:
 	# (the UI concept's canvas: its pixel values are at 1440 x 810; a taller window shows more, it is not letterboxed)
 	var win := get_window()

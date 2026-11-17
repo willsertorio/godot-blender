@@ -84,8 +84,8 @@ func _page() -> void:
 	_press.anchor_bottom = 1.0
 	_press.offset_top = -112.0 - 20.0
 	_press.offset_bottom = -112.0
-	# pressing start: the page fades into the grey of the game's own pages, and the run opens out of that grey
-	_veil = V2Ui.full(ui, Color(UIPalette.COMPLETE_BG, 0.0))
+	# pressing start: the letters fade into the page's own white, and the run opens out of that same white
+	_veil = V2Ui.full(ui, Color(UIPalette.FACILITY_WHITE, 0.0))
 
 
 func _process(delta: float) -> void:
@@ -115,10 +115,11 @@ func _start() -> void:
 		return
 	_leaving = true
 	V2Sfx.play("ui")
-	V2Music.stop(1.6)
+	V2Music.stop(2.4)
+	V2World.open_from = UIPalette.FACILITY_WHITE
 	var tw := create_tween()
-	tw.tween_property(_veil, "color:a", 1.0, 0.7).set_trans(Tween.TRANS_SINE)
-	tw.tween_interval(0.25)
+	tw.tween_property(_veil, "color:a", 1.0, 1.3).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_interval(0.3)
 	tw.tween_callback(func() -> void: get_tree().change_scene_to_file(GAME))
 
 

@@ -42,6 +42,8 @@ enum { PLAYING, WON, LOST }
 
 static var missions := 0            # missions completed in this sitting: the threat level
 static var total_score := 0
+var start_at := Vector3.ZERO         # where the player appears, and facing where (the training: in front of the dummy)
+var start_yaw := 0.0
 static var trained := false         # the training of the first room was done in this sitting (it is not repeated)
 
 var gen: DungeonGen
@@ -136,8 +138,14 @@ func _ready() -> void:
 	# (nothing is stood where the player appears: the middle of a room with an even number of cells is a cell corner)
 	dungeon.keep_clear.append([gen.player_spawn, 2.3, false])
 	var dummy_at := Vector3.ZERO
+	start_at = gen.player_spawn
+	start_yaw = gen.player_yaw
 	if training:
 		dummy_at = _training_spot()
+		# (**user: "make the character be loaded in front of the enemy in the training room"**)
+		start_at = _training_start(dummy_at)
+		start_yaw = atan2(-(dummy_at.x - start_at.x), -(dummy_at.z - start_at.z))
+		dungeon.keep_clear.append([start_at, 2.3, false])
 		dungeon.locked_room = gen.spawn_room
 		dungeon.keep_clear.append([dummy_at, 3.0, true])
 		for l in gen.loot_spawns:                          # (the room's crate holds the health kit of the fourth step)
@@ -186,8 +194,8 @@ func _ready() -> void:
 	player.rules = true
 	player.grab = false                                    # (a click does not take the mouse back: the menu's buttons must work)
 	add_child(player)
-	player.global_position = gen.player_spawn + Vector3(0, 0.02, 0)
-	player._yaw = gen.player_yaw
+	player.global_position = start_at + Vector3(0, 0.02, 0)
+	player._yaw = start_yaw
 	player._pitch = deg_to_rad(-3.0)
 	player.died.connect(func() -> void: finish(false))
 	player.interact.connect(interact)
@@ -220,7 +228,8 @@ func _ready() -> void:
 
 
 ## How a run opens (**user: "a fade in into the environment, then the gun appears with the inspecting motion, then
-## the character is playable"**; the title has faded into this same grey): the grey lifts off the room, the gun
+## the character is playable"**, and later **"the letters all fade into white, and the same white fades out into
+## the game, more slowly"**: the title has faded into its own white, `V2World.open_from`): the veil lifts off the room, the gun
 ## comes up into view (Draw) and is turned over once (Inspect), and only then do the keys and the mouse answer and
 ## the HUD comes in. Later runs of a sitting open the same way without the turning over. Not for the bot, the
 ## checks or the pictures.
@@ -228,13 +237,16 @@ func _opening(full: bool) -> void:
 	var top := CanvasLayer.new()
 	top.layer = 8
 	add_child(top)
-	var veil := V2Ui.full(top, UIPalette.COMPLETE_BG)
+	var from_title := V2World.open_from != UIPalette.COMPLETE_BG
+	var veil := V2Ui.full(top, V2World.open_from)
+	V2World.open_from = UIPalette.COMPLETE_BG
 	player.locked = true
 	player.overlay.visible = false
 	hud.modulate.a = 0.0
-	await get_tree().create_timer(0.4).timeout
+	await get_tree().create_timer(0.5).timeout
 	var tw := create_tween()
-	tw.tween_property(veil, "color:a", 0.0, 1.4).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	# (out of the title's white: slowly, the room comes out of the light; out of an end screen's grey: quicker)
+	tw.tween_property(veil, "color:a", 0.0, 3.0 if from_title else 1.4).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	await tw.finished
 	top.queue_free()
 	player.overlay.visible = true
@@ -389,13 +401,38 @@ func _training_spot() -> Vector3:
 	return best
 
 
+## Where the player appears in the training room: in front of the dummy, 6 m from it (less in a small room), on
+## the row or column of cell middles the dummy stands in: cover stands at the cells' corners, so that lane is
+## always open and the dummy is in plain view. Of the four ways, the one that leads most toward the room's middle.
+func _training_start(at: Vector3) -> Vector3:
+	var room: DungeonGen.Room = gen.rooms[gen.spawn_room]
+	var c := V2Dungeon.cell_of(at)
+	var inward := room.center() - at
+	inward.y = 0.0
+	var best := gen.player_spawn
+	var best_score := -1e9
+	for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+		var n := 0
+		while room.rect.has_point(c + d * (n + 1)):
+			n += 1
+		var reach := n * V2Dungeon.CELL + V2Dungeon.CELL / 2.0 - 1.3        # (to 1.3 m short of the wall)
+		if reach < 4.0:
+			continue
+		var dir := Vector3(d.x, 0, d.y)
+		var score := minf(6.0, reach) + (dir.dot(inward.normalized()) * 2.0 if inward.length() > 0.1 else 0.0)
+		if score > best_score:
+			best_score = score
+			best = at + dir * minf(6.0, reach)
+	return best
+
+
 ## The dummy and its pad: a low dark plinth with two of the set's striped floor tiles on it, the spider on top,
 ## facing where the player appears. It is no enemy: not among `robots`, it only takes hits.
 func _training_build(at: Vector3) -> void:
 	var layer: int = dungeon.areas[dungeon.area_of[gen.rooms[gen.spawn_room].rect.position]].layer
 	var pad := Node3D.new()
 	add_child(pad)
-	var to := gen.player_spawn - at
+	var to := start_at - at
 	pad.position = at
 	pad.rotation.y = atan2(to.x, to.z)
 	var base := MeshInstance3D.new()
