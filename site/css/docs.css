@@ -83,8 +83,11 @@ a { color: var(--accent); }
 
 /* WORKFLOW */
 .steps { list-style: none; counter-reset: step; padding: 0; margin: 28px 0 0; }
-.steps li { counter-increment: step; position: relative; padding: 0 0 8px 52px; }
-.steps li::before { content: counter(step); position: absolute; left: 0; top: 14px; width: 32px; height: 32px; border-radius: 50%; background: var(--accent-bg); color: var(--accent); font-weight: 600; display: grid; place-items: center; }
-.steps li h2 { margin-top: 12px; border-top: 0; padding-top: 16px; }
-.steps li + li h2 { border-top: 1px solid var(--line); }
+.steps > li { counter-increment: step; position: relative; padding: 0 0 8px 52px; }
+.steps > li::before { content: counter(step); position: absolute; left: 0; top: 14px; width: 32px; height: 32px; border-radius: 50%; background: var(--accent-bg); color: var(--accent); font-weight: 600; display: grid; place-items: center; }
+.steps > li > h2 { margin-top: 12px; border-top: 0; padding-top: 16px; }
+.steps > li + li > h2 { border-top: 1px solid var(--line); }
 .steps img { display: block; width: 100%; height: auto; margin: 14px 0 8px; border: 1px solid var(--line); border-radius: 6px; }
+.steps h3 { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2); margin: 18px 0 4px; }
+.steps ul { margin: 0; padding-left: 1.2em; list-style: disc; }
+.steps ul li { margin: 3px 0; }
