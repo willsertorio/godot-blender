@@ -92,6 +92,10 @@ static var _bus := ""
 
 ## The lab's bus: a short reverb for a hard-walled room of 11 x 17 m.
 static func bus() -> String:
+	# Web (Godot 4.3): sounds are played as Web Audio samples, and a bus added at runtime stays silent there.
+	# The browser build plays everything on Master: no room reverb or limiter, 3 dB under the desktop mix.
+	if OS.has_feature("web"):
+		return "Master"
 	if _bus == "":
 		_bus = "V2Room"
 		if AudioServer.get_bus_index(_bus) < 0:
