@@ -12,7 +12,7 @@ GLTF="${GLTF_TRANSFORM:-npx --yes @gltf-transform/cli@4.1.1}"
 mkdir -p "$OUT"
 # keep the game export between page-only builds
 find "$OUT" -mindepth 1 -maxdepth 1 ! -name play -exec rm -rf {} +
-cp -r site/. "$OUT"/
+cp -r site/. "$OUT"/ && rm -f "$OUT/README.md"
 
 # fonts: the game's UI fonts (SIL OFL 1.1, licence file alongside)
 mkdir -p "$OUT/fonts"

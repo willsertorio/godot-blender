@@ -3,146 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Project Firewall</title>
-<meta name="description" content="Project Firewall: a first-person shooter in a procedurally generated facility, made with Godot and Blender. Play it in the browser and explore every model in 3D.">
-<meta property="og:title" content="Project Firewall">
-<meta property="og:description" content="A first-person shooter in a procedurally generated facility, made with Godot and Blender. Play it in the browser.">
-<meta property="og:image" content="img/firefight_rifle.jpg">
+<title>Game · Project Firewall</title>
 <link rel="icon" href="img/icon.png">
-<link rel="stylesheet" href="css/site.css">
+<link rel="stylesheet" href="css/docs.css">
 </head>
 <body>
-<header class="site-head"><div class="wrap">
-  <a class="brand" href="index.html"><small>PROJECT</small><b>FIREWALL</b></a>
-  <nav class="nav" aria-label="Site">
-    <a href="#play">Play</a>
-    <a href="design.html">Design</a>
-    <a href="assets.html">Assets</a>
-    <a href="making-of.html">Making of</a>
-  </nav>
-</div></header>
-
-<main>
-<section class="hero">
-  <div class="bg" style="background-image:url(img/firefight_rifle.jpg)"></div>
-  <div class="wrap">
-    <p class="kicker">A first-person shooter · Godot 4.3 + Blender 4.2</p>
-    <h1>Project<br>Firewall</h1>
-    <hr class="rule">
-    <p class="lede">Break into a facility that is assembled fresh for every run. Clear its rooms of hostile robots, loot crates for health and ammunition, and reach the exit portal in the deepest room before your health runs out. Every completed mission makes the next one harder.</p>
-    <div class="actions">
-      <a class="btn btn-primary" href="#play">Play in the browser</a>
-      <a class="btn btn-dark-ghost" href="assets.html">See every model in 3D</a>
-    </div>
-  </div>
-</section>
-
-<section id="play">
-  <div class="wrap">
-    <p class="kicker">Play</p>
-    <h2>Run the dungeon</h2>
-    <hr class="rule">
-    <div class="player" id="player">
-      <div class="poster" id="poster" style="background-image:url(img/play_poster.jpg), url(img/firefight_pistol.jpg)"></div>
-      <div class="start"><div>
-        <button class="btn btn-primary" id="start">Load the game</button>
-        <p>About 80 MB the first time (then cached). Desktop browser, keyboard and mouse.</p>
-      </div></div>
-    </div>
-    <p class="small muted" style="margin-top:12px">
-      <a href="play/index.html" target="_blank" rel="noopener">Open the game in its own window</a> ·
-      <button class="linklike" id="fullscreen" type="button">Full screen</button> ·
-      Click the game to lock the mouse; Esc frees it. A run opens with a short training in the first room.
-    </p>
-    <div class="keys" aria-label="Controls">
-      <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move</span>
-      <span><kbd>Mouse</kbd> look</span>
-      <span><kbd>Left</kbd> fire</span>
-      <span><kbd>Right</kbd> or <kbd>C</kbd> aim</span>
-      <span><kbd>R</kbd> reload</span>
-      <span><kbd>1</kbd><kbd>2</kbd> or <kbd>Q</kbd> switch gun</span>
-      <span><kbd>E</kbd> open door / crate</span>
-      <span><kbd>H</kbd> use med kit</span>
-      <span><kbd>Tab</kbd> map</span>
-      <span><kbd>Shift</kbd> sprint</span>
-      <span><kbd>Space</kbd> jump</span>
-      <span><kbd>X</kbd> crouch</span>
-      <span><kbd>F</kbd> inspect gun</span>
-    </div>
-  </div>
-</section>
-
-<section>
-  <div class="wrap">
-    <div class="grid-2">
-      <div>
-        <p class="kicker">The game</p>
-        <h2>No two runs share a layout</h2>
-        <hr class="rule">
-        <p>Each run generates a dungeon of 8 to 12 rooms joined by corridors and doors, then places robots, loot crates and one exit portal through it. Three robots hunt you: a four-legged spider that walks the dungeon, a drone that chases and explodes when shot down, and a ceiling turret that winds up and sweeps the room.</p>
-        <p>Score comes only from kills. Reach the portal and the next dungeon has more robots, tougher ones, and fewer med kits; fall, and you start again at the same threat level.</p>
-        <p><a href="design.html">Read the game design document, with notes on how each rule was built →</a></p>
-      </div>
-      <figure class="shot"><img src="img/dungeon_room.jpg" alt="A generated room: white wall panels with displays, equipment along the walls and a spider robot on patrol" loading="lazy" width="1440" height="810"></figure>
-    </div>
-    <div class="stats" style="margin-top:40px">
-      <div><b>8–12</b><span>rooms per run</span></div>
-      <div><b>3</b><span>robot types</span></div>
-      <div><b>44</b><span>environment pieces</span></div>
-      <div><b>120</b><span>sound files</span></div>
-    </div>
-  </div>
-</section>
-
-<section>
-  <div class="wrap">
-    <p class="kicker">Explore</p>
-    <h2>Behind the game</h2>
-    <hr class="rule">
-    <div class="grid-3">
-      <a class="card" href="assets.html">
-        <img src="img/robots_views.jpg" alt="The spider, drone and ceiling turret from several angles" loading="lazy">
-        <div class="card-body"><h3>Assets in 3D</h3><p>Every robot, gun, glove and piece of the environment set, with their animation clips, in the game's own materials.</p></div>
-      </a>
-      <a class="card" href="design.html">
-        <img src="img/godot_turret.jpg" alt="The ceiling turret firing in the test lab" loading="lazy">
-        <div class="card-body"><h3>Design</h3><p>The original game design document, section by section, with what was built for each rule and what changed.</p></div>
-      </a>
-      <a class="card" href="making-of.html">
-        <img src="img/concept_scene.jpg" alt="The Blender concept render of the lab room that set the look" loading="lazy">
-        <div class="card-body"><h3>Making of</h3><p>From a neon greybox to a modelled facility: the stages, the pipeline from Blender to the browser, and the conversation that built it.</p></div>
-      </a>
-    </div>
-  </div>
-</section>
+<nav class="side" aria-label="Pages">
+  <a href="index.html" aria-current="page">GAME</a>
+  <a href="gdd.html">GDD</a>
+  <a href="assets.html">ASSETS</a>
+  <a href="trajectory.html">TRAJECTORY</a>
+</nav>
+<main class="main game">
+  <iframe src="play/index.html" title="Project Firewall" allow="autoplay; fullscreen; gamepad" allowfullscreen></iframe>
 </main>
-
-<footer class="site-foot"><div class="wrap">
-  <span>Project Firewall · made with <a href="https://godotengine.org">Godot</a> and <a href="https://www.blender.org">Blender</a>.</span>
-  <span>Models are original work; textures from <a href="https://ambientcg.com">ambientCG</a>, sounds and music from <a href="https://opengameart.org">OpenGameArt</a> (all CC0); fonts Barlow (SIL OFL). <a href="licenses.csv">Full credits</a></span>
-</div></footer>
-
-<script>
-(() => {
-  const box = document.getElementById('player');
-  let frame = null;
-  function load() {
-    if (frame) return frame;
-    frame = document.createElement('iframe');
-    frame.src = 'play/index.html';
-    frame.title = 'Project Firewall';
-    frame.allow = 'autoplay; fullscreen; gamepad';
-    frame.setAttribute('allowfullscreen', '');
-    box.replaceChildren(frame);
-    frame.addEventListener('load', () => frame.focus());
-    return frame;
-  }
-  document.getElementById('start').addEventListener('click', load);
-  document.getElementById('fullscreen').addEventListener('click', () => {
-    const f = load();
-    (f.requestFullscreen || f.webkitRequestFullscreen || (() => {})).call(f);
-  });
-})();
-</script>
 </body>
 </html>

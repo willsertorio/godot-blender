@@ -76,26 +76,20 @@ async function clipTable(asset) {
 // ---------------------------------------------------------------------------------- list UI
 const list = $('list');
 const pick = $('pick');
-for (const g of catalog.groups) {
-  const h = document.createElement('h3');
-  h.textContent = g.title;
-  list.append(h);
-  const og = document.createElement('optgroup');
-  og.label = g.title;
+catalog.groups.forEach((g, gi) => {
+  if (gi) list.append(document.createElement('hr'));
   for (const it of g.items) {
     const b = document.createElement('button');
     b.dataset.id = it.id;
-    b.innerHTML = `<span></span>${it.kind === 'robot' || it.kind === 'view' ? '<small>animated</small>' : ''}`;
-    b.firstChild.textContent = it.name;
+    b.textContent = it.name;
     b.addEventListener('click', () => select(it.id));
     list.append(b);
     const o = document.createElement('option');
     o.value = it.id;
     o.textContent = it.name;
-    og.append(o);
+    pick.append(o);
   }
-  pick.append(og);
-}
+});
 pick.addEventListener('change', () => select(pick.value));
 
 // ---------------------------------------------------------------------------------- state
@@ -108,20 +102,6 @@ let token = 0;
 const clay = new THREE.MeshStandardMaterial({ color: 0xb7bcbe, roughness: 0.62, metalness: 0 });
 const wire = new THREE.MeshBasicMaterial({ color: 0x111416, wireframe: true });
 const wireBase = new THREE.MeshStandardMaterial({ color: 0xe6e9ea, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-
-function stats(root) {
-  let tris = 0, verts = 0, meshes = 0;
-  const m = new Set();
-  root.traverse((o) => {
-    if (!o.isMesh) return;
-    meshes++;
-    const g = o.geometry;
-    verts += g.attributes.position.count;
-    tris += (g.index ? g.index.count : g.attributes.position.count) / 3;
-    (Array.isArray(o.material) ? o.material : [o.material]).forEach((x) => m.add(x.name));
-  });
-  return { tris: Math.round(tris), verts, meshes, materials: m.size };
-}
 
 function setMode(m) {
   mode = m;
@@ -176,7 +156,9 @@ function frame() {
   } else {
     const dir = it.below ? new THREE.Vector3(0.55, -0.55, 1) : new THREE.Vector3(0.75, 0.42, 1);
     if (it.kind === 'view') dir.set(-0.9, 0.35, -0.6);
-    const dist = r / Math.sin(THREE.MathUtils.degToRad(camera.fov * 0.5)) * 1.05;
+    const vHalf = THREE.MathUtils.degToRad(camera.fov * 0.5);
+    const hHalf = Math.atan(Math.tan(vHalf) * Math.max(camera.aspect, 0.1));
+    const dist = r / Math.sin(Math.min(vHalf, hHalf)) * 1.05;   // fits a narrow (portrait) view too
     controls.target.copy(center);
     camera.position.copy(center).add(dir.normalize().multiplyScalar(dist));
   }
@@ -202,10 +184,9 @@ async function select(id, { replace = false } = {}) {
   if (location.hash !== '#' + it.id) {
     history[replace ? 'replaceState' : 'pushState'](null, '', location.pathname + location.search + '#' + it.id);
   }
-  info(it, null);
   $('loading').hidden = false;
   let gltf;
-  try { gltf = await loadFile(it.file); } catch (e) { $('loading').textContent = 'Could not load ' + it.file; return; }
+  try { gltf = await loadFile(it.file); } catch (e) { $('loading').hidden = true; return; }
   if (my !== token) return;
   const asset = it.file.replace('.glb', '');
 
@@ -272,7 +253,6 @@ async function select(id, { replace = false } = {}) {
   $('cams').hidden = it.kind !== 'view';
   setCam(it.kind === 'view' ? 'player' : 'orbit');
   buildClips();
-  info(it, stats(root), table);
 }
 
 function buildClips() {
@@ -304,30 +284,6 @@ function setPlaying(p) {
   playing = p;
   $('playpause').textContent = p ? '❚❚' : '▶';
   $('playpause').setAttribute('aria-label', p ? 'Pause' : 'Play');
-}
-
-function info(it, st, table) {
-  $('i-group').textContent = it.group.title;
-  $('i-name').textContent = it.name;
-  $('i-text').textContent = it.text || it.group.blurb;
-  const f = $('i-facts');
-  f.innerHTML = '';
-  const add = (k, v) => { const dt = document.createElement('dt'); dt.textContent = k; const dd = document.createElement('dd'); dd.textContent = v; f.append(dt, dd); };
-  if (st) {
-    add('Triangles', st.tris.toLocaleString('en'));
-    add('Vertices', st.verts.toLocaleString('en'));
-    add('Meshes', st.meshes);
-    add('Materials', st.materials);
-    if (current && current.bounds) {
-      const s = current.bounds.getSize(new THREE.Vector3());
-      add('Size', `${s.x.toFixed(2)} x ${s.y.toFixed(2)} x ${s.z.toFixed(2)} m`);
-    }
-    if (table) add('Clips', `${Object.keys(table.clips).length} at ${table.fps} fps`);
-  }
-  add('Source', it.node ? `${it.node} in set.glb` : it.file);
-  $('i-script').innerHTML = '';
-  const script = it.script || (it.node ? 'v2/scripts/set_structure.py, set_cover.py, set_equipment.py, set_pickups.py; export_set.py' : '');
-  if (script) { $('i-script').append('Built by '); const c = document.createElement('code'); c.textContent = script; $('i-script').append(c); }
 }
 
 // ---------------------------------------------------------------------------------- controls
