@@ -733,7 +733,14 @@ func train(dir: String) -> void:
 	to_spawn.y = 0.0
 	var feet := target.global_position
 	feet.y = 0.0
-	_look_at(gen.player_spawn, target.hit_point())
+	var start_room: DungeonGen.Room = gen.rooms[gen.spawn_room]      # the room from a corner: where the cage stands in it
+	var corner := Vector3(start_room.rect.position.x * 4.0 + 1.2, 0, start_room.rect.position.y * 4.0 + 1.2)
+	_look_at(corner, feet + Vector3(0, 1.0, 0))
+	player.overlay.visible = false
+	await _wait(0.5)
+	await _shot(dir, "Train0_room")
+	player.overlay.visible = true
+	teleport(game.start_at, rad_to_deg(game.start_yaw), -3.0)       # as the player appears
 	await _wait(0.6)
 	await _shot(dir, "Train1_start")
 	var stand := feet + to_spawn.normalized() * 3.4

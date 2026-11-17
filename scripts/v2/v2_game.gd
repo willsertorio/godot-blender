@@ -377,53 +377,30 @@ func _exit() -> void:
 
 
 # ---------------------------------------------------------------------------------------------- the training
-## Where the dummy stands: the middle of a cell of the first room, 5 m or more from the player if the room has
-## one, rather in front of them than behind, not at a doorway and not where the crate is.
+## Where the dummy stands in its cage: **the middle of the first room** (user: "in the center of the training
+## room, not in the corner"). (It was a cell near a wall. In a room with an even number of cells the middle is a
+## cell corner; `keep_clear` keeps cover off it.)
 func _training_spot() -> Vector3:
-	var room: DungeonGen.Room = gen.rooms[gen.spawn_room]
-	var fwd := Vector3(-sin(gen.player_yaw), 0, -cos(gen.player_yaw))
-	var best := room.center()
-	var best_score := -1e9
-	for x in range(room.rect.position.x, room.rect.end.x):
-		for y in range(room.rect.position.y, room.rect.end.y):
-			var c := Vector2i(x, y)
-			var at := V2Dungeon.center(c)
-			var to := at - gen.player_spawn
-			var ok := to.length() > 3.4
-			for dc in room.doorway_cells:
-				if absi(dc.x - x) + absi(dc.y - y) <= 1:
-					ok = false
-			for l in gen.loot_spawns:
-				if V2Dungeon.cell_of(l.pos) == c:
-					ok = false
-			if not ok:
-				continue
-			var score := minf(to.length(), 8.0) + to.normalized().dot(fwd) * 1.5
-			if score > best_score:
-				best_score = score
-				best = at
-	return best
+	return (gen.rooms[gen.spawn_room] as DungeonGen.Room).center()
 
 
-## Where the player appears in the training room: in front of the dummy, 6 m from it (less in a small room), on
-## the row or column of cell middles the dummy stands in: cover stands at the cells' corners, so that lane is
-## always open and the dummy is in plain view. Of the four ways, the one that leads most toward the room's middle.
+## Where the player appears in the training room: in front of the cage's door, 6 m from the dummy (less in a
+## small room: 1.3 m short of the wall), along a row or a column of the room. Of the four ways, the one with the
+## player's back to where the generator would have had them look from (the way out lies beyond the cage), unless
+## the room is too short that way. `keep_clear` round that spot and round the dummy opens the line between them.
 func _training_start(at: Vector3) -> Vector3:
 	var room: DungeonGen.Room = gen.rooms[gen.spawn_room]
-	var c := V2Dungeon.cell_of(at)
-	var inward := room.center() - at
-	inward.y = 0.0
+	var lo := Vector2(room.rect.position) * V2Dungeon.CELL
+	var hi := Vector2(room.rect.end) * V2Dungeon.CELL
+	var back := Vector3(sin(gen.player_yaw), 0, cos(gen.player_yaw))
 	var best := gen.player_spawn
 	var best_score := -1e9
 	for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-		var n := 0
-		while room.rect.has_point(c + d * (n + 1)):
-			n += 1
-		var reach := n * V2Dungeon.CELL + V2Dungeon.CELL / 2.0 - 1.3        # (to 1.3 m short of the wall)
+		var reach := (hi.x - at.x if d.x > 0 else (at.x - lo.x if d.x < 0 else (hi.y - at.z if d.y > 0 else at.z - lo.y))) - 1.3
 		if reach < 4.0:
 			continue
 		var dir := Vector3(d.x, 0, d.y)
-		var score := minf(6.0, reach) + (dir.dot(inward.normalized()) * 2.0 if inward.length() > 0.1 else 0.0)
+		var score := minf(6.0, reach) + dir.dot(back) * 2.0
 		if score > best_score:
 			best_score = score
 			best = at + dir * minf(6.0, reach)

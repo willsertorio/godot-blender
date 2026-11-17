@@ -524,10 +524,12 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   `TRAIN_HITS` [3, 6]. Before `build`: `dungeon.locked_room` = the spawn room (**every doorway of it gets a door,
   shut and locked**: `doors[i].locked`, `unlock()`; E there says "Locked · finish the training" and no prompt
   offers it), `dungeon.keep_clear` (nothing is stood round the dummy), the room's crate is made to hold a kit.
-  `_training_spot` = a cell's middle well away from the room's middle, off the doorways and the crate;
-  **the player appears in front of the dummy, facing it** (user; `_training_start`, `start_at` / `start_yaw`:
-  6 m from it, less in a small room, on the dummy's own row or column of cell middles: cover stands at the
-  cells' corners, so that lane is always open); `_training_build` = a dark plinth with two `floor_hazard` tiles on it, the spider on top and **the cage round
+  `_training_spot` = **the middle of the room** (user: "in the center of the training room, not in the corner";
+  it was a cell near a wall); **the player appears in front of the cage's door, facing the dummy** (user;
+  `_training_start`, `start_at` / `start_yaw`: 6 m from it, less in a small room, along a row or column, with
+  the way the generator would have had them look beyond the cage; `keep_clear` round both opens the line).
+  Not handled: a robot that follows the player back into this room walks its lanes of cell middles as in any
+  room, and in a room with an odd number of cells the cage stands on one; `_training_build` = a dark plinth with two `floor_hazard` tiles on it, the spider on top and **the cage round
   it** (user: "give the impression that the dummy robot is caged", from their reference picture, "use this as
   inspiration but make more spaced bars": `training_cage` of the set, 3.2 x 3.2 x 2.6 m, `set_cover.py`: white
   corner posts with grey shoes and lifting eyes, a base frame with hazard stripes, a framed door toward the
