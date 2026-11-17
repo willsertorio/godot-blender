@@ -82,6 +82,8 @@ var _perf_log := false             # -- --perf-log: F3's lines are printed every
 var _perf_t := 0.0
 var _perf_n := 0
 var _menu: Control
+var _click: Control                # "click to play": the mouse was never ours in this run (a browser)
+var _had_mouse := false
 var _top: CanvasLayer
 var _end: Control
 var _map: V2Map
@@ -222,7 +224,8 @@ func _ready() -> void:
 		else:
 			_bot.test()
 	else:
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		if not OS.has_feature("web"):                      # (a browser: taken on the key that started the run, or by "click to play")
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		_opening(training)
 		for a in args:                                     # (pictures of the opening: -- --title --open-capture=DIR)
 			if a.begins_with("--open-capture="):
@@ -855,6 +858,14 @@ func _pickups(delta: float) -> void:
 			node.queue_free()
 
 
+func _input(event: InputEvent) -> void:
+	if _click != null and _click.visible and ((event is InputEventMouseButton and event.pressed)
+			or (event is InputEventKey and event.pressed and not event.echo and not (event.keycode in [KEY_F3, KEY_F4, KEY_ESCAPE]))):
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED       # (inside the event: that is when a browser allows it)
+		if event is InputEventMouseButton:
+			get_viewport().set_input_as_handled()          # (the click that takes the mouse fires no round)
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_F3:
@@ -912,6 +923,22 @@ func _hud() -> void:
 	var buttons := V2Ui.row(col, 12)
 	V2Ui.button(buttons, "RESUME", func() -> void: Input.mouse_mode = Input.MOUSE_MODE_CAPTURED, UIPalette.CYAN, "chevron_right")
 	V2Ui.button(buttons, "STOP HERE", to_title)
+	# The mouse was never ours in this run (**user, of the browser build: "the game opens on the Esc card"**: a
+	# browser gives the pointer lock only in answer to a click or a key, and may refuse even then): not the
+	# pause card, which says the player left, but an invitation; any click or key takes the mouse.
+	_click = Control.new()
+	_click.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_click.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_click.visible = false
+	_top.add_child(_click)
+	V2Ui.full(_click, Color(0, 0, 0, 0.3))
+	var cc := V2Ui.panel(_click, UIPalette.hud_panel(true), [30, 20, 30, 22])
+	V2Ui.at(cc, 0.5, 0.5, 0.0, 0.0)
+	var ccol := V2Ui.column(cc, 6)
+	var line := V2Ui.text(ccol, "CLICK TO PLAY", "extrabold", 22, UIPalette.TEXT, 0.2)
+	line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var sub := V2Ui.text(ccol, "The browser hands over the mouse on a click", "regular", 13, UIPalette.LABEL)
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 
 func to_title() -> void:
@@ -921,6 +948,7 @@ func to_title() -> void:
 
 
 func again() -> void:
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED           # (on the button's click or Enter: see the title's `_start`)
 	V2World.cover(get_tree(), UIPalette.COMPLETE_BG, 0.0)  # (no frame of the engine's clear colour between the two runs)
 	get_tree().reload_current_scene()
 
@@ -928,7 +956,12 @@ func again() -> void:
 func _hud_update(delta: float) -> void:
 	hud.update(delta)
 	hud.visible = not _map.visible                         # (the map has the screen to itself)
-	_menu.visible = state == PLAYING and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE and _bot == null
+	# (on the desktop the mouse is ours from the first frame; in a browser `mouse_mode` says whether the pointer
+	# lock is really held)
+	var ours := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+	_had_mouse = _had_mouse or ours
+	_menu.visible = state == PLAYING and not ours and _had_mouse and _bot == null
+	_click.visible = state == PLAYING and not ours and not _had_mouse and _bot == null
 	if _map.visible:
 		_map.queue_redraw()
 	if _perf.visible:

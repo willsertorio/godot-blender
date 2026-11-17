@@ -114,6 +114,9 @@ func _start() -> void:
 	if _leaving:
 		return
 	_leaving = true
+	# (the mouse is taken here, on the key or the click itself: a browser gives the pointer lock only in answer
+	# to one, and the game would ask nine seconds too late)
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	V2Sfx.play("ui")
 	V2Music.stop(2.4)
 	var tw := V2World.cover(get_tree(), UIPalette.FACILITY_WHITE, 1.3)
