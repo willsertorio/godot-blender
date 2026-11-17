@@ -3,6 +3,10 @@ class_name V2Fx
 ## marks, smoke, and the point lights that go with the muzzle-flash meshes of the glbs.
 ## Everything is unshaded (the rooms' lights only reach their own render layer) and alpha-blended, never additive.
 
+## Flashes of light from shots, hits and bursts (point lights). Off in the browser build: every one of them is
+## another light over the room's large merged meshes, and combat in the browser stuttered (M1, Chrome).
+static var LIGHTS := not OS.has_feature("web")
+
 static var root: Node3D            # where spawned effects are parented (the lab)
 static var hold := 1.0             # > 1 keeps tracers and impact lights longer (screenshots)
 static var _cache: Dictionary = {}
@@ -304,6 +308,7 @@ static func impact(pos: Vector3, normal: Vector3, metal: bool = false) -> void:
 	if not metal:
 		scorch(pos, normal)
 	var l := OmniLight3D.new()
+	l.visible = LIGHTS
 	l.light_color = Color(1.0, 0.65, 0.3)
 	l.light_energy = 2.0
 	l.omni_range = 2.5
@@ -420,6 +425,7 @@ static func sparkle(pos: Vector3, amount: int = 10, db: float = 0.0) -> void:
 		g.global_position = pos
 		_later(0.05 * hold, g)
 	var l := OmniLight3D.new()
+	l.visible = LIGHTS
 	l.light_color = Color(0.45, 0.65, 1.0)
 	l.light_energy = 3.5
 	l.omni_range = 3.0
@@ -495,6 +501,7 @@ static func explosion(pos: Vector3) -> void:
 	for k in 3:
 		scorch(Vector3(pos.x + randf_range(-0.35, 0.35), 0.0, pos.z + randf_range(-0.35, 0.35)), Vector3.UP, randf_range(0.7, 1.1))
 	var l := OmniLight3D.new()
+	l.visible = LIGHTS
 	l.light_color = Color(1.0, 0.62, 0.28)
 	l.light_energy = 9.0
 	l.omni_range = 10.0
@@ -513,6 +520,7 @@ static func burst(pos: Vector3) -> void:
 	sparkle(pos, 22)
 	puff(pos, Vector3.UP, Color(0.42, 0.43, 0.46), 0.7, 6, 1.3, 0.4, 1.0)
 	var l := OmniLight3D.new()
+	l.visible = LIGHTS
 	l.light_color = Color(1.0, 0.6, 0.25)
 	l.light_energy = 5.0
 	l.omni_range = 6.0
@@ -562,7 +570,7 @@ static func poll(list: Array) -> Array:
 	var fired: Array = []
 	for f in list:
 		var on: bool = (f.node as Node3D).scale.x > 0.01 and (f.node as Node3D).is_visible_in_tree()
-		(f.light as OmniLight3D).visible = on
+		(f.light as OmniLight3D).visible = on and LIGHTS
 		if on and not f.on:
 			fired.append(f.node)
 		f.on = on
