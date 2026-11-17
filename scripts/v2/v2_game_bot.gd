@@ -1357,3 +1357,18 @@ func reactions(dir: String) -> void:
 		await _wait(0.8)
 	get_tree().quit()
 
+
+## The hit's blur at four strengths from one place (-- --game-capture=DIR --part=blur): Blur_0.0 (none), 1.5,
+## 3.0 (a hit), 4.5 (Signal lost). For comparing two versions of the shader.
+func blur(dir: String) -> void:
+	DirAccess.make_dir_recursive_absolute(dir)
+	player.invulnerable = true
+	for r in game.robots:
+		r.set_process(false)
+	await _wait(1.0)
+	for amount in [0.0, 1.5, 3.0, 4.5]:
+		game.hud.blur_hold = amount
+		await _wait(0.4)
+		await _shot(dir, "Blur_%.1f" % amount)
+	get_tree().quit()
+

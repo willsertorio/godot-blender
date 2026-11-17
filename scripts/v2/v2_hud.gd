@@ -22,6 +22,8 @@ const RELOADS := ["Reload", "ReloadTactical", "ReloadEmpty"]
 
 var game: Node                      # the V2 game (v2_game.gd)
 var blur: ColorRect                 # under the HUD, in the game's effects layer
+var _blur_h: ColorRect              # its first pass, and the copy of the screen between the two
+var _blur_copy: BackBufferCopy
 var vignette: ColorRect
 
 var _panels: Control                # what fades while aiming
@@ -65,6 +67,7 @@ var _heal_to := 0
 var _heal_t := 0.0
 var _hit_t := 0.0                   # 1 when hit, falls to 0 in 0.6 s: vignette and arc
 var _blur_t := 0.0                  # 1 -> 0 in 0.5 s
+var blur_hold := -1.0               # >= 0 (-- --blur-demo=N): the hit's blur held at that strength, for looking at it
 var _hit_angle := 0.0               # where the hit came from: clockwise from straight ahead
 var _last_flash := 0.0
 var _lined := false                 # the next round would strike a robot
@@ -75,7 +78,18 @@ func setup(game_node: Node, fx_layer: CanvasLayer) -> void:
 	game = game_node
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# the blur takes two passes (assets/ui/shaders/screen_blur.gdshader): across, a copy of the screen, then down.
+	# `blur` is the second: what the game and the end screen switch on and set `amount` and `tint` on; the first
+	# pass and the copy follow it (`_blur_sync`).
+	_blur_h = V2Ui.full(fx_layer, Color.WHITE, "screen_blur")
+	(_blur_h.material as ShaderMaterial).set_shader_parameter("dir", Vector2(1, 0))
+	_blur_h.visible = false
+	_blur_copy = BackBufferCopy.new()
+	_blur_copy.copy_mode = BackBufferCopy.COPY_MODE_VIEWPORT
+	_blur_copy.visible = false
+	fx_layer.add_child(_blur_copy)
 	blur = V2Ui.full(fx_layer, Color.WHITE, "screen_blur")
+	(blur.material as ShaderMaterial).set_shader_parameter("dir", Vector2(0, 1))
 	blur.visible = false
 	vignette = V2Ui.full(fx_layer, Color.WHITE, "damage_vignette")
 	vignette.visible = false
@@ -392,9 +406,10 @@ func update(delta: float) -> void:
 	_hit_t = maxf(_hit_t - delta / 0.6, 0.0)
 	_blur_t = maxf(_blur_t - delta / 0.5, 0.0)
 	if not game.ending:                                    # (the end screen takes the blur over)
-		blur.visible = _blur_t > 0.02
+		blur.visible = _blur_t > 0.02 or blur_hold >= 0.0
 		if blur.visible:
-			(blur.material as ShaderMaterial).set_shader_parameter("amount", 3.0 * _blur_t)
+			(blur.material as ShaderMaterial).set_shader_parameter("amount", blur_hold if blur_hold >= 0.0 else 3.0 * _blur_t)
+	_blur_sync()
 	vignette.visible = _hit_t > 0.01
 	if vignette.visible:
 		var vm := vignette.material as ShaderMaterial
@@ -421,6 +436,14 @@ func update(delta: float) -> void:
 	# --- the chip
 	_toast_t -= delta
 	_toast.modulate.a = clampf(_toast_t * 2.0, 0.0, 1.0) if playing else 0.0
+
+
+## The blur's first pass and the copy between the passes do what `blur` does.
+func _blur_sync() -> void:
+	_blur_h.visible = blur.visible
+	_blur_copy.visible = blur.visible
+	if blur.visible:
+		(_blur_h.material as ShaderMaterial).set_shader_parameter("amount", (blur.material as ShaderMaterial).get_shader_parameter("amount"))
 
 
 func _segments(hp: float) -> int:

@@ -898,6 +898,9 @@ func _hud() -> void:
 	hud.setup(self, _fx)
 	_perf = hud.perf
 	_perf_log = "--perf-log" in OS.get_cmdline_user_args()
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--blur-demo="):
+			hud.blur_hold = float(a.trim_prefix("--blur-demo="))
 	_perf.visible = _perf_log
 	var map_layer := CanvasLayer.new()
 	map_layer.layer = 5
