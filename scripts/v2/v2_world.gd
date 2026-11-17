@@ -49,6 +49,39 @@ static var open_from := UIPalette.COMPLETE_BG
 ## dungeon in that time. With the sheet at the root there is nothing to see of it.)
 static var veil: ColorRect
 
+## Where a frame's time goes, by system (F3): microseconds since the last report and how often. Every `_process`
+## of the game's own code is bracketed with `var t := Time.get_ticks_usec()` ... `V2World.took("name", t)`.
+static var prof: Dictionary = {}
+static var prof_n: Dictionary = {}
+
+
+static func took(system: String, since_usec: int) -> void:
+	prof[system] = int(prof.get(system, 0)) + Time.get_ticks_usec() - since_usec
+	prof_n[system] = int(prof_n.get(system, 0)) + 1
+
+
+## The report for F3: milliseconds a frame for each system over the `frames` since the last one, the biggest first,
+## then what the engine itself reports (its whole process step, its physics step), and what is left of the process
+## step when the game's own code is taken out (the engine's animation, particles, tweens, culling and draw list).
+static func prof_text(frames: int) -> String:
+	var parts: Array = []
+	var own := 0.0
+	var names := prof.keys()
+	names.sort_custom(func(a: String, b: String) -> bool: return int(prof[a]) > int(prof[b]))
+	for k in names:
+		var ms := int(prof[k]) / 1000.0 / maxi(frames, 1)
+		if not String(k).contains(":"):                    # ("robots: clips" is part of "robots")
+			own += ms
+		if ms >= 0.05:
+			parts.append("%s %.1f" % [k, ms])
+	var process := 1000.0 * Performance.get_monitor(Performance.TIME_PROCESS)
+	var physics := 1000.0 * Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)
+	prof.clear()
+	prof_n.clear()
+	return "ms a frame: %s\nengine: process step %.1f, of it not the game's code %.1f   physics step %.1f   nodes %d" % [
+		"   ".join(parts), process, maxf(process - own, 0.0), physics, int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))]
+
+
 ## Physics layer of what stops the player and lets rounds and lines of sight through (the training cage's bars).
 const CAGE := 4
 const SHOTS := 0xFFFFFFFF ^ CAGE          # the collision mask of every ray that is a round or a look

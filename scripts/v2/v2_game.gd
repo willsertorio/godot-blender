@@ -78,6 +78,7 @@ var train_hits := 0
 var dummy: V2Robot
 var _train_kits := 0
 var _perf: Label
+var _perf_log := false             # -- --perf-log: F3's lines are printed every second (the browser's console)
 var _perf_t := 0.0
 var _perf_n := 0
 var _menu: Control
@@ -780,7 +781,10 @@ func _process(delta: float) -> void:
 				exit_found = true
 		else:
 			walked[a.id] = true
+	var t := Time.get_ticks_usec()
 	dungeon.update(at, V2Player.GUN_LAYER)
+	V2World.took("dungeon", t)
+	t = Time.get_ticks_usec()
 	if training and state == PLAYING:
 		_training_tick()
 	if state == PLAYING:
@@ -796,7 +800,10 @@ func _process(delta: float) -> void:
 	if state == LOST:
 		_death(delta)
 	_pickups(delta)
+	V2World.took("game", t)
+	t = Time.get_ticks_usec()
 	_hud_update(delta)
+	V2World.took("hud", t)
 
 
 ## Twice a second: which robots are awake and drawn, and which go after the player.
@@ -879,6 +886,8 @@ func _hud() -> void:
 	_ui.add_child(hud)
 	hud.setup(self, _fx)
 	_perf = hud.perf
+	_perf_log = "--perf-log" in OS.get_cmdline_user_args()
+	_perf.visible = _perf_log
 	var map_layer := CanvasLayer.new()
 	map_layer.layer = 5
 	add_child(map_layer)
@@ -933,7 +942,12 @@ func _hud_update(delta: float) -> void:
 				_perf_n / _perf_t, 1000.0 * _perf_t / _perf_n, _render_text(),
 				Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1000.0,
 				Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0,
-				"\ndrawing: cpu %.1f ms, gpu %.1f ms   game code %.1f ms" % [cpu, gpu, 1000.0 * Performance.get_monitor(Performance.TIME_PROCESS)] if gpu > 0.0 or cpu > 0.0 else ""]
+				"\ndrawing: cpu %.1f ms, gpu %.1f ms" % [cpu, gpu] if gpu > 0.0 or cpu > 0.0 else ""]
+			# where the rest goes, by system (**user, of the browser build: "game code ~33 ms": which code?**)
+			_perf.text += "\n" + V2World.prof_text(_perf_n) + "   robots awake %d of %d" % [
+				robots.filter(func(r: V2Robot) -> bool: return r.is_processing()).size(), robots.size()]
+			if _perf_log:
+				print("[perf] ", _perf.text.replace("\n", " | "))
 			_perf_t = 0.0
 			_perf_n = 0
 

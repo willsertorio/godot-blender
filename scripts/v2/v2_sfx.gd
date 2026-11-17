@@ -167,6 +167,12 @@ static func _pitch(key: String, pitch: float) -> float:
 
 ## Play `key` once: at `at` (world) if given, else in the listener's head.
 static func play(key: String, at: Vector3 = Vector3.INF, db: float = 0.0, pitch: float = 1.0) -> void:
+	var t := Time.get_ticks_usec()
+	_play(key, at, db, pitch)
+	V2World.took("sound", t)
+
+
+static func _play(key: String, at: Vector3 = Vector3.INF, db: float = 0.0, pitch: float = 1.0) -> void:
 	heard[key] = true
 	log.append(key)
 	if log.size() > 400:

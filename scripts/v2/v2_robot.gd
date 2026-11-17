@@ -1360,7 +1360,9 @@ func _springs(delta: float) -> void:
 			_wreck_body.global_position += Vector3(_shove.x, 0.0, _shove.z) * delta
 		_shove *= exp(-delta * (5.0 if kind == "drone" else 9.0))
 	_flinch = maxf(_flinch - delta * 6.0, 0.0)         # and a short shake
+	var t := Time.get_ticks_usec()
 	_pose()
+	V2World.took("robots: pose", t)
 
 
 func _pose() -> void:
@@ -1556,8 +1558,16 @@ func _sounds(delta: float) -> void:
 
 
 func _process(delta: float) -> void:
+	var t := Time.get_ticks_usec()
+	_tick(delta)
+	V2World.took("robots", t)
+
+
+func _tick(delta: float) -> void:
+	var t := Time.get_ticks_usec()
 	if ap.is_playing():
 		ap.advance(delta)
+	V2World.took("robots: clips", t)
 	_feet_read()
 	var fired := V2Fx.fired(ap, _events, _ev, _flashes)
 	if state == PREVIEW:

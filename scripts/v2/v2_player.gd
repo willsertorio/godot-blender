@@ -566,6 +566,12 @@ func _input(event: InputEvent) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	var t0 := Time.get_ticks_usec()
+	_step(delta)
+	V2World.took("player", t0)
+
+
+func _step(delta: float) -> void:
 	var dir := Vector3.ZERO
 	if Input.is_key_pressed(KEY_W):
 		dir.z -= 1.0
@@ -611,6 +617,12 @@ func _physics_process(delta: float) -> void:
 
 
 func _process(delta: float) -> void:
+	var t0 := Time.get_ticks_usec()
+	_frame(delta)
+	V2World.took("player", t0)
+
+
+func _frame(delta: float) -> void:
 	_clock += delta
 	_kick = move_toward(_kick, 0.0, delta * 0.18)
 	_since_hurt += delta

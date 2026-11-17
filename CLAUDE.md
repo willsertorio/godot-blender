@@ -643,6 +643,29 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
 - Static state survives a scene change (`V2Fx._marks`, `V2Sfx.root`, the game's `missions`): every scene's `_ready`
   sets the roots and calls `V2Fx.reset()`.
 
+## V2 in the browser (the user tested it: Chrome, M1, in an iframe, 30 to 40 fps)
+
+- Build: `tools/web_build.sh` = the "Web (site)" preset of `export_presets.cfg` (V2 only, pck 77 MB) ->
+  `build/site/play` (the site of the branch `claude/epic-dijkstra-kge96s` embeds it). Run it here:
+  `node tools/web_run.js OUT --args="--play --seed=33 --no-training --perf-log" --steps="wait:70,shot:game"`
+  (headless Chromium on SwiftShader: a frame of the game takes seconds to draw, so a screenshot needs minutes,
+  but the page's own thread is measured truly). `--probe=10` counts and times every WebGL call and each frame's
+  callback. The game's arguments go into the page's `GODOT_CONFIG.args` after a `--`.
+- **What made it slow (measured with the probe, it was not the game's code):** at the end of every frame
+  Emscripten's shell copies its offscreen framebuffer to the canvas and first asks WebGL
+  `getParameter(SCISSOR_TEST)`. The browser answers that by waiting for the GPU process to work through the whole
+  frame, so the page's one thread stood still: here 2,600 ms of a 2,610 ms frame callback, on the user's M1 the
+  "33 ms of game code" that F3 showed (that figure was the engine's process step, which holds the draw and the
+  swap). `tools/web/head_include.html` (the preset's `html/head_include`: after editing it, copy it into
+  `export_presets.cfg` again, escaped) answers the question on the page: it changes only through `enable` /
+  `disable`. After: 13 ms a frame callback here, 4 ms of it in 11,800 WebGL calls (607 draws), 3 ms scripts.
+- F3 (and `-- --perf-log`, which prints it every second): `V2World.took(system, since)` brackets the game's own
+  code: robots (and of it clips, pose), player, hud, game, dungeon, fx (making effects), sound, map; then the
+  engine's process step, what of it is not the game's code, the physics step, nodes, robots awake.
+- From the site branch: on web the sounds play on Master (a bus added at runtime is silent in Godot 4.3's web
+  sample playback: no room reverb, no limiter), no point lights on shots / hits / bursts (`V2Fx.LIGHTS`), the 3D
+  picture starts at 900 rows with 2x MSAA.
+
 ## The environment set (approved by the user; it is what the game is built from)
 
 **User, after the themed kit: "the elements in the map are poorly designed", go back to Blender, more realistic,

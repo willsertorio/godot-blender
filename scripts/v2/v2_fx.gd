@@ -24,6 +24,84 @@ static var layer_at: Callable       # position -> the render layer of the room t
 
 
 ## A new scene: the marks of the last one are gone with it.
+# ---------------------------------------------------------------- what is called from outside
+# (each is timed for F3 as "fx": the making of the effect's nodes, not their drawing; one that calls another
+# counts once)
+static var _depth := 0
+
+
+static func tracer(from: Vector3, to: Vector3, color: Color) -> void:
+	var t := Time.get_ticks_usec()
+	_depth += 1
+	_tracer(from, to, color)
+	_depth -= 1
+	if _depth == 0:
+		V2World.took("fx", t)
+
+
+static func scorch(pos: Vector3, normal: Vector3, big: float = 0.0) -> void:
+	var t := Time.get_ticks_usec()
+	_depth += 1
+	_scorch(pos, normal, big)
+	_depth -= 1
+	if _depth == 0:
+		V2World.took("fx", t)
+
+
+static func impact(pos: Vector3, normal: Vector3, metal: bool = false) -> void:
+	var t := Time.get_ticks_usec()
+	_depth += 1
+	_impact(pos, normal, metal)
+	_depth -= 1
+	if _depth == 0:
+		V2World.took("fx", t)
+
+
+static func sparks(pos: Vector3, dir: Vector3 = Vector3.UP, amount: int = 16) -> void:
+	var t := Time.get_ticks_usec()
+	_depth += 1
+	_sparks(pos, dir, amount)
+	_depth -= 1
+	if _depth == 0:
+		V2World.took("fx", t)
+
+
+static func sparkle(pos: Vector3, amount: int = 10, db: float = 0.0) -> void:
+	var t := Time.get_ticks_usec()
+	_depth += 1
+	_sparkle(pos, amount, db)
+	_depth -= 1
+	if _depth == 0:
+		V2World.took("fx", t)
+
+
+static func arc(a: Vector3, b: Vector3) -> void:
+	var t := Time.get_ticks_usec()
+	_depth += 1
+	_arc(a, b)
+	_depth -= 1
+	if _depth == 0:
+		V2World.took("fx", t)
+
+
+static func explosion(pos: Vector3) -> void:
+	var t := Time.get_ticks_usec()
+	_depth += 1
+	_explosion(pos)
+	_depth -= 1
+	if _depth == 0:
+		V2World.took("fx", t)
+
+
+static func burst(pos: Vector3) -> void:
+	var t := Time.get_ticks_usec()
+	_depth += 1
+	_burst(pos)
+	_depth -= 1
+	if _depth == 0:
+		V2World.took("fx", t)
+
+
 static func reset() -> void:
 	_marks.clear()
 	_mark_i = 0
@@ -197,7 +275,7 @@ static func set_smoke(s: CPUParticles3D, on: bool) -> void:
 
 
 ## A bright streak along a bullet's path, gone after two frames.
-static func tracer(from: Vector3, to: Vector3, color: Color) -> void:
+static func _tracer(from: Vector3, to: Vector3, color: Color) -> void:
 	var d := to - from
 	var ln := d.length()
 	if ln < 0.4 or root == null:
@@ -215,7 +293,7 @@ static func tracer(from: Vector3, to: Vector3, color: Color) -> void:
 
 
 ## A dark mark where a round hit a wall or the floor (a ring of them: the oldest is reused).
-static func scorch(pos: Vector3, normal: Vector3, big: float = 0.0) -> void:
+static func _scorch(pos: Vector3, normal: Vector3, big: float = 0.0) -> void:
 	var mi: MeshInstance3D
 	if _marks.size() < MAX_MARKS:
 		mi = MeshInstance3D.new()
@@ -255,7 +333,7 @@ static func scorch(pos: Vector3, normal: Vector3, big: float = 0.0) -> void:
 
 
 ## Where a round lands: a shower of sparks, chips, a puff of dust, a short flash of light; a scorch mark on the room.
-static func impact(pos: Vector3, normal: Vector3, metal: bool = false) -> void:
+static func _impact(pos: Vector3, normal: Vector3, metal: bool = false) -> void:
 	if root == null:
 		return
 	V2Sfx.play("impact_metal" if metal else "impact_concrete", pos)
@@ -318,7 +396,7 @@ static func impact(pos: Vector3, normal: Vector3, metal: bool = false) -> void:
 
 
 ## A shower of sparks only (a damaged machine shedding them).
-static func sparks(pos: Vector3, dir: Vector3 = Vector3.UP, amount: int = 16) -> void:
+static func _sparks(pos: Vector3, dir: Vector3 = Vector3.UP, amount: int = 16) -> void:
 	if root == null:
 		return
 	V2Sfx.play("zap", pos)
@@ -348,7 +426,7 @@ static func sparks(pos: Vector3, dir: Vector3 = Vector3.UP, amount: int = 16) ->
 
 ## A short circuit: a crackle of blue-white sparks thrown every way, a jagged arc or two, a flick of cold light.
 ## What a wreck does at random moments, and a wreck that is shot.
-static func sparkle(pos: Vector3, amount: int = 10, db: float = 0.0) -> void:
+static func _sparkle(pos: Vector3, amount: int = 10, db: float = 0.0) -> void:
 	if root == null:
 		return
 	V2Sfx.play("zap", pos, db)
@@ -435,7 +513,7 @@ static func sparkle(pos: Vector3, amount: int = 10, db: float = 0.0) -> void:
 
 
 ## A jagged thread of light from `a` to `b`, gone at once: the arc of a short circuit.
-static func arc(a: Vector3, b: Vector3) -> void:
+static func _arc(a: Vector3, b: Vector3) -> void:
 	if root == null:
 		return
 	var im := ImmediateMesh.new()
@@ -464,7 +542,7 @@ static func arc(a: Vector3, b: Vector3) -> void:
 
 ## It blows up: a fireball, a grey cloud that soon thins, sparks and debris in every direction, a hard flash, a burn
 ## mark on the floor under it.
-static func explosion(pos: Vector3) -> void:
+static func _explosion(pos: Vector3) -> void:
 	if root == null:
 		return
 	V2Sfx.play("explosion", pos)
@@ -511,7 +589,7 @@ static func explosion(pos: Vector3) -> void:
 
 
 ## A robot is destroyed: sparks in every direction, a short circuit, a puff of grey smoke, a flash of light.
-static func burst(pos: Vector3) -> void:
+static func _burst(pos: Vector3) -> void:
 	if root == null:
 		return
 	V2Sfx.play("robot_break", pos)
