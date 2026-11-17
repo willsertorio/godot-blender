@@ -556,6 +556,14 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   twitchy. Struck again while a reaction lasts (the machine gun), it does not start over: deeper, held longer.
   Wounds stay: it heaves as it breathes, lists a little, smokes from the third, shorts now and then from the
   fourth. Pictures of all five: `-- --training --game-capture=DIR --part=reactions`.
+  **Feet planted (user, with a screenshot: "the spider is kind of 'floating' when shot. make it more grounded")**:
+  a push, a tilt, a swinging joint and the reactions all move the root or the body, and the legs (children of the
+  body: `Spider_Hip/Thigh/Shin/Foot0..3`) went along as one rigid piece, feet in the air. `V2Robot._feet_read`
+  (right after the clip has posed it: where each foot is in the root's frame) and `_feet_plant` (at the end of
+  `_pose`): each leg is solved again, the hip turned about the upright, thigh and shin bent in the leg's plane
+  with the knee on the side the clip has it, until the foot is where the clip alone would have it. **For every
+  live spider, not only the dummy.** The training test measures it: 0.0 mm off through four reactions, 39 mm in
+  the buckle, where the legs fold as far as they go.
   **The last round of the rifle step destroys it** (user;
   `V2Robot.finish_off`: the usual burst, Death clip and smoking wreck, solid, on its pad: `floor_y`). A hit counts only **aimed** (`player._aimed` > 0.6) and
   with the step's gun; otherwise a chip says why. The kit step ends when the player holds a kit, then the doors

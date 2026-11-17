@@ -675,6 +675,36 @@ func training_test() -> void:
 		player.act("Fire")
 		await _wait(0.6)
 	ok = _check("training: three aimed pistol hits pass the first step", game.train_step == 1, "step %d, hits %d" % [game.train_step, game.train_hits]) and ok
+	# its feet stay where its clip has them while its body is thrown about (every reaction; a foot off that place
+	# is a foot in the air or dragged)
+	await _until(func() -> bool: return target._react == "", 8.0)
+	await _wait(0.6)
+	var worst := 0.0
+	var before := 0.0
+	var folded := 0.0
+	var body_moved := 0.0
+	for name in V2Robot.REACTIONS:
+		target.force_react = name
+		target.hit(1.0, -to_spawn.normalized(), target.hit_point())
+		target._wounds -= 1
+		var tt := 0.0
+		while tt < 2.0:
+			tt += await _frame()
+			var rest: Transform3D = target.global_transform * Transform3D(target._base, target._seat)
+			for i in target._legs.size():
+				if i < target._foot_rel.size():
+					worst = maxf(worst, ((target._legs[i][3] as Node3D).global_position - rest * (target._foot_rel[i] as Vector3)).length())
+			body_moved = maxf(body_moved, (target._root.global_position - rest.origin).length())
+		if name == "buckle":                               # (its legs fold as far as they go: the last centimetres are out of reach)
+			folded = worst
+			worst = before
+		before = worst
+		await _until(func() -> bool: return target._react == "", 8.0)
+		await _wait(0.6)
+	target.force_react = ""
+	ok = _check("training: the dummy reels with its feet planted", worst < 0.005 and folded < 0.05 and body_moved > 0.04 and target._legs.size() == 4,
+		"through all five reactions its body was up to %.0f mm off its place, a foot at most %.1f mm off where its clip has it (%.0f mm as its legs fold in the buckle)" % [
+			body_moved * 1000.0, worst * 1000.0, folded * 1000.0]) and ok
 	player.bot_aim = false
 	await _until(func() -> bool: return player.busy == "", 3.0)
 	player.switch_weapon()

@@ -169,6 +169,9 @@ var _breath := 0.0
 ## scene (the game: the training cage), emptied by every scene's `_ready`.
 static var no_go: Array = []
 var _via := Vector3.INF           # the corner of such a square it is going round by
+var _legs: Array = []             # spider: [hip, thigh, shin, foot] of each leg (`_feet_plant`)
+var _foot_rel: Array = []         # where the clip has each foot this frame, in the root's frame
+var _planted: Dictionary = {}     # leg joint -> [as the clip had it, as the planting left it]
 var _seat := Vector3.ZERO         # where the Root joint sits on this node
 var _base := Basis.IDENTITY       # spider, drone: the Root joint's own attitude on this node
 var _muzzles: Array[Node3D] = []  # the flash nodes: -Z of each is its barrel
@@ -227,6 +230,7 @@ func setup(robot: String) -> void:
 	_label.global_position = _hit_joint.global_position + Vector3(0, 0.75, 0)
 	_smoke = V2Fx.smoke_column(_hit_joint, Vector3.ZERO, 0.6 if kind == "drone" else 0.8)
 	_target = position
+	_legs_find()
 	_measure_wreck()
 	_play("Idle", 1.0, true)
 
@@ -1378,6 +1382,108 @@ func _pose() -> void:
 			var a: Dictionary = _aims[i]
 			var r := Basis(a.axis as Vector3, _ayaw if i == 0 else _apitch)
 			(a.node as Node3D).transform = Transform3D(r, (a.pivot as Vector3) - r * (a.pivot as Vector3))
+		_feet_plant()
+
+
+# ---------------------------------------------------------------- feet on the floor
+## The spider's four legs: [hip, thigh, shin, foot] each (the hip turns about the upright, thigh and shin bend in
+## the leg's own plane).
+func _legs_find() -> void:
+	_legs = []
+	if kind != "spider":
+		return
+	for i in 4:
+		var leg: Array = []
+		for part in ["Hip", "Thigh", "Shin", "Foot"]:
+			var n := _root.find_child("Spider_%s%d" % [part, i], true, false) as Node3D
+			if n == null:
+				_legs = []
+				return
+			leg.append(n)
+		_legs.append(leg)
+
+
+## A node's place in the root's frame.
+func _to_root(n: Node3D) -> Transform3D:
+	var t := Transform3D.IDENTITY
+	var m: Node = n
+	while m != null and m != _root:
+		t = (m as Node3D).transform * t
+		m = m.get_parent()
+	return t
+
+
+## Right after the clip has posed the robot: where it has each foot (the root's frame). A leg joint that still
+## holds what `_feet_plant` gave it last frame (the clip did not write it again) is put back first, and a joint
+## that is swinging from a hit is read where the clip had it.
+func _feet_read() -> void:
+	_foot_rel.clear()
+	if _legs.is_empty() or state == DEAD:
+		_planted.clear()
+		return
+	for j in _planted:
+		if (j as Node3D).transform == _planted[j][1]:
+			(j as Node3D).transform = _planted[j][0]
+	_planted.clear()
+	for leg in _legs:
+		var t := Transform3D.IDENTITY
+		var m: Node = leg[3]
+		while m != null and m != _root:
+			var n := m as Node3D
+			t = ((_flop[n].base as Transform3D) if _flop.has(n) and n.transform == _flop[n].mine else n.transform) * t
+			m = m.get_parent()
+		_foot_rel.append(t.origin)
+
+
+## **Its feet stay where the clip puts them, whatever is done to its body** (user, of the training dummy: "the
+## spider is kind of 'floating' when shot. make it more grounded"): a hit's push and tilt, a swinging joint and the
+## dummy's reactions all move the root or the body, and the legs went with them as one rigid piece, feet in the
+## air. Here each leg is solved again: the hip turned about the upright, thigh and shin bent in the leg's plane,
+## the knee kept on the side the clip has it, until the foot is back where the clip alone would have it.
+func _feet_plant() -> void:
+	if _foot_rel.size() != _legs.size() or state == DEAD or _spin > 0.0:
+		return
+	var rest := Transform3D(_base, _seat)                  # the root as the clip alone leaves it
+	var now := _root.transform
+	if now.is_equal_approx(rest) and _flop.is_empty():
+		return
+	var back := now.affine_inverse() * rest
+	for i in _legs.size():
+		var hip: Node3D = _legs[i][0]
+		var thigh: Node3D = _legs[i][1]
+		var shin: Node3D = _legs[i][2]
+		var foot: Node3D = _legs[i][3]
+		for j in [hip, thigh, shin]:
+			_planted[j] = [(j as Node3D).transform, (j as Node3D).transform]
+		# the goal and the foot as it is, in the frame the hip hangs in
+		var g: Vector3 = _to_root(hip.get_parent() as Node3D).affine_inverse() * (back * (_foot_rel[i] as Vector3))
+		var f: Vector3 = hip.transform * (thigh.transform * (shin.transform * foot.position))
+		var o := hip.position
+		var yaw := atan2(-(g.z - o.z), g.x - o.x) - atan2(-(f.z - o.z), f.x - o.x)
+		hip.transform = Transform3D(Basis(Vector3.UP, wrapf(yaw, -PI, PI)) * hip.basis, o)
+		# in the hip's own frame the leg lies in the x, y plane
+		var gh: Vector3 = hip.transform.affine_inverse() * g
+		var kh: Vector3 = thigh.transform * shin.position
+		var fh: Vector3 = thigh.transform * (shin.transform * foot.position)
+		var t2 := Vector2(thigh.position.x, thigh.position.y)
+		var k2 := Vector2(kh.x, kh.y)
+		var f2 := Vector2(fh.x, fh.y)
+		var d := Vector2(gh.x, gh.y) - t2
+		var l1 := (k2 - t2).length()
+		var l2 := (f2 - k2).length()
+		if l1 < 0.01 or l2 < 0.01 or d.length() < 0.01:
+			continue
+		var reach := clampf(d.length(), absf(l1 - l2) + 0.02, l1 + l2 - 0.01)
+		var side := signf((k2 - t2).cross(f2 - t2))
+		var bend := acos(clampf((l1 * l1 + reach * reach - l2 * l2) / (2.0 * l1 * reach), -1.0, 1.0))
+		var up := d.angle() - (side if side != 0.0 else -1.0) * bend
+		var d1 := wrapf(up - (k2 - t2).angle(), -PI, PI)
+		var knee := t2 + Vector2.from_angle(up) * l1
+		var d2 := wrapf(((t2 + d.normalized() * reach) - knee).angle() - (f2 - k2).angle() - d1, -PI, PI)
+		thigh.transform = Transform3D(Basis(Vector3.BACK, d1) * thigh.basis, thigh.position)
+		shin.transform = Transform3D(Basis((thigh.basis.inverse() * Vector3.BACK).normalized(), d2) * shin.basis, shin.position)
+		for j in [hip, thigh, shin]:
+			_planted[j][1] = (j as Node3D).transform
 
 
 # ---------------------------------------------------------------- every frame
@@ -1452,6 +1558,7 @@ func _sounds(delta: float) -> void:
 func _process(delta: float) -> void:
 	if ap.is_playing():
 		ap.advance(delta)
+	_feet_read()
 	var fired := V2Fx.fired(ap, _events, _ev, _flashes)
 	if state == PREVIEW:
 		_label.text = "%s  ·  %s" % [kind.to_upper(), clip]
