@@ -719,8 +719,60 @@ func training_test() -> void:
 	ok = _check("training: E opens the door and the run starts; the practice rounds are given back; no robot heard the practice",
 		d0.open and door_prompt == "door" and not game.training and game.trained and player.mag.rifle == V2Player.MAG.rifle and heard == 0,
 		"door open %s, training %s, magazine %d, robots alerted %d" % [str(d0.open), str(game.training), player.mag.rifle, heard]) and ok
+	ok = _cage_check() and ok
 	print("[game] RESULT: %s" % ("PASS" if ok else "FAIL"))
 	get_tree().quit()
+
+
+## A spider and a drone sent from one side of the training cage to the other, four ways each (along the rows and
+## the columns, both senses): they get there, and never come nearer the cage than their room to pass. (Stepped
+## here by hand, 30 times a second of its own clock: no waiting.) And no path leads through a cell the cage is on.
+func _cage_check() -> bool:
+	if V2Robot.no_go.is_empty():
+		return _check("robots go round the cage", false, "no cage")
+	var c: Vector3 = V2Robot.no_go[0][0]
+	var h: float = V2Robot.no_go[0][1]
+	var area: int = dungeon.area_of[gen.rooms[gen.spawn_room].rect.position]
+	var arena: Rect2 = dungeon.arena(area, 1.2)
+	var nearest := 1e9
+	var arrived := 0
+	var longest := 0.0
+	teleport(Vector3(arena.position.x, 0, arena.position.y))           # (out of the robots' way)
+	for kind in ["spider", "drone"]:
+		for way in [Vector3(1, 0, 0), Vector3(-1, 0, 0), Vector3(0, 0, 1), Vector3(0, 0, -1)]:
+			var reach := minf(7.0, (arena.size.x if way.x != 0.0 else arena.size.y) / 2.0 - 0.2)
+			var side := Vector3(way.z, 0, way.x) * 0.4
+			var r := V2Robot.new()
+			game.add_child(r)
+			r.setup(kind)
+			r.player = player
+			r.arena = arena
+			r.grid = 4.0
+			r.place(c - way * reach + side, 0.0)
+			r.set_ai(false)
+			r.set_process(false)
+			r._target = c + way * reach + side
+			var t := 0.0
+			var there := false
+			while t < 60.0 and not there:
+				there = r._move(1.0 / 30.0, true, false)
+				t += 1.0 / 30.0
+				nearest = minf(nearest, maxf(absf(r.position.x - c.x), absf(r.position.z - c.z)))
+			arrived += 1 if there else 0
+			if not there and OS.has_environment("V2_CAGE"):
+				printerr("[cage] %s way %s: from %s to %s, ended at %s after %.0f s, heading %.0f, clip %s, state %d, arena %s, cage %s" % [kind, str(way), str(c - way * reach + side), str(r._target), str(r.position.snapped(Vector3(0.01, 0.01, 0.01))), t, rad_to_deg(r.rotation.y), r.clip, r.state, str(arena), str(c)])
+			longest = maxf(longest, t)
+			r.queue_free()
+	var through := 0
+	for cell in dungeon.blocked:
+		var a: Vector2i = cell + Vector2i(-1, 0)
+		var b: Vector2i = cell + Vector2i(1, 0)
+		if dungeon.path(a, b).has(cell):
+			through += 1
+	return _check("robots go round the cage: a spider and a drone, four ways each, get past it and stay out of it; no path through its cell",
+		arrived == 8 and nearest >= h - 0.05 and through == 0,
+		"%d of 8 arrived, the slowest in %.0f s; never nearer than %.2f m to its middle (the cage ends at 1.61, kept clear to %.2f); %d cells shut to paths, %d crossed" % [
+			arrived, longest, nearest, h, dungeon.blocked.size(), through])
 
 
 # ---------------------------------------------------------------------------------------------- pictures
@@ -1249,5 +1301,29 @@ func drones(dir: String) -> void:
 					str(r.global_position.snapped(Vector3(0.1, 0.1, 0.1))), r.hit_point().y, str(r.is_visible_in_tree()), r.global_position.distance_to(player.global_position), r.shots_fired])
 				await _shot(dir, "Drone_0_later_%d" % k)
 		n += 1
+	get_tree().quit()
+
+
+## The training dummy's five reactions to a hit (-- --training --game-capture=DIR --part=reactions): each started
+## by a hit from the front, then five pictures of it, about 0.7 s of the game apart, from 4.5 m in front of the cage.
+func reactions(dir: String) -> void:
+	DirAccess.make_dir_recursive_absolute(dir)
+	await _wait(1.0)
+	var target: V2Robot = game.dummy
+	var feet := target.global_position
+	feet.y = 0.0
+	var to_start: Vector3 = (game.start_at - feet).normalized()
+	_look_at(feet + to_start * 4.5, feet + Vector3(0, 1.0, 0))
+	player.overlay.visible = false
+	game.hud.visible = false
+	await _wait(0.5)
+	for name in V2Robot.REACTIONS:
+		target.force_react = name
+		target.hit(1.0, -to_start, target.hit_point() + Vector3(0.1, 0, 0))
+		for k in 5:
+			await _wait(0.2 if k == 0 else 0.7)
+			await _shot(dir, "React_%s_%d" % [name, k])
+		await _until(func() -> bool: return target._react == "", 6.0)
+		await _wait(0.8)
 	get_tree().quit()
 

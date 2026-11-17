@@ -149,9 +149,26 @@ var _head: Node3D
 var _aim_node: Node3D
 var _head_pivot := Vector3.ZERO
 var _flinch := 0.0                # 1 when hit, dies away: a short shake
-var _pain := 0.0                  # the training dummy: 1 when struck, gone after 1.5 s
 var _wounds := 0                  # the training dummy: how often it was struck
 var _twitch := 0.0
+const REACTIONS := ["cower", "stagger", "buckle", "rear", "turn"]
+var _react := ""                  # the training dummy: the reaction it is in ("" = calm), `_dummy_tick`
+var force_react := ""             # (for the pictures: the reaction the next hit starts)
+var _last_react := ""
+var _rt := 0.0                    # seconds into it
+var _rhold := 0.0                 # until when it holds it (a new hit pushes this on)
+var _rdur := 0.0                  # when it is over
+var _rside := 1.0                 # the side it goes to
+var _ramp := 1.0                  # how deep (grows when struck again while it lasts)
+var _rhome := INF                 # its heading at rest (one reaction turns the whole of it away)
+var _rx_tilt := Vector3.ZERO      # what the reaction adds to the body's tilt (axis * angle, its own frame) and place
+var _rx_pos := Vector3.ZERO
+var _list := 0.0                  # how far it lists to a side for good
+var _breath := 0.0
+## Squares that spiders and drones go round: [middle (world), half its side with room for the robot]. Set by the
+## scene (the game: the training cage), emptied by every scene's `_ready`.
+static var no_go: Array = []
+var _via := Vector3.INF           # the corner of such a square it is going round by
 var _seat := Vector3.ZERO         # where the Root joint sits on this node
 var _base := Basis.IDENTITY       # spider, drone: the Root joint's own attitude on this node
 var _muzzles: Array[Node3D] = []  # the flash nodes: -Z of each is its barrel
@@ -445,50 +462,105 @@ func flash_on() -> bool:
 	return false
 
 
-## The training dummy between and after hits. Unhurt and calm, its head follows the player round the room (it is
-## alive, and it watches). Struck, for a second and a half: its legs scramble on the spot (the Run clip), it
-## trembles, single joints jerk, its head thrashes; then it steadies and looks at whoever shot it. Every wound
-## stays: a shiver that grows, smoke from the third on, a short circuit now and then.
+## The training dummy between and after hits (**user: "have different animations from it getting shot", "make
+## the animation longer and less twitchy"**). Calm, its head follows the player round the room. Struck, it plays
+## one of five reactions, never the same twice running, each about three and a half seconds, slow and heavy:
+##   cower    it leans back and away, steps uneasily (Walk, slow), turns its head aside
+##   stagger  it is thrown to one side and sways there and back, stepping to keep its feet (Turn, slow)
+##   buckle   its legs give (the start of the Death clip), it sinks, then gathers itself and rises
+##   rear     its front comes up, it holds, comes down, and shakes its head slowly
+##   turn     it steps round, away from the shot, stands turned away looking back, and steps round again
+## Every pose is a target that the body follows smoothly (`_rx_tilt`, `_rx_pos`, the head at a limited rate): no
+## impulses, nothing random from frame to frame. Struck again while one lasts, it does not start over: it reels
+## deeper and holds longer. Every wound stays: it heaves as it breathes, lists a little, smokes from the third.
 func _dummy_tick(delta: float) -> void:
-	_pain = maxf(_pain - delta / 1.5, 0.0)
-	_flinch = maxf(_flinch, maxf(_pain * 0.9, minf(_wounds * 0.035, 0.28)))
-	if _pain > 0.0:
+	_left = 99.0                                           # (the preview's own clock does not restart clips here)
+	var want_tilt := Vector3(0.0, 0.0, _list)
+	var want_pos := Vector3.ZERO
+	var head := Vector2.INF                                # yaw, pitch it holds its head at; INF = on the player
+	if _react != "":
+		_rt += delta
+		var e := smoothstep(0.0, 0.4, _rt) * (1.0 - smoothstep(_rhold, _rdur, _rt)) * _ramp
+		match _react:
+			"cower":
+				want_tilt += Vector3(0.2, 0.0, _rside * 0.05) * e
+				want_pos += Vector3(0.0, 0.0, 0.1) * e
+				head = Vector2(_rside * 0.9, 0.3) * minf(e, 1.0)
+				if _rt < _rhold - 0.5:
+					_play("Walk", 0.55)
+				else:
+					_ease_to("Idle", 0.7)
+			"stagger":
+				var sway := _rside * exp(-_rt * 0.55) * cos(_rt * 2.4) * smoothstep(0.0, 0.3, _rt) * _ramp
+				want_tilt += Vector3(0.04, 0.0, 0.26 * sway)
+				want_pos += Vector3(0.13 * sway, 0.0, 0.03)
+				head = Vector2(-_rside * 0.5 * sway, 0.15)
+				if _rt < _rhold - 0.3:
+					_play("Turn", 0.7)
+				else:
+					_ease_to("Idle", 0.7)
+			"buckle":
+				want_tilt += Vector3(-0.1, 0.0, _rside * 0.04) * e
+				head = Vector2(_rside * 0.25, 0.45) * minf(e, 1.0)
+				if _rt >= 0.75 and clip == "Death":
+					_ease_to("Idle", 1.2)
+			"rear":
+				var up := smoothstep(0.0, 0.35, _rt) * (1.0 - smoothstep(_rhold - 0.9, _rhold - 0.4, _rt)) * _ramp
+				want_tilt += Vector3(0.3 * up, 0.0, 0.0)
+				want_pos += Vector3(0.0, 0.05 * up, 0.06 * up)
+				var after := _rt - (_rhold - 0.4)
+				head = Vector2(0.55 * sin(after * TAU * 0.9) * exp(-after * 0.8), 0.1) if after > 0.0 else Vector2(0.0, -0.3 * up)
+				_ease_to("Idle", 0.5)
+			"turn":
+				var to := _rhome + (_rside * 0.75 if _rt < _rhold else 0.0)
+				var left := _step_round(Vector3(-sin(to), 0.0, -cos(to)), delta * 0.55)        # (slowly: it is hurt)
+				if left < deg_to_rad(2.0):
+					_ease_to("Idle", 0.4)
+				want_tilt += Vector3(0.06, 0.0, _rside * 0.05) * e
+		if _rt >= _rdur:
+			_react = ""
+			_ramp = 1.0
+			_ease_to("Idle", 0.5)
+	elif _rhome != INF and absf(angle_difference(rotation.y, _rhome)) > deg_to_rad(2.0):      # (still turned away: round again)
+		if _step_round(Vector3(-sin(_rhome), 0.0, -cos(_rhome)), delta * 0.55) < deg_to_rad(2.0):
+			_ease_to("Idle", 0.4)
+	if _wounds > 0:                                        # hurt, it heaves
+		_breath += delta * minf(1.3 + 0.2 * _wounds, 2.6)
+		want_pos.y += sin(_breath) * 0.005 * minf(_wounds, 6)
+		want_tilt.x += sin(_breath) * 0.006 * minf(_wounds, 6)
 		_twitch -= delta
-		if _twitch <= 0.0 and not _parts.is_empty():
-			_twitch = randf_range(0.05, 0.13)
-			var part: Array = _parts[randi() % _parts.size()]
-			var j := part[0] as Node3D
+		if _twitch <= 0.0 and _wounds >= 4 and not _parts.is_empty():      # and something in it shorts now and then
+			_twitch = randf_range(3.0, 6.0)
+			var j := (_parts[randi() % _parts.size()] as Array)[0] as Node3D
 			if is_instance_valid(j):
-				var d := Vector3(randf_range(-1, 1), randf_range(-0.6, 0.6), randf_range(-1, 1)).normalized()
-				_knock_joint(j, j.global_position + Vector3(randf_range(-0.2, 0.2), 0.1, randf_range(-0.2, 0.2)), d, 0.6 * _pain)
-			# and the whole body convulses: thrown about on its springs again and again
-			_tilt_v += Vector3(randf_range(-1, 1), 0.0, randf_range(-1, 1)).normalized() * 2.6 * _pain
-			_knock_v += Vector3(randf_range(-1, 1), randf_range(0.2, 1.0), randf_range(-1, 1)) * 0.55 * _pain
-		if _pain > 0.45:                                   # the head thrashes
-			_ayaw = clampf(_ayaw + randf_range(-1.0, 1.0) * 9.0 * delta, -1.2, 1.2)
-			_apitch = clampf(_apitch + randf_range(-1.0, 1.0) * 6.0 * delta, -0.6, 0.6)
-		if _pain < 0.5 and clip == "Run":
-			play("Idle")
-	elif _wounds > 0:
-		_twitch -= delta
-		if _twitch <= 0.0:                                 # a wounded thing does not stand still
-			_twitch = randf_range(1.2, 3.0) / minf(1.0 + _wounds * 0.25, 3.0)
-			if not _parts.is_empty():
-				var part2: Array = _parts[randi() % _parts.size()]
-				var j2 := part2[0] as Node3D
-				if is_instance_valid(j2):
-					_knock_joint(j2, j2.global_position + Vector3(0.1, 0.1, 0.0), Vector3(randf_range(-1, 1), 0.3, randf_range(-1, 1)).normalized(), 0.5)
-					if _wounds >= 4 and randf() < 0.5:
-						V2Fx.sparkle(j2.global_position, 5, -6.0)
-	if _pain <= 0.45 and player != null and not _aims.is_empty():          # it looks at the player
+				V2Fx.sparkle(j.global_position, 5, -6.0)
+	var follow := 1.0 - exp(-delta * 6.0)
+	_rx_tilt = _rx_tilt.lerp(want_tilt, follow)
+	_rx_pos = _rx_pos.lerp(want_pos, follow)
+	if head != Vector2.INF:
+		_ayaw = move_toward(_ayaw, clampf(head.x, -1.2, 1.2), 2.0 * delta)
+		_apitch = move_toward(_apitch, clampf(head.y, -0.6, 0.6), 1.5 * delta)
+	elif player != null and not _aims.is_empty():          # it looks at the player
 		_aim_point = player.global_position + Vector3(0, 1.3, 0)
 		_aim_valid = true
-		_servo(delta * (0.35 if _wounds == 0 else 0.6), true)
+		_servo(delta * (0.35 if _wounds == 0 else 0.5), true)
+
+
+## Go over to a clip with a long blend (a change of pose that takes its time).
+func _ease_to(clip_name: String, blend: float) -> void:
+	if clip == clip_name or ap == null or not ap.has_animation(clip_name):
+		return
+	ap.speed_scale = 1.0
+	clip = clip_name
+	ap.play(clip_name, blend)
 
 
 ## The training dummy: the round that has just struck it was the last one wanted. It falls apart as a robot does.
 func finish_off(dir: Vector3) -> void:
 	_dummy_last = true
+	_react = ""
+	_rx_tilt = Vector3.ZERO
+	_rx_pos = Vector3.ZERO
 	hit(1.0, dir)
 	_shove = Vector3.ZERO
 
@@ -505,18 +577,36 @@ func hit(damage: float = 34.0, dir: Vector3 = Vector3.ZERO, point: Vector3 = Vec
 		if point == Vector3.INF:
 			point = hit_point()
 		# (**user: "make the dummy robot more reactive to the shots he's taking, like he's alive. make him
-		# 'suffer' after a shot"**: `_dummy_tick`)
+		# 'suffer' after a shot"**, then "different animations", "longer and less twitchy": `_dummy_tick`)
 		_wounds += 1
-		_pain = 1.0
-		_flinch = 1.0
-		_knock_joint(joint if joint != null else _hit_joint, point, dir, 1.3)
-		_push(dir, 2.0)
+		_flinch = 0.5
+		if _rhome == INF:
+			_rhome = rotation.y
+		_knock_joint(joint if joint != null else _hit_joint, point, dir, 0.8)
+		_push(dir, 1.1)
 		_shove = Vector3.ZERO                          # (it keeps its place on its pad)
-		_play("Run", 1.8, true)                        # its legs scramble under it: it would run, and cannot
-		_left = 99.0
+		var side := signf((global_basis.inverse() * dir).x + (point - global_position).dot(global_basis.x) * 0.5)
+		if side == 0.0:
+			side = 1.0 if randf() < 0.5 else -1.0
+		_list = clampf(_list + side * 0.012, -0.07, 0.07)
+		if _react == "" or _rt > _rhold:               # calm, or coming out of the last one: another, not the same again
+			var others: Array = REACTIONS.filter(func(r: String) -> bool: return r != _last_react)
+			_react = others[randi() % others.size()] if force_react == "" else force_react
+			_last_react = _react
+			_rt = 0.0
+			_ramp = 1.0
+			_rside = side
+			_rhold = {"cower": 2.2, "stagger": 2.6, "buckle": 2.2, "rear": 2.6, "turn": 2.3}[_react]
+			_rdur = _rhold + 1.3
+			if _react == "buckle":
+				_play("Death", 0.8, true)
+			V2Sfx.play("servo", point, 3.0, {"cower": 1.6, "stagger": 1.25, "buckle": 0.8, "rear": 1.85, "turn": 1.4}[_react])
+		else:                                          # struck while it reels: deeper, and longer
+			_ramp = minf(_ramp + 0.15, 1.5)
+			_rhold = maxf(_rhold, _rt + 0.9)
+			_rdur = _rhold + 1.3
 		V2Fx.sparkle(point, 6 + mini(_wounds, 6), -4.0)
 		V2Sfx.play("robot_hit", point, 2.0)
-		V2Sfx.play("servo", point, 3.0, randf_range(1.5, 1.9))         # a whine
 		if _wounds >= 3:
 			V2Fx.set_smoke(_smoke, true)
 		struck.emit()
@@ -871,17 +961,93 @@ func _step_round(dir: Vector3, delta: float) -> float:
 	return absf(angle_difference(rotation.y, want))
 
 
+## A place out of every `no_go` square: p itself, or the nearest point of the square's edge.
+func _clear_of(p: Vector3) -> Vector3:
+	for n in no_go:
+		var c: Vector3 = n[0]
+		var h: float = n[1]
+		var d := p - c
+		if absf(d.x) < h and absf(d.z) < h:
+			if h - absf(d.x) < h - absf(d.z):
+				p.x = c.x + (h + 0.06) * (1.0 if d.x >= 0.0 else -1.0)
+			else:
+				p.z = c.z + (h + 0.06) * (1.0 if d.z >= 0.0 else -1.0)
+	return p
+
+
+## Does the straight way from a to b cross the square of middle c and half side h? (on the floor's plane)
+static func _crosses(a: Vector3, b: Vector3, c: Vector3, h: float) -> bool:
+	var t0 := 0.0
+	var t1 := 1.0
+	for axis in [0, 2]:
+		var p: float = a[axis] - c[axis]
+		var v: float = b[axis] - a[axis]
+		if absf(v) < 1e-6:
+			if absf(p) >= h:
+				return false
+		else:
+			var ta := (-h - p) / v
+			var tb := (h - p) / v
+			t0 = maxf(t0, minf(ta, tb))
+			t1 = minf(t1, maxf(ta, tb))
+			if t0 >= t1:
+				return false
+	return true
+
+
+## Where to head for to get from where it is to `to` without crossing a `no_go` square: `to`, or a corner of the
+## square to go round first. The corner is kept until it is reached (`_via`): choosing afresh every frame, it
+## turned back and forth between two of them. Then the next one: the one that makes the shorter way, of those in
+## plain view.
+func _round(to: Vector3) -> Vector3:
+	for n in no_go:
+		var c: Vector3 = n[0]
+		var h: float = n[1]
+		if not _crosses(position, to, c, h + 0.03):
+			continue
+		if _via != Vector3.INF and position.distance_to(_via) > 0.12:
+			return _via
+		var best := to
+		var best_len := 1e9
+		for sx in [-1.0, 1.0]:
+			for sz in [-1.0, 1.0]:
+				var k := Vector3(c.x + sx * (h + 0.25), position.y, c.z + sz * (h + 0.25))
+				if (_via != Vector3.INF and k.distance_to(_via) < 0.01) or _crosses(position, k, c, h - 0.15):
+					continue
+				var length := position.distance_to(k) + k.distance_to(to)
+				if length < best_len:
+					best_len = length
+					best = k
+		_via = best if best != to else Vector3.INF
+		return best
+	_via = Vector3.INF
+	return to
+
+
 ## One step toward _target; true when it is there. face_player: keep the nose on the player while moving.
 func _move(delta: float, fast: bool, face_player: bool) -> bool:
-	var to := _target - position
+	if not no_go.is_empty() and kind != "turret":
+		_target = _clear_of(_target)
+		var via := _round(_target)
+		if via != _target:
+			return _move_to(via, delta, fast, face_player, true)
+	return _move_to(_target, delta, fast, face_player, false)
+
+
+func _move_to(goal: Vector3, delta: float, fast: bool, face_player: bool, around: bool) -> bool:
+	var to := goal - position
 	to.y = 0.0
-	if grid > 0.0 and state != WATCH and absf(to.x) > 0.35 and absf(to.z) > 0.35:
+	if grid > 0.0 and state != WATCH and not around and absf(to.x) > 0.35 and absf(to.z) > 0.35:
 		to = Vector3(to.x, 0.0, 0.0) if absf(fposmod(position.z, grid) - grid / 2.0) < absf(fposmod(position.x, grid) - grid / 2.0) \
 			else Vector3(0.0, 0.0, to.z)                   # (first along the row or the column it is on the middle of)
+		for n in no_go:                                    # (unless that leg leads into what it goes round: then straight)
+			if _crosses(position, position + to, n[0], float(n[1]) + 0.03):
+				to = goal - position
+				to.y = 0.0
 	var dist := to.length()
 	var clips: Array = _spec.clips
 	_own_vel = Vector3.ZERO
-	if dist < 0.3 and (_target - position).length() < 0.45:
+	if dist < 0.3 and (_target - position).length() < 0.45 and not around:
 		return true
 	var k := 1.0
 	if face_player:
@@ -904,6 +1070,8 @@ func _move(delta: float, fast: bool, face_player: bool) -> bool:
 	var step := minf(speed * delta, dist)
 	var moved := position + to / maxf(dist, 0.001) * step
 	position = Vector3(clampf(moved.x, arena.position.x, arena.end.x), 0.0, clampf(moved.z, arena.position.y, arena.end.y))
+	if not no_go.is_empty():
+		position = _clear_of(position)
 	travelled += step
 	if k <= 0.0 and kind == "spider":
 		_rest_pose()                                   # (standing: no walking on the spot)
@@ -1199,8 +1367,9 @@ func _pose() -> void:
 		_root.position = _seat + shake
 		_apply_turret()
 		return
-	_root.position = _seat + _knock + shake - Vector3(0.0, _sink, 0.0)
-	var tilt := Basis(_tilt.normalized(), _tilt.length()) if _tilt.length() > 0.0001 else Basis.IDENTITY
+	_root.position = _seat + _knock + _rx_pos + shake - Vector3(0.0, _sink, 0.0)
+	var tv := _tilt + _rx_tilt
+	var tilt := Basis(tv.normalized(), tv.length()) if tv.length() > 0.0001 else Basis.IDENTITY
 	if kind == "drone":
 		_root.basis = tilt * Basis(Vector3.RIGHT, _apitch) * _base
 	else:

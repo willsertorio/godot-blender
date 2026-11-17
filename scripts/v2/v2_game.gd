@@ -129,6 +129,7 @@ func _ready() -> void:
 	# (-- --no-training skips it, -- --training forces it, -- --training-test checks it)
 	var automated := "--game-test" in args or bot > 0 or capture != ""
 	training = ("--training" in args or "--training-test" in args) or (not trained and missions == 0 and not automated and not ("--no-training" in args))
+	V2Robot.no_go = []
 	_rng.seed = hash(seed_used) + 5
 	_loot_rng.seed = hash(seed_used) + 11
 	_environment(0.38, 0.25, 22.0)
@@ -461,6 +462,12 @@ func _training_build(at: Vector3) -> void:
 		bars.add_child(side)
 	pad.add_child(bars)
 	player.collision_mask |= V2World.CAGE
+	# robots go round it (**user: "make the robots avoid the cage"**): spiders and drones steer round the square
+	# (`V2Robot.no_go`: the cage and 0.85 m for the robot), and no path leads through a cell it stands in the middle of
+	V2Robot.no_go.append([Vector3(at.x, 0.0, at.z), 1.61 + 0.85])
+	var cell := V2Dungeon.cell_of(at)
+	if V2Dungeon.center(cell).distance_to(Vector3(at.x, 0.0, at.z)) < 1.0:
+		dungeon.blocked[cell] = true
 	dummy = V2Robot.new()
 	add_child(dummy)
 	dummy.setup("spider")

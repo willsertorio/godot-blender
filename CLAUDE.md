@@ -528,8 +528,14 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   it was a cell near a wall); **the player appears in front of the cage's door, facing the dummy** (user;
   `_training_start`, `start_at` / `start_yaw`: 6 m from it, less in a small room, along a row or column, with
   the way the generator would have had them look beyond the cage; `keep_clear` round both opens the line).
-  Not handled: a robot that follows the player back into this room walks its lanes of cell middles as in any
-  room, and in a room with an odd number of cells the cage stands on one; `_training_build` = a dark plinth with two `floor_hazard` tiles on it, the spider on top and **the cage round
+  **Robots go round the cage (user)**: `V2Robot.no_go` (static: squares [middle, half side], here the cage and
+  0.85 m for the robot; emptied by every scene's `_ready`): in `_move` a target inside is moved to the edge, and
+  where the straight way crosses the square the robot heads for a corner of it first (`_round`, the corner kept
+  in `_via` until reached: choosing afresh every frame, it turned back and forth between two corners; and the
+  square it plans with must be the one its place is kept out of, or it stands at the edge for ever); the
+  row-then-column rule is dropped for a leg that would lead in. `V2Dungeon.blocked` = cells no path leads through
+  (the cage's, in a room with an odd number of cells). Check: the training test sends a spider and a drone past
+  it four ways each (`_cage_check`); `_training_build` = a dark plinth with two `floor_hazard` tiles on it, the spider on top and **the cage round
   it** (user: "give the impression that the dummy robot is caged", from their reference picture, "use this as
   inspiration but make more spaced bars": `training_cage` of the set, 3.2 x 3.2 x 2.6 m, `set_cover.py`: white
   corner posts with grey shoes and lifting eyes, a base frame with hazard stripes, a framed door toward the
@@ -539,11 +545,17 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   that is a round or a look uses `V2World.SHOTS`** (the player's rounds, the HUD's cursor, the robots' sight and
   rounds), so rounds go through the bars
   (`V2Robot.dummy`: it stands in the preview's Idle, a hit jars it on its springs and emits `struck`, it is not
-  in `robots`, so no count, no score, no hostile line). **It suffers (user: "more reactive to the shots he's taking, like he's alive. make him 'suffer'")**:
-  `V2Robot._dummy_tick`: calm, its head follows the player round the room; struck, for 1.5 s its legs scramble on
-  the spot (the Run clip at 1.8), the body is thrown back and convulses on its springs, single joints jerk, the
-  head thrashes, sparks, a whine (`servo` pitched up); then it steadies and looks at the player again; every
-  wound stays (a shiver that grows, smoke from the third hit, twitches and short circuits between hits).
+  in `robots`, so no count, no score, no hostile line). **It suffers (user: "more reactive to the shots he's taking, like he's alive. make him 'suffer'"; then
+  "different animations", "longer and less twitchy")**: `V2Robot._dummy_tick`. Calm, its head follows the player
+  round the room. Struck, it plays one of **five reactions** (`REACTIONS`, never the same twice running, about
+  3.5 s each): cower (leans back, steps uneasily, head aside), stagger (thrown to a side, sways there and back),
+  buckle (the start of the Death clip: its legs give, then a 1.2 s blend back up), rear (front up, down, a slow
+  shake of the head), turn (steps round away from the shot, stands, steps back). **Every pose is a target the body
+  follows smoothly** (`_rx_tilt`, `_rx_pos`, the head at a limited rate, clips changed with long blends,
+  `_ease_to`): the first version drove it with random impulses every tenth of a second, which the user found
+  twitchy. Struck again while a reaction lasts (the machine gun), it does not start over: deeper, held longer.
+  Wounds stay: it heaves as it breathes, lists a little, smokes from the third, shorts now and then from the
+  fourth. Pictures of all five: `-- --training --game-capture=DIR --part=reactions`.
   **The last round of the rifle step destroys it** (user;
   `V2Robot.finish_off`: the usual burst, Death clip and smoking wreck, solid, on its pad: `floor_y`). A hit counts only **aimed** (`player._aimed` > 0.6) and
   with the step's gun; otherwise a chip says why. The kit step ends when the player holds a kit, then the doors

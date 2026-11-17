@@ -64,6 +64,7 @@ var gen: DungeonGen
 var areas: Array = []                 # {room: bool, id, rect: Rect2 (world x z), node, layer, lights: Array}
 var area_of: Dictionary = {}          # cell -> index into areas
 var locked_room := -1                 # set before `build`: every doorway of this room gets a door, shut and locked (the training)
+var blocked: Dictionary = {}          # cells no path leads through (something stands in their middle: the training cage)
 var keep_clear: Array = []            # set before `build`: [place, radius, its whole cell too?]: nothing is stood there
 var doors: Array = []                 # {a: cell (room), b: cell (corridor), at: Vector3, dir: Vector2i, door: bool, open: bool, leaves, lamps}
 var _door_at: Dictionary = {}         # [cell, cell] -> index into doors (both orders)
@@ -673,7 +674,7 @@ func path(a: Vector2i, b: Vector2i) -> Array:
 			break
 		for d in DungeonGen.DIRS:
 			var n: Vector2i = c + d
-			if not prev.has(n) and passable(c, n):
+			if not prev.has(n) and passable(c, n) and (not blocked.has(n) or n == b):
 				prev[n] = c
 				queue.append(n)
 	if not prev.has(b):
