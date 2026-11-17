@@ -328,7 +328,7 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   rooms 3..6 cells a side; corridors 1 cell wide; a tree from the spawn room; the exit in the deepest room; doors on
   about half the doorways; `enemy_spawns` turret / brawler / pursuer = our turret / spider / drone; `loot_spawns`;
   `deco_spawns`). `-- --seed=N` gives the same dungeon again; `-- --threat=N` starts at that threat level.
-- Kit: **the environment set** (`assets/models/v2/set.glb`, 43 pieces; see "The environment set" below). The kit
+- Kit: **the environment set** (`assets/models/v2/set.glb`, 44 pieces; see "The environment set" below). The kit
   before it (`v2/scripts/build_kit.py` -> `kit.glb`, 51 pieces, and `build_props.py` -> `props.glb`) is no longer
   loaded by the game: the user found its pieces poorly designed. Its files stay in the repository.
   Rooms 5.2 m high (the turret's pylon ends there), corridors 3.4 m, doorways 2.4 x 2.6 m (every robot fits).
@@ -498,7 +498,11 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
     **How a run opens (user's direction; second round: "the letters all fade into white, and the same white
     fades out into the game, more slowly")**: the title's letters fade into the page's own white (1.3 s, the music
     going down with it), the game comes up under the same white (`V2World.open_from`, set by the title;
-    `V2Game._opening`, a layer 8 veil), the white lifts off the room in 3 s with no gun and no HUD (a run started
+    `V2Game._opening`), the white lifts off the room in 3 s
+    (**the sheet is one node hung from the tree's root, `V2World.cover` / `V2World.veil`, layer 100, and lives
+    through the change of scene**: with a veil in each scene the engine drew its grey clear colour for the frames
+    between them, while the dungeon was built, and the user saw "a gray screen, then white"; `again()` covers
+    the same way; `_opening` fades the sheet out and frees it) with no gun and no HUD (a run started
     from an end screen opens out of that screen's grey in 1.4 s), then the gun comes up (Draw) and is turned over
     once (Inspect; only on the run that has the training), and only then the keys and the mouse answer
     (`V2Player.locked`) and the HUD fades in: about 9 s from the key to control. Not for the bot, the checks or
@@ -523,14 +527,29 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   `_training_spot` = a cell's middle well away from the room's middle, off the doorways and the crate;
   **the player appears in front of the dummy, facing it** (user; `_training_start`, `start_at` / `start_yaw`:
   6 m from it, less in a small room, on the dummy's own row or column of cell middles: cover stands at the
-  cells' corners, so that lane is always open); `_training_build` = a dark plinth with two `floor_hazard` tiles on it and the spider on top
+  cells' corners, so that lane is always open); `_training_build` = a dark plinth with two `floor_hazard` tiles on it, the spider on top and **the cage round
+  it** (user: "give the impression that the dummy robot is caged", from their reference picture, "use this as
+  inspiration but make more spaced bars": `training_cage` of the set, 3.2 x 3.2 x 2.6 m, `set_cover.py`: white
+  corner posts with grey shoes and lifting eyes, a base frame with hazard stripes, a framed door toward the
+  player with hinges, a bolt, a control box and cables, two thin bars 0.84 m apart in the door, four a side, the
+  X brace on the back only, an open top so the room's light reaches the robot). Its posts stop everything; its
+  bars are boxes on physics layer `V2World.CAGE` (4), which only the player's body collides with: **every ray
+  that is a round or a look uses `V2World.SHOTS`** (the player's rounds, the HUD's cursor, the robots' sight and
+  rounds), so rounds go through the bars
   (`V2Robot.dummy`: it stands in the preview's Idle, a hit jars it on its springs and emits `struck`, it is not
-  in `robots`, so no count, no score, no hostile line). **The last round of the rifle step destroys it** (user;
+  in `robots`, so no count, no score, no hostile line). **It suffers (user: "more reactive to the shots he's taking, like he's alive. make him 'suffer'")**:
+  `V2Robot._dummy_tick`: calm, its head follows the player round the room; struck, for 1.5 s its legs scramble on
+  the spot (the Run clip at 1.8), the body is thrown back and convulses on its springs, single joints jerk, the
+  head thrashes, sparks, a whine (`servo` pitched up); then it steadies and looks at the player again; every
+  wound stays (a shiver that grows, smoke from the third hit, twitches and short circuits between hits).
+  **The last round of the rifle step destroys it** (user;
   `V2Robot.finish_off`: the usual burst, Death clip and smoking wreck, solid, on its pad: `floor_y`). A hit counts only **aimed** (`player._aimed` > 0.6) and
   with the step's gun; otherwise a chip says why. The kit step ends when the player holds a kit, then the doors
   unlock; a door of the room opening ends the training: the rounds fired are given back, the clock starts, and
   **while it lasts the robots beyond hear nothing** (`_robots_tick`). HUD: a card top middle (`V2Hud._training`:
-  "TRAINING n / 4", the step with its key caps, the hit count; the room panel reads "Training room").
+  "TRAINING n / 4", the step with its key caps, the hit count). **While the training lasts the HUD is the card,
+  the cursor, the E prompt and the pickup chip only (user); the room panel, chips, health, kits, weapon tiles and
+  ammunition fade in when it ends** (`V2Hud._rest`).
   Check: `godot --headless --path . -- --training-test [--seed=N]`; pictures: `-- --training
   --game-capture=DIR --part=train`. `V2Player.bot_aim` holds the aim for the checks.
   Also fixed on the way: `keep_clear` holds the player's spawn point too (the middle of a room with an even
