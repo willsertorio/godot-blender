@@ -17,97 +17,57 @@
 </nav>
 <main class="main"><article class="doc">
 <h1>Overview</h1>
-<p>This game is a sample: a vertical slice, not a complete game. It was built from the GDD the client shared with us. The same GDD had already been put through other tests: the game was first built in HTML only, then in Unity. This version recreates it with Blender and Godot.</p>
+<p>This game is a sample: a vertical slice, not a complete game. It was built from the GDD the client shared with us. The same GDD had already been put through other tests: the game was first built in HTML only, then in Unity (<a href="https://willsertorio.github.io/experiments/game_viewer/161027/">see those versions</a>). This version recreates it with Blender and Godot.</p>
 <p>A first version was built directly in Godot from downloaded asset packs. It did not reach the quality bar, especially the guns and hands, so it was set aside and the game was rebuilt Blender first, in the order below.</p>
 <ol class="steps">
-
   <li>
     <h2>Concept art</h2>
-    <p>Create 2D concept art of the game with the help of AI.</p>
     <img src="img/workflow_2_concept.jpg" alt="AI-assisted 2D concept art of the lab with the robots" width="1024" height="572" loading="lazy">
+    <h3>Steps</h3>
+    <ul><li>Generate 2D concept art with AI: the whole scene, the gloved hands, 24 reference sheets for the environment pieces.</li><li>Design a UI concept for the interface.</li></ul>
     <h3>Goal</h3>
-    <ul>
-      <li>Give Claude an image to work from instead of a description: a concept of the whole scene, the gloved hands, and 24 reference sheets for the environment pieces.</li>
-      <li>A UI concept for the interface: screens and design tokens.</li>
-    </ul>
+    <p>Give Claude an image to work from instead of a written description.</p>
     <h3>Learnings</h3>
-    <ul>
-      <li>Results became consistent once there was a reference to follow; reference images of how a gun is held fixed what written instructions could not.</li>
-    </ul>
-    <h3>Tools and sources</h3>
-    <ul>
-      <li>AI image generation (Google Gemini for the hand references).</li>
-      <li>Reference images of first-person gun holds.</li>
-    </ul>
+    <ul><li>Results became consistent once there was a reference to follow.</li><li>Reference images of how a gun is held fixed what written instructions could not.</li></ul>
+    <h3>Tools</h3>
+    <ul><li>AI image generation (Google Gemini for the hand references).</li><li>Reference images of first-person gun holds.</li></ul>
   </li>
-
   <li>
     <h2>Modelling in Blender</h2>
-    <p>Feed the concept art to Claude, which models it in Blender; we review and adjust the models.</p>
     <img src="img/workflow_3_modelling.jpg" alt="The spider, drone and ceiling turret modelled in Blender" width="1440" height="1116" loading="lazy">
+    <h3>Steps</h3>
+    <ul><li>Feed the concept art to Claude, which models it in Blender.</li><li>Review the renders and ask for adjustments.</li><li>Approve each asset, or a sheet of them, before it goes into the game.</li></ul>
     <h3>Goal</h3>
-    <ul>
-      <li>Model every asset from scratch, so the game does not depend on external models.</li>
-      <li>Blender first: nothing went into Godot before a Blender render was approved.</li>
-    </ul>
+    <p>Model every asset from scratch, so the look is under control and the game does not depend on external models.</p>
     <h3>Learnings</h3>
-    <ul>
-      <li>Downloaded packs looked too cartoonish and ready-made hands too blocky; modelling from references gave control over the look.</li>
-      <li>The target was realism ("grounded military hardware", then "AAA"); the whole environment set was approved on a single sheet of renders before it went into the game.</li>
-      <li>The hands were the hardest part: the grip, the thumb and the knuckles passing through the gun took many rounds.</li>
-    </ul>
-    <h3>Tools and sources</h3>
-    <ul>
-      <li>Blender 4.2 LTS, driven by Python scripts, so a change is a re-run rather than a hand edit; Cycles for the review renders.</li>
-      <li>ambientCG PBR textures (CC0): painted plaster, concrete, metal, walkway grating, plastic, rubber, fabric.</li>
-      <li>MakeHuman base mesh (CC0) for the player's arms.</li>
-    </ul>
+    <ul><li>Downloaded packs looked too cartoonish and ready-made hands too blocky.</li><li>Setting a clear bar helped: "grounded military hardware", then "AAA".</li><li>The hands were the hardest part: the grip, the thumb and the knuckles passing through the gun took many rounds.</li></ul>
+    <h3>Tools</h3>
+    <ul><li>Blender 4.2 LTS, driven by Python scripts (a change is a re-run, not a hand edit); Cycles for review renders.</li><li>ambientCG PBR textures (CC0).</li><li>MakeHuman base mesh (CC0) for the player's arms.</li></ul>
   </li>
-
   <li>
     <h2>Rigging and animation in Blender</h2>
-    <p>Rig and animate the models in Blender.</p>
     <img src="img/workflow_4_rigging.jpg" alt="The rigged gloved arms posed on the pistol in Blender" width="1024" height="576" loading="lazy">
+    <h3>Steps</h3>
+    <ul><li>Describe each animation in plain language: idle sway, fire, reload, inspect.</li><li>Claude says what is feasible, then rigs and animates.</li><li>Review the motion and ask for another pass where needed.</li></ul>
     <h3>Goal</h3>
-    <ul>
-      <li>Each animation described in plain language first (idle sway, fire, reload, inspect), with Claude stating what was feasible before building it.</li>
-      <li>A set of clips for each gun with its hands, and for each robot: idle, shoot, move and death.</li>
-    </ul>
+    <p>A set of clips for each gun with its hands, and for each robot: idle, shoot, move and death.</p>
     <h3>Learnings</h3>
-    <ul>
-      <li>Motion needs impact: the robots were reworked to be juicier, more exaggerated and more dramatic.</li>
-      <li>Keep it simple: hiding the hands during part of an animation was preferred to fighting the rig.</li>
-    </ul>
-    <h3>Tools and sources</h3>
-    <ul>
-      <li>Blender armatures: the MakeHuman skeleton and skin weights (CC0) for the arms; joints for the robots' moving parts.</li>
-      <li>Clips baked at 24 fps on one timeline, with a clip table exported alongside each model.</li>
-    </ul>
+    <ul><li>Motion needs impact: the robots were reworked to be juicier, more exaggerated and more dramatic.</li><li>Keep it simple: hiding the hands during part of an animation beats fighting the rig.</li></ul>
+    <h3>Tools</h3>
+    <ul><li>Blender armatures: the MakeHuman skeleton and skin weights (CC0) for the arms; joints for the robots' moving parts.</li><li>Clips baked at 24 fps, with a clip table exported alongside each model.</li></ul>
   </li>
-
   <li>
     <h2>Building the game in Godot</h2>
-    <p>Once every asset is modelled and animated, bring everything into Godot to build the final game, then test its gameplay and physics.</p>
     <img src="img/workflow_5_godot.jpg" alt="The game running in Godot" width="1440" height="810" loading="lazy">
+    <h3>Steps</h3>
+    <ul><li>Bring the models and clips into a test lab: one room per robot.</li><li>Tune animations, gunfire, sound and feel there.</li><li>Build the GDD's loop: the generated dungeon, a training room, the UI and menu music.</li><li>Play, report what feels wrong, fix, repeat.</li></ul>
     <h3>Goal</h3>
-    <ul>
-      <li>A test lab first, one room per robot, to check animations, gunfire and feel before building the full game.</li>
-      <li>Then the GDD's loop: the generated dungeon, a training room, the UI concept and menu music.</li>
-    </ul>
+    <p>The final game, following the GDD's loop, with the look approved in Blender.</p>
     <h3>Learnings</h3>
-    <ul>
-      <li>Feel matters as much as looks: recoil was exaggerated, arcade sounds were replaced by realistic recordings, wrecks give off electrical smoke, footsteps were made quieter.</li>
-      <li>Playing found what tests did not: lights flickering under doors, the frame rate, a spider that seemed to float when shot.</li>
-    </ul>
-    <h3>Tools and sources</h3>
-    <ul>
-      <li>Godot 4.3 (GL Compatibility renderer, exportable to the web); models brought in as glTF (.glb).</li>
-      <li>Sounds from OpenGameArt (CC0), including The Free Firearm Sound Library; menu music "Exploration Theme" by Cleyton Kauffman (CC0).</li>
-      <li>Barlow fonts (SIL Open Font License).</li>
-      <li>Automated checks and a bot that plays whole runs to measure balance.</li>
-    </ul>
+    <ul><li>Feel matters as much as looks: stronger recoil, realistic recorded sounds, electrical smoke from wrecks, quieter footsteps.</li><li>Playing found what automated tests did not: lights flickering under doors, the frame rate, a spider that seemed to float when shot.</li></ul>
+    <h3>Tools</h3>
+    <ul><li>Godot 4.3 (GL Compatibility renderer, exportable to the web); models brought in as glTF (.glb).</li><li>Sounds from OpenGameArt (CC0), including The Free Firearm Sound Library; menu music "Exploration Theme" by Cleyton Kauffman (CC0).</li><li>Barlow fonts (SIL Open Font License).</li><li>Automated checks and a bot that plays whole runs to measure balance.</li></ul>
   </li>
-
 </ol>
 </article></main>
 </body>
