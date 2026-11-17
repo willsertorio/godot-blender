@@ -149,6 +149,9 @@ var _head: Node3D
 var _aim_node: Node3D
 var _head_pivot := Vector3.ZERO
 var _flinch := 0.0                # 1 when hit, dies away: a short shake
+var _pain := 0.0                  # the training dummy: 1 when struck, gone after 1.5 s
+var _wounds := 0                  # the training dummy: how often it was struck
+var _twitch := 0.0
 var _seat := Vector3.ZERO         # where the Root joint sits on this node
 var _base := Basis.IDENTITY       # spider, drone: the Root joint's own attitude on this node
 var _muzzles: Array[Node3D] = []  # the flash nodes: -Z of each is its barrel
@@ -442,6 +445,47 @@ func flash_on() -> bool:
 	return false
 
 
+## The training dummy between and after hits. Unhurt and calm, its head follows the player round the room (it is
+## alive, and it watches). Struck, for a second and a half: its legs scramble on the spot (the Run clip), it
+## trembles, single joints jerk, its head thrashes; then it steadies and looks at whoever shot it. Every wound
+## stays: a shiver that grows, smoke from the third on, a short circuit now and then.
+func _dummy_tick(delta: float) -> void:
+	_pain = maxf(_pain - delta / 1.5, 0.0)
+	_flinch = maxf(_flinch, maxf(_pain * 0.9, minf(_wounds * 0.035, 0.28)))
+	if _pain > 0.0:
+		_twitch -= delta
+		if _twitch <= 0.0 and not _parts.is_empty():
+			_twitch = randf_range(0.05, 0.13)
+			var part: Array = _parts[randi() % _parts.size()]
+			var j := part[0] as Node3D
+			if is_instance_valid(j):
+				var d := Vector3(randf_range(-1, 1), randf_range(-0.6, 0.6), randf_range(-1, 1)).normalized()
+				_knock_joint(j, j.global_position + Vector3(randf_range(-0.2, 0.2), 0.1, randf_range(-0.2, 0.2)), d, 0.6 * _pain)
+			# and the whole body convulses: thrown about on its springs again and again
+			_tilt_v += Vector3(randf_range(-1, 1), 0.0, randf_range(-1, 1)).normalized() * 2.6 * _pain
+			_knock_v += Vector3(randf_range(-1, 1), randf_range(0.2, 1.0), randf_range(-1, 1)) * 0.55 * _pain
+		if _pain > 0.45:                                   # the head thrashes
+			_ayaw = clampf(_ayaw + randf_range(-1.0, 1.0) * 9.0 * delta, -1.2, 1.2)
+			_apitch = clampf(_apitch + randf_range(-1.0, 1.0) * 6.0 * delta, -0.6, 0.6)
+		if _pain < 0.5 and clip == "Run":
+			play("Idle")
+	elif _wounds > 0:
+		_twitch -= delta
+		if _twitch <= 0.0:                                 # a wounded thing does not stand still
+			_twitch = randf_range(1.2, 3.0) / minf(1.0 + _wounds * 0.25, 3.0)
+			if not _parts.is_empty():
+				var part2: Array = _parts[randi() % _parts.size()]
+				var j2 := part2[0] as Node3D
+				if is_instance_valid(j2):
+					_knock_joint(j2, j2.global_position + Vector3(0.1, 0.1, 0.0), Vector3(randf_range(-1, 1), 0.3, randf_range(-1, 1)).normalized(), 0.5)
+					if _wounds >= 4 and randf() < 0.5:
+						V2Fx.sparkle(j2.global_position, 5, -6.0)
+	if _pain <= 0.45 and player != null and not _aims.is_empty():          # it looks at the player
+		_aim_point = player.global_position + Vector3(0, 1.3, 0)
+		_aim_valid = true
+		_servo(delta * (0.35 if _wounds == 0 else 0.6), true)
+
+
 ## The training dummy: the round that has just struck it was the last one wanted. It falls apart as a robot does.
 func finish_off(dir: Vector3) -> void:
 	_dummy_last = true
@@ -460,10 +504,21 @@ func hit(damage: float = 34.0, dir: Vector3 = Vector3.ZERO, point: Vector3 = Vec
 			dir = Vector3.FORWARD
 		if point == Vector3.INF:
 			point = hit_point()
-		_knock_joint(joint if joint != null else _hit_joint, point, dir, 0.5)
-		_push(dir, 0.7)
+		# (**user: "make the dummy robot more reactive to the shots he's taking, like he's alive. make him
+		# 'suffer' after a shot"**: `_dummy_tick`)
+		_wounds += 1
+		_pain = 1.0
+		_flinch = 1.0
+		_knock_joint(joint if joint != null else _hit_joint, point, dir, 1.3)
+		_push(dir, 2.0)
 		_shove = Vector3.ZERO                          # (it keeps its place on its pad)
-		V2Sfx.play("robot_hit", point)
+		_play("Run", 1.8, true)                        # its legs scramble under it: it would run, and cannot
+		_left = 99.0
+		V2Fx.sparkle(point, 6 + mini(_wounds, 6), -4.0)
+		V2Sfx.play("robot_hit", point, 2.0)
+		V2Sfx.play("servo", point, 3.0, randf_range(1.5, 1.9))         # a whine
+		if _wounds >= 3:
+			V2Fx.set_smoke(_smoke, true)
 		struck.emit()
 		return
 	if state == PREVIEW:
@@ -667,6 +722,7 @@ func _look(delta: float) -> void:
 	if active and not player.down:
 		for point in [player.chest(), player.cam.global_position - Vector3(0.0, 0.08, 0.0)]:
 			var q := PhysicsRayQueryParameters3D.create(_eye(), point)
+			q.collision_mask = V2World.SHOTS
 			q.exclude = _bodies
 			var res := get_world_3d().direct_space_state.intersect_ray(q)
 			if not res.is_empty() and res.collider == player:
@@ -715,6 +771,7 @@ func _fire(muzzle: Node3D) -> void:
 	V2Sfx.play(kind + "_shot", from)
 	var to := from + dir * 40.0
 	var q := PhysicsRayQueryParameters3D.create(from + dir * 0.15, to)
+	q.collision_mask = V2World.SHOTS
 	q.exclude = _bodies
 	var res := get_world_3d().direct_space_state.intersect_ray(q)
 	if not res.is_empty():
@@ -1249,6 +1306,7 @@ func _process(delta: float) -> void:
 				play(clip)
 		if dummy:
 			_label.visible = false
+			_dummy_tick(delta)
 			_springs(delta)
 		return
 	_label.text = kind.to_upper()

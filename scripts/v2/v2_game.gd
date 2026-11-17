@@ -224,7 +224,7 @@ func _ready() -> void:
 		_opening(training)
 		for a in args:                                     # (pictures of the opening: -- --title --open-capture=DIR)
 			if a.begins_with("--open-capture="):
-				V2World.film(self, a.trim_prefix("--open-capture="), "game", 24.0)
+				V2World.film(self, a.trim_prefix("--open-capture="), "game", 16.0)
 
 
 ## How a run opens (**user: "a fade in into the environment, then the gun appears with the inspecting motion, then
@@ -238,7 +238,8 @@ func _opening(full: bool) -> void:
 	top.layer = 8
 	add_child(top)
 	var from_title := V2World.open_from != UIPalette.COMPLETE_BG
-	var veil := V2Ui.full(top, V2World.open_from)
+	var veil: ColorRect = V2World.veil if is_instance_valid(V2World.veil) else V2Ui.full(top, V2World.open_from)
+	veil.color.a = 1.0
 	V2World.open_from = UIPalette.COMPLETE_BG
 	player.locked = true
 	player.overlay.visible = false
@@ -249,6 +250,9 @@ func _opening(full: bool) -> void:
 	tw.tween_property(veil, "color:a", 0.0, 3.0 if from_title else 1.4).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	await tw.finished
 	top.queue_free()
+	if is_instance_valid(V2World.veil):
+		V2World.veil.get_parent().queue_free()
+		V2World.veil = null
 	player.overlay.visible = true
 	for clip in (["Draw", "Inspect"] if full else ["Draw"]):
 		player.act(clip)
@@ -446,6 +450,11 @@ func _training_build(at: Vector3) -> void:
 		var tile := _prop("floor_hazard")
 		pad.add_child(tile)
 		tile.position = Vector3(x, 0.24, 0)
+	# the cage round it (**user: "let's give the impression that the dummy robot is 'caged'"**, after their
+	# reference; `training_cage` of the set, its door toward the player): its posts stop everything, its bars
+	# stop the player and let rounds and looks through (`V2World.CAGE`)
+	var cage := _prop("training_cage")
+	pad.add_child(cage)
 	_set_layer(pad, layer)
 	var body := StaticBody3D.new()
 	var shape := CollisionShape3D.new()
@@ -455,6 +464,26 @@ func _training_build(at: Vector3) -> void:
 	shape.position.y = 0.155
 	body.add_child(shape)
 	pad.add_child(body)
+	for sx in [-1.0, 1.0]:
+		for sz in [-1.0, 1.0]:
+			var post := CollisionShape3D.new()
+			var pb := BoxShape3D.new()
+			pb.size = Vector3(0.24, 2.5, 0.24)
+			post.shape = pb
+			post.position = Vector3(sx * 1.4, 1.25, sz * 1.4)
+			body.add_child(post)
+	var bars := StaticBody3D.new()
+	bars.collision_layer = V2World.CAGE
+	bars.collision_mask = 0
+	for k in 4:
+		var side := CollisionShape3D.new()
+		var sb := BoxShape3D.new()
+		sb.size = Vector3(2.6, 2.5, 0.16) if k < 2 else Vector3(0.16, 2.5, 2.6)
+		side.shape = sb
+		side.position = Vector3(0, 1.25, -1.45 if k == 0 else 1.45) if k < 2 else Vector3(-1.45 if k == 2 else 1.45, 1.25, 0)
+		bars.add_child(side)
+	pad.add_child(bars)
+	player.collision_mask |= V2World.CAGE
 	dummy = V2Robot.new()
 	add_child(dummy)
 	dummy.setup("spider")
@@ -899,6 +928,7 @@ func to_title() -> void:
 
 
 func again() -> void:
+	V2World.cover(get_tree(), UIPalette.COMPLETE_BG, 0.0)  # (no frame of the engine's clear colour between the two runs)
 	get_tree().reload_current_scene()
 
 

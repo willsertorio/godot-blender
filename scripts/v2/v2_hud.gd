@@ -54,6 +54,7 @@ var _train_line: HBoxContainer
 var _train_count: Label
 var _train_shown := -1
 var _train_flash := 0.0
+var _rest := 1.0                    # the panels other than the training's card: 0 while the training lasts, then they come in
 
 var _shown_hp := 100.0              # what the bar showed last frame
 var _ghost_from := 0                # segments lost a moment ago: [_ghost_from, _ghost_to)
@@ -372,10 +373,15 @@ func update(delta: float) -> void:
 		(tile.icon as TextureRect).modulate = UIPalette.TEXT if active else UIPalette.LABEL
 		(tile.bar as ColorRect).visible = active
 	var aimed := player._aimed
-	_ammo.visible = playing
+	# (**user: "in the training room, show only the instructions and aim in the HUD. when the training is over,
+	# then we show the rest of the interface"**: the card, the cursor, the E prompt and the pickup chip stay)
+	_rest = 0.0 if game.training else minf(_rest + delta / 0.6, 1.0)
+	_ammo.visible = playing and _rest > 0.0
+	_ammo.modulate.a = _rest
 	_ammo.queue_redraw()
 	# --- aiming: the panels step back (a quiet sign of the slower walk)
-	_panels.modulate.a = lerpf(1.0, 0.4, aimed) if playing else 1.0
+	_panels.visible = _rest > 0.0
+	_panels.modulate.a = (lerpf(1.0, 0.4, aimed) if playing else 1.0) * _rest
 	# --- the hit: blur, the glow on the side it came from, the arc round the cursor
 	if player.hurt_flash > _last_flash + 0.2 and playing:
 		_hit_t = 1.0
@@ -400,6 +406,7 @@ func update(delta: float) -> void:
 		var from := player.cam.global_position
 		var q := PhysicsRayQueryParameters3D.create(from, from + player.aim_dir() * 60.0)
 		q.exclude = [player.get_rid()]
+		q.collision_mask = V2World.SHOTS
 		var res := player.get_world_3d().direct_space_state.intersect_ray(q)
 		if not res.is_empty() and res.collider.has_meta("robot"):
 			_lined = (res.collider.get_meta("robot") as V2Robot).state != V2Robot.DEAD

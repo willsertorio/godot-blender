@@ -40,6 +40,38 @@ var _concept := false             # the detailed room of the Blender scene inste
 ## The colour a run opens out of: the title sets its own white before it hands over, so that its page seems to
 ## dissolve into the room; a run started from an end screen opens out of that screen's grey.
 static var open_from := UIPalette.COMPLETE_BG
+## A sheet of one colour over everything, hung from the tree's root so that it lives through a change of scene:
+## the scene before fades it in (`cover`), the scene after fades it out and frees it (`V2Game._opening`).
+## (**User: "a gray screen appears, then the screen goes white and the fade in appears. i dont want this gray
+## screen"**: between two scenes the engine draws a frame or more of its clear colour, grey; the game builds a
+## dungeon in that time. With the sheet at the root there is nothing to see of it.)
+static var veil: ColorRect
+
+## Physics layer of what stops the player and lets rounds and lines of sight through (the training cage's bars).
+const CAGE := 4
+const SHOTS := 0xFFFFFFFF ^ CAGE          # the collision mask of every ray that is a round or a look
+
+
+## The sheet, made if it is not there, at `alpha` now; fades to opaque in `seconds` (0 = at once). Returns the tween.
+static func cover(tree: SceneTree, color: Color, seconds: float) -> Tween:
+	if not is_instance_valid(veil):
+		var layer := CanvasLayer.new()
+		layer.layer = 100
+		tree.root.add_child(layer)
+		veil = ColorRect.new()
+		veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		veil.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		layer.add_child(veil)
+		veil.color = Color(color, 0.0)
+	else:
+		veil.color = Color(color, veil.color.a)
+	open_from = color
+	if seconds <= 0.0:
+		veil.color.a = 1.0
+		return null
+	var tw := tree.create_tween()
+	tw.tween_property(veil, "color:a", 1.0, seconds).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	return tw
 
 func _render_setup() -> void:
 	# (the UI concept's canvas: its pixel values are at 1440 x 810; a taller window shows more, it is not letterboxed)

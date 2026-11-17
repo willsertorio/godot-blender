@@ -657,7 +657,7 @@ func training_test() -> void:
 	ok = _check("training: E does nothing at a locked door, and no prompt offers it", not d0.open and prompt == "") and ok
 	# in front of the dummy, 2.8 m from it (the ground round it is kept clear)
 	var target: V2Robot = game.dummy
-	var to_spawn := (gen.player_spawn - target.global_position)
+	var to_spawn: Vector3 = (game.start_at - target.global_position)
 	to_spawn.y = 0.0
 	var stand := target.global_position + to_spawn.normalized() * 2.8
 	stand.y = 0.0                                          # (the dummy stands on its pad; the player on the floor)
@@ -729,7 +729,7 @@ func train(dir: String) -> void:
 	DirAccess.make_dir_recursive_absolute(dir)
 	await _wait(1.0)
 	var target: V2Robot = game.dummy
-	var to_spawn := gen.player_spawn - target.global_position
+	var to_spawn: Vector3 = game.start_at - target.global_position
 	to_spawn.y = 0.0
 	var feet := target.global_position
 	feet.y = 0.0
@@ -742,6 +742,8 @@ func train(dir: String) -> void:
 	player.act("ADS")
 	await _until(func() -> bool: return player._aimed > 0.9, 2.0)
 	player.act("Fire")
+	for k in 9:                                            # the dummy struck: frame after frame (0.13 s of the game apart here)
+		await _shot(dir, "Train1_struck_%d" % k)
 	await _wait(0.7)
 	await _shot(dir, "Train1_aimed")
 	player.bot_aim = false
@@ -1100,7 +1102,7 @@ func wrecks(dir: String) -> void:
 		game._training_end()
 	elif game.dummy != null:
 		var target: V2Robot = game.dummy
-		var to_spawn := gen.player_spawn - target.global_position
+		var to_spawn: Vector3 = game.start_at - target.global_position
 		to_spawn.y = 0.0
 		var feet := target.global_position
 		feet.y = 0.0

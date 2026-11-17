@@ -418,3 +418,79 @@ def power_core():
         s_, c_ = math.sin(math.radians(a)), -math.cos(math.radians(a))
         cable([((R - 0.2) * s_, (R - 0.2) * c_, 2.08), ((R + 0.02) * s_, (R + 0.02) * c_, 2.0), ((R + 0.05) * s_, (R + 0.05) * c_, 1.7), ((R - 0.06) * s_, (R - 0.06) * c_, 1.42)], 0.02, mat_k)
     Part("grey", bevel=0.008, name="top cap").cyl((0, 0, 2.08), (0, 0, 2.14), R - 0.25, segs=seg).done()
+
+
+# ------------------------------------------------------------------ the training cage: 3.0 x 3.0 m, 2.5 m high
+# (the user's reference, a picture in the chat: heavy white corner posts with grey shoes, caps and lifting eyes, a
+# base frame on feet, a framed door with hinges, a sliding bolt and a control box, cables up the posts, an X brace.
+# "Use this as inspiration but make more spaced bars": the robot inside is shot at, so the front is the door's
+# frame with two thin bars 0.84 m apart, the sides have four bars half a metre apart, and the X brace is on the
+# back only. No roof slab: the room's light falls straight down and the robot must stand in it.)
+@asset("training_cage", views=[(-0.6, -1.0, 0.22), (0.9, 0.75, 0.3)], res=[(720, 620), (720, 620)])
+def training_cage():
+    W, H, P = 1.5, 2.5, 0.2
+    lifting_posts(W, W, H, post=P)
+    bar = 0.018
+    for k, a in enumerate((0, 90, 180, 270)):                # the front (the door), a side, the back, the other side
+        m = T(rz=a)
+        base = Part("grey", bevel=0.012, name="base")
+        base.box((-W + P, -W, 0.0), (W - P, -W + 0.17, 0.18))
+        for x in (-0.95, 0.95):                              # feet with a bolt each
+            base.box((x - 0.09, -W - 0.11, 0.0), (x + 0.09, -W, 0.05))
+        base.done(m)
+        Part("hazard", bevel=0.0, name="base stripes").box((-W + P + 0.05, -W - 0.0025, 0.045), (W - P - 0.05, -W, 0.135)).done(m)
+        Part("steel", bevel=0.0, name="foot bolts").bolts([(x, -W - 0.06, 0.05) for x in (-0.95, 0.95)], axis=(0, 0, 1), r=0.02, h=0.012).done(m)
+        Part("white", bevel=0.012, name="top rail").box((-W + P, -W + 0.02, H - 0.3), (W - P, -W + 0.16, H - 0.12)).done(m)
+        bars = Part("grey", bevel=0.0, name="bars")
+        if k == 0:
+            for x in (-0.42, 0.42):
+                bars.cyl((x, -W + 0.06, 0.42), (x, -W + 0.06, H - 0.52), bar, segs=8)
+        else:
+            for x in (-0.78, -0.26, 0.26, 0.78):
+                bars.cyl((x, -W + 0.09, 0.18), (x, -W + 0.09, H - 0.3), bar, segs=8)
+        bars.done(m)
+    # --- the front: the door
+    out = chamfer(-1.22, 0.22, 1.22, H - 0.34, 0.2)
+    inn = chamfer(-1.04, 0.42, 1.04, H - 0.52, 0.24)
+    Part("white", bevel=0.01, name="door frame").band_xz(out + out[:1], inn + inn[:1], -W + 0.02, -W + 0.1).done()
+    hg = Part("grey", bevel=0.006, name="hinges")
+    for z in (0.62, 1.22, 1.82):
+        hg.box((-1.3, -W - 0.012, z - 0.07), (-1.1, -W + 0.02, z + 0.07))
+        hg.cyl((-1.22, -W - 0.03, z - 0.1), (-1.22, -W - 0.03, z + 0.1), 0.032, segs=10)
+    hg.done()
+    lk = Part("grey", bevel=0.008, name="bolt housing")
+    lk.box((0.9, -W - 0.03, 1.2), (1.06, -W + 0.02, 1.36)).box((1.14, -W - 0.03, 1.2), (1.3, -W + 0.02, 1.36))
+    lk.done()
+    Part("steel", bevel=0.0, name="bolt").cyl((0.84, -W - 0.045, 1.28), (1.33, -W - 0.045, 1.28), 0.022, segs=10).done()
+    handle((0.96, -W - 0.045, 1.28), (1.02, -W - 0.045, 1.28), (0, -0.05, 0), r=0.01)
+    Part("orange", bevel=0.0, name="door lamp").box((-0.32, -W + 0.014, H - 0.245), (0.32, -W + 0.02, H - 0.195)).done()
+    # the control box on the right post, its cables up to the top rail
+    Part("white", bevel=0.01, name="control box").box((1.305, -W - 0.07, 1.02), (1.495, -W, 1.44)).done()
+    Part("screen", bevel=0.0, name="control screen").box((1.33, -W - 0.0725, 1.3), (1.47, -W - 0.07, 1.41)).done()
+    Part("dark", bevel=0.002, name="keypad").box((1.34, -W - 0.076, 1.08), (1.46, -W - 0.07, 1.26)).done()
+    Part("ledred", bevel=0.0, name="lock lamp").box((1.335, -W - 0.0725, 1.045), (1.365, -W - 0.07, 1.06)).done()
+    for i, x in enumerate((1.36, 1.4, 1.44)):
+        cable([(x, -W - 0.035, 1.44), (x, -W - 0.035, 1.9 + i * 0.06), (x - 0.22, -W - 0.035, H - 0.2 - i * 0.03), (0.5 - i * 0.12, -W - 0.035, H - 0.2 - i * 0.03),
+               (0.5 - i * 0.12, -W + 0.03, H - 0.2 - i * 0.03)], 0.012, ("cable", "cable_red", "cable")[i])
+    Part("grey", bevel=0.006, name="junction").box((0.1, -W - 0.01, H - 0.28), (0.56, -W + 0.02, H - 0.14)).done()
+    # --- the back: the X brace with its plate
+    m = T(rz=180)
+    br = Part("white", bevel=0.008, name="brace")
+    x0, z0, x1, z1, w = -W + P, 0.2, W - P, H - 0.32, 0.075
+    n = math.hypot(x1 - x0, z1 - z0)
+    ox, oz = -(z1 - z0) / n * w, (x1 - x0) / n * w
+    br.plate_xz([(x0 - ox, z0 - oz), (x1 - ox, z1 - oz), (x1 + ox, z1 + oz), (x0 + ox, z0 + oz)], -W + 0.03, -W + 0.07)
+    br.plate_xz([(x1 - ox, z0 + oz), (x1 + ox, z0 - oz), (x0 + ox, z1 - oz), (x0 - ox, z1 + oz)], -W + 0.075, -W + 0.115)
+    br.done(m)
+    zc = (z0 + z1) / 2
+    Part("grey", bevel=0.01, name="brace plate").plate_xz(chamfer(-0.24, zc - 0.34, 0.24, zc + 0.34, 0.08), -W + 0.005, -W + 0.125).done(m)
+    Part("steel", bevel=0.0, name="brace bolts").bolts([(sx * 0.17, -W + 0.005, zc + sz * 0.26) for sx in (-1, 1) for sz in (-1, 1)], r=0.016, h=0.01).done(m)
+    # --- the top: two beams and four bars, open to the light
+    tp = Part("white", bevel=0.01, name="roof beams")
+    for y in (-0.5, 0.5):
+        tp.box((-W + P, y - 0.05, H - 0.26), (W - P, y + 0.05, H - 0.16))
+    tp.done()
+    rb = Part("grey", bevel=0.0, name="roof bars")
+    for x in (-0.78, -0.26, 0.26, 0.78):
+        rb.cyl((x, -W + 0.1, H - 0.14), (x, W - 0.1, H - 0.14), bar, segs=8)
+    rb.done()

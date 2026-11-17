@@ -13,7 +13,6 @@ const LAB_ARGS := ["--lab", "--enemy-test", "--gun-test", "--input-test", "--per
 const GAME_ARGS := ["--play", "--game-test", "--training", "--no-training", "--training-test"]
 
 var _press: Label
-var _veil: ColorRect
 var _leaving := false
 var _t := 0.0
 
@@ -44,7 +43,8 @@ func _ready() -> void:
 		if a.begins_with("--title-capture="):
 			_shot(a.trim_prefix("--title-capture="))
 		if a.begins_with("--open-capture="):               # the way into a run, frame by frame (the game goes on with it)
-			V2World.film(self, a.trim_prefix("--open-capture="), "title", 6.0)
+			# (filmed from the tree's root, so that the frames between the two scenes are in it too)
+			V2World.film(get_tree().root, a.trim_prefix("--open-capture="), "title", 9.0)
 			get_tree().create_timer(1.2).timeout.connect(_start)
 
 
@@ -84,8 +84,7 @@ func _page() -> void:
 	_press.anchor_bottom = 1.0
 	_press.offset_top = -112.0 - 20.0
 	_press.offset_bottom = -112.0
-	# pressing start: the letters fade into the page's own white, and the run opens out of that same white
-	_veil = V2Ui.full(ui, Color(UIPalette.FACILITY_WHITE, 0.0))
+	# (pressing start: the letters fade into the page's own white, `V2World.cover`, and the run opens out of it)
 
 
 func _process(delta: float) -> void:
@@ -116,9 +115,7 @@ func _start() -> void:
 	_leaving = true
 	V2Sfx.play("ui")
 	V2Music.stop(2.4)
-	V2World.open_from = UIPalette.FACILITY_WHITE
-	var tw := create_tween()
-	tw.tween_property(_veil, "color:a", 1.0, 1.3).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	var tw := V2World.cover(get_tree(), UIPalette.FACILITY_WHITE, 1.3)
 	tw.tween_interval(0.3)
 	tw.tween_callback(func() -> void: get_tree().change_scene_to_file(GAME))
 

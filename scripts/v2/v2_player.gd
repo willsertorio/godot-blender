@@ -710,6 +710,7 @@ func _process(delta: float) -> void:
 		var to := cam.global_position + aim * 60.0
 		var q := PhysicsRayQueryParameters3D.create(cam.global_position, to)
 		q.exclude = [get_rid()]
+		q.collision_mask = V2World.SHOTS
 		var res := get_world_3d().direct_space_state.intersect_ray(q)
 		if not res.is_empty():
 			to = res.position
