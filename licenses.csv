@@ -164,3 +164,5 @@ V2 sounds: servo (roboticsqueeze: its gear squeal layer),Quick Drill Fix by qubo
 "V2 menu music: Exploration Theme (assets/audio/v2/music/menu_exploration_theme.ogg)",Cleyton Kauffman (OpenGameArt),https://opengameart.org/content/exploration-theme,CC0 1.0,2026-11-16
 "Funnel Display font (site only) -> site/fonts/FunnelDisplay-*.woff2, licence site/fonts/OFL-FunnelDisplay.txt",The Funnel Project Authors (Google Fonts),https://fonts.google.com/specimen/Funnel+Display,SIL Open Font License 1.1,2026-11-17
 "Lucide icons (site menu, inline SVG): book-open-text, gamepad-2, file-text, box, route",Lucide Contributors,https://lucide.dev,ISC,2026-11-17
+"Geist font (site body text) -> site/fonts/Geist-latin.woff2, licence site/fonts/OFL-Geist.txt",The Geist Project Authors (Google Fonts),https://fonts.google.com/specimen/Geist,SIL Open Font License 1.1,2026-11-18
+"JetBrains Mono font (site labels) -> site/fonts/JetBrainsMono-latin.woff2, licence site/fonts/OFL-JetBrainsMono.txt",The JetBrains Mono Project Authors (Google Fonts),https://fonts.google.com/specimen/JetBrains+Mono,SIL Open Font License 1.1,2026-11-18
