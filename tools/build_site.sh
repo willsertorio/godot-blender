@@ -14,9 +14,6 @@ mkdir -p "$OUT" && touch build/.gdignore   # Godot must not import the built sit
 find "$OUT" -mindepth 1 -maxdepth 1 ! -name play -exec rm -rf {} +
 cp -r site/. "$OUT"/ && rm -f "$OUT/README.md" "$OUT/.gdignore"
 
-# fonts: the game's UI fonts (SIL OFL 1.1, licence file alongside)
-mkdir -p "$OUT/fonts"
-cp assets/ui/fonts/*.ttf assets/ui/fonts/OFL.txt "$OUT/fonts/"
 
 # gallery: the game's own V2 glbs, meshopt-compressed (geometry and animation untouched otherwise)
 mkdir -p "$OUT/models" "$OUT/textures"
