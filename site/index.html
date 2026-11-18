@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overview · Project Firewall</title>
+<link rel="icon" href="img/icon.png">
+<link rel="stylesheet" href="css/docs.css">
+</head>
+<body>
+<nav class="side" aria-label="Pages">
+  <a href="index.html" aria-current="page"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7v14"/><path d="M16 12h2"/><path d="M16 8h2"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/><path d="M6 12h2"/><path d="M6 8h2"/></svg><span>Overview</span></a>
+  <a href="game.html"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" x2="10" y1="11" y2="11"/><line x1="8" x2="8" y1="9" y2="13"/><line x1="15" x2="15.01" y1="12" y2="12"/><line x1="18" x2="18.01" y1="10" y2="10"/><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"/></svg><span>Play</span></a>
+  <a href="gdd.html"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg><span>GDD</span></a>
+  <a href="assets.html"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg><span>Assets</span></a>
+  <a href="trajectory.html"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg><span>Trajectory</span></a>
+</nav>
+<main class="main"><article class="doc">
+<h1 class="home">Overview</h1>
+<div class="video"><iframe src="https://share.descript.com/embed/9pC2byJwMe9" title="Project Firewall video" allow="fullscreen; autoplay; picture-in-picture" allowfullscreen></iframe></div>
+<p class="lead">This game is a sample: a vertical slice, not a complete game. It was built from the GDD the client shared with us. The same GDD had already been put through other tests: the game was first built in HTML only, then in Unity (<a href="https://willsertorio.github.io/experiments/game_viewer/161027/">see those versions</a>). This version recreates it with Blender and Godot.</p>
+<p class="lead">A first version was built directly in Godot from downloaded asset packs. It did not reach the quality bar, especially the guns and hands, so it was set aside and the game was rebuilt Blender first, in the order below.</p>
+<ol class="steps">
+  <li>
+    <h2>Concept art</h2>
+    <div class="shots"><img src="img/ov_concept_1.jpg" alt="AI concept of the lab firefight" width="1024" height="572" loading="lazy"><img src="img/ov_concept_2.jpg" alt="Concept sheet of the spider robot" width="960" height="717" loading="lazy"><img src="img/ov_concept_3.jpg" alt="Reference sheet for the power core" width="960" height="536" loading="lazy"></div>
+    <h3>Goal</h3>
+    <p>Give Claude an image to work from instead of a written description.</p>
+    <h3>Steps</h3>
+    <ul><li>Generate 2D concept art with AI: the whole scene, the gloved hands, 24 reference sheets for the environment pieces.</li><li>Design a UI concept for the interface.</li></ul>
+    <h3>Learnings</h3>
+    <ul><li>Results became consistent once there was a reference to follow.</li><li>Reference images of how a gun is held fixed what written instructions could not.</li></ul>
+    <h3>Tools</h3>
+    <ul><li>AI image generation (Google Gemini for the hand references).</li><li>Reference images of first-person gun holds.</li></ul>
+  </li>
+  <li>
+    <h2>Modelling in Blender</h2>
+    <div class="shots"><img src="img/ov_modelling_1.jpg" alt="Environment pieces modelled in Blender" width="1440" height="770" loading="lazy"><img src="img/ov_modelling_2.jpg" alt="The machine gun modelled in Blender, four views" width="960" height="496" loading="lazy"><img src="img/ov_modelling_3.jpg" alt="The concept lab room rendered in Blender" width="960" height="540" loading="lazy"></div>
+    <h3>Goal</h3>
+    <p>Model every asset from scratch, so the look is under control and the game does not depend on external models.</p>
+    <h3>Steps</h3>
+    <ul><li>Feed the concept art to Claude, which models it in Blender.</li><li>Review the renders and ask for adjustments.</li><li>Approve each asset, or a sheet of them, before it goes into the game.</li></ul>
+    <h3>Learnings</h3>
+    <ul><li>Downloaded packs looked too cartoonish and ready-made hands too blocky.</li><li>Setting a clear bar helped: "grounded military hardware", then "AAA".</li><li>The hands were the hardest part: the grip, the thumb and the knuckles passing through the gun took many rounds.</li></ul>
+    <h3>Tools</h3>
+    <ul><li>Blender 4.2 LTS, driven by Python scripts (a change is a re-run, not a hand edit); Cycles for review renders.</li><li>ambientCG PBR textures (CC0).</li><li>MakeHuman base mesh (CC0) for the player's arms.</li></ul>
+  </li>
+  <li>
+    <h2>Rigging and animation in Blender</h2>
+    <div class="shots"><img src="img/ov_rigging_1.jpg" alt="Animated firefight frame rendered in Blender" width="1280" height="720" loading="lazy"><img src="img/ov_rigging_2.jpg" alt="Rig check of the gloved arms" width="960" height="540" loading="lazy"><img src="img/ov_rigging_3.jpg" alt="The pistol in its hold pose" width="960" height="540" loading="lazy"></div><img class="strip" src="img/ov_rigging_strip.jpg" alt="Five frames of the pistol reload animation" width="1600" height="246" loading="lazy">
+    <h3>Goal</h3>
+    <p>A set of clips for each gun with its hands, and for each robot: idle, shoot, move and death.</p>
+    <h3>Steps</h3>
+    <ul><li>Describe each animation in plain language: idle sway, fire, reload, inspect.</li><li>Claude says what is feasible, then rigs and animates.</li><li>Review the motion and ask for another pass where needed.</li></ul>
+    <h3>Learnings</h3>
+    <ul><li>Motion needs impact: the robots were reworked to be juicier, more exaggerated and more dramatic.</li><li>Keep it simple: hiding the hands during part of an animation beats fighting the rig.</li></ul>
+    <h3>Tools</h3>
+    <ul><li>Blender armatures: the MakeHuman skeleton and skin weights (CC0) for the arms; joints for the robots' moving parts.</li><li>Clips baked at 24 fps, with a clip table exported alongside each model.</li></ul>
+  </li>
+  <li>
+    <h2>Building the game in Godot</h2>
+    <div class="shots"><img src="img/ov_godot_1.jpg" alt="The training room in the game" width="1440" height="810" loading="lazy"><img src="img/ov_godot_2.jpg" alt="A generated room with a spider robot" width="960" height="540" loading="lazy"><img src="img/ov_godot_3.jpg" alt="The in-game map" width="960" height="540" loading="lazy"></div>
+    <h3>Goal</h3>
+    <p>The final game, following the GDD's loop, with the look approved in Blender.</p>
+    <h3>Steps</h3>
+    <ul><li>Bring the models and clips into a test lab: one room per robot.</li><li>Tune animations, gunfire, sound and feel there.</li><li>Build the GDD's loop: the generated dungeon, a training room, the UI and menu music.</li><li>Play, report what feels wrong, fix, repeat.</li></ul>
+    <h3>Learnings</h3>
+    <ul><li>Feel matters as much as looks: stronger recoil, realistic recorded sounds, electrical smoke from wrecks, quieter footsteps.</li><li>Playing found what automated tests did not: lights flickering under doors, the frame rate, a spider that seemed to float when shot.</li></ul>
+    <h3>Tools</h3>
+    <ul><li>Godot 4.3 (GL Compatibility renderer, exportable to the web); models brought in as glTF (.glb).</li><li>Sounds from OpenGameArt (CC0), including The Free Firearm Sound Library; menu music "Exploration Theme" by Cleyton Kauffman (CC0).</li><li>Barlow fonts (SIL Open Font License).</li><li>Automated checks and a bot that plays whole runs to measure balance.</li></ul>
+  </li>
+</ol>
+</article></main>
+</body>
+</html>

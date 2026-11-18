@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GDD · Project Firewall</title>
+<link rel="icon" href="img/icon.png">
+<link rel="stylesheet" href="css/docs.css">
+</head>
+<body>
+<nav class="side" aria-label="Pages">
+  <a href="index.html"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7v14"/><path d="M16 12h2"/><path d="M16 8h2"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/><path d="M6 12h2"/><path d="M6 8h2"/></svg><span>Overview</span></a>
+  <a href="game.html"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" x2="10" y1="11" y2="11"/><line x1="8" x2="8" y1="9" y2="13"/><line x1="15" x2="15.01" y1="12" y2="12"/><line x1="18" x2="18.01" y1="10" y2="10"/><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"/></svg><span>Play</span></a>
+  <a href="gdd.html" aria-current="page"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg><span>GDD</span></a>
+  <a href="assets.html"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg><span>Assets</span></a>
+  <a href="trajectory.html"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg><span>Trajectory</span></a>
+</nav>
+<main class="main"><article class="doc">
+<h1>Project Firewall — game design document</h1>
+<section id="concept">
+      <h2>Concept</h2>
+      <p>Project Firewall — a first-person corridor shooter in which the player infiltrates a procedurally assembled dataspace, clears hostile constructs, loots containers for health and ammunition, and reaches the exit portal in the final room before their health runs out.</p>
+      <p>Minimalist neon cyberspace seen through a first-person view: dark walls traced with glowing grid lines, geometric enemies in a single hostile colour, and luminous pickups standing out against the floor.</p>
+      <p>A session is one generated dungeon of eight to twelve rooms. It ends when the player steps into the exit portal — a success — or when their health reaches zero — a failure — and either way the end screen shows a score and offers another, harder run.</p>
+</section>
+<section id="mechanic">
+      <h2>The core mechanic</h2>
+      <p>The generated dungeon. Every run builds a fresh dataspace from a random arrangement of rooms joined by corridors and doors, then scatters hostile constructs, loot and one exit portal through it. The player clears room by room, spending health and ammunition to do it, and loots containers and fallen enemies to survive long enough to reach the exit. Having no two runs share a layout is the hook, and the opposition and the payout both scale with every mission completed.</p>
+</section>
+<section id="loop">
+      <h2>1. Core gameplay loop</h2>
+      <ol>
+        <li>Player reads the title screen and presses its single button to generate a dungeon and enter play.</li>
+        <li>Player walks the generated rooms and corridors, counting each new room against a total of eight to twelve.</li>
+        <li>Player shoots hostile constructs with the pistol or the rifle, spending health and ammunition to clear each room.</li>
+        <li>Player loots containers and fallen enemies for restored health, carried health kits and rifle ammunition.</li>
+        <li>Player opens the doors between rooms and reads the map to pick a route toward the exit portal in the final room.</li>
+        <li>Player's run ends one of two ways: reaching the exit portal marks the mission complete, and losing all health ends the run in failure.</li>
+        <li>Player reads the score and enemies killed, then plays again against a harder dungeon or stops; the game has no final ending, only a difficulty that keeps climbing with each completed mission.</li>
+      </ol>
+</section>
+<section id="controls">
+      <h2>2. Controls</h2>
+      <ul>
+        <li><b>Keyboard</b> — WASD move in four directions, R reload the rifle, E interact with doors and containers, Q spend a carried health kit, 1 and 2 switch between the pistol and the rifle, Tab toggle the map.</li>
+        <li><b>Mouse</b> — move to look, left button fire, right button aim down sights; the view locks to the mouse while playing.</li>
+        <li>Aiming down sights slows movement as well as tightening the shot, and nothing on screen teaches it — the one effect the player has to discover.</li>
+      </ul>
+</section>
+<section id="rules">
+      <h2>3. Mechanics and rules</h2>
+      <p><b>Movement.</b> The player walks the dungeon on a flat grid, stopped only by walls and closed doors. Aiming down sights slows the walk.</p>
+      <p><b>Weapons.</b> The pistol fires single shots and never runs out of ammunition; the rifle fires automatically but drains a finite reserve that must be found, and only the rifle reloads.</p>
+      <p><b>Aiming down sights.</b> It tightens the shot's spread and narrows the view, and it slows movement while held.</p>
+      <p><b>Line of sight.</b> A shot hits only the first hostile along a clear line, and walls break both eyes and bullets. Hostiles attack under the same rule, so without a clear line no damage passes in either direction.</p>
+      <p><b>Doors.</b> Some corridor chokepoints hold a door that blocks movement, bullets and sight until the player opens it with the interact key while standing close enough, and an opened door stays open.</p>
+      <p><b>Loot.</b> Interact on a closed container opens it onto one of three payoffs — a carried health kit, rifle ammunition, or immediate health — and some fallen enemies drop the same.</p>
+      <p><b>Health kits.</b> The player can carry up to three kits and spends one on command to heal; picking up another refills a slot. Health and ammunition also restore instantly on pickup.</p>
+      <p><b>Enemies.</b> Three kinds of hostile constructs differ by motion and range: a stationary turret that shoots from across a room, a fast brawler that closes to melee, and a hovering pursuer in between.</p>
+      <p><b>Exit.</b> The exit portal waits in the final room and stepping into it ends the run in success; reaching zero health ends it in failure.</p>
+      <p><b>Difficulty.</b> Every completed mission makes the next dungeon's hostiles tougher and more numerous and thins the health kits on offer, and the climb resets when the game is reloaded because nothing is saved.</p>
+</section>
+<section id="pillars">
+      <h2>4. Experience pillars</h2>
+      <h3>Onboarding</h3>
+      <p>The title screen lists every control in two short lines and offers a single button, so a player is inside a dungeon on one click with no choices to make. What the game never teaches is that aiming down sights also slows movement, and how close the player must stand before the interact key will answer — the second shows no prompt and is only felt by trial.</p>
+      <h3>Enemies</h3>
+      <p>Three hostiles, differentiated by motion and range, and none of them is a projectile to dodge: each damages the player the instant line of sight is clear and its timer elapses, so the only defences are killing first, breaking the sight line or putting a door between. The game never lets a shot be dodged, which is the gap a richer enemy aims to fix.</p>
+      <h3>Rewards and power-ups</h3>
+      <p>Score is awarded only for killing hostiles, and the three types pay by the danger they pose, so the game pays for aggression and nothing else. Loot pays the two resources a run spends — health and rifle ammunition — restored on the spot or stocked as carryable kits. There are no power-ups that strengthen the player mid-run; every reward restores or scores rather than upgrades.</p>
+      <h3>Progression</h3>
+      <p>Nothing carries between sessions except difficulty: complete a mission and the next dungeon raises hostile health and numbers while it thins the kits, then resets when the page reloads. There is no currency, no unlocks and no player growth, so the pull across runs is a higher score on a harder layout, not a build. Difficulty climbs only with missions completed, not with how well any one was fought, so a player who scrapes through faces the same next dungeon as one who dominated it.</p>
+</section>
+<section id="hud">
+      <h2>5. Interface and HUD</h2>
+      <h3>In play</h3>
+      <ul>
+        <li><b>Health</b> — whether this is the room to fall back, spend a kit, or push through.</li>
+        <li><b>Ammo and reserve</b> — whether the rifle can still carry the next room or the pistol must.</li>
+        <li><b>Health kit count</b> — whether to spend a kit now or save it for the exit room.</li>
+        <li><b>Which weapon is active</b> — whether the trigger is the one that runs dry or the one that never does.</li>
+        <li><b>Room count and exit proximity</b> — how deep into the dungeon the player is and whether the goal is near.</li>
+        <li><b>Crosshair</b> — where the next shot will land and when a hostile is lined up.</li>
+        <li><b>Damage flash</b> — that health was just lost and the player should break line of sight now.</li>
+        <li><b>The objective line</b> — what the run is actually for at the moment the player decides where to go next.</li>
+        <li><b>Map toggle</b> — which rooms are explored, which hold hostiles, and where the exit sits once its room is found — the whole routing decision.</li>
+      </ul>
+      <h3>Menus</h3>
+      <ul>
+        <li><b>Title screen</b> — every control in two short lines plus one launch button, because there is nothing to pick before a run.</li>
+        <li><b>End screen</b> — win or loss, the score, enemies killed and rooms explored, and a play-again button; the decision is another, harder run or stop. The score is a single kill total, so reaching the exit and staying alive are counted but never valued.</li>
+        <li><b>No pause control</b> — the only way to stop mid-run is to leave the tab, and the game never tells the player that.</li>
+      </ul>
+</section>
+</article></main>
+</body>
+</html>
