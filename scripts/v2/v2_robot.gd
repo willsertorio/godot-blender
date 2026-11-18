@@ -76,6 +76,9 @@ var hp := 1.0
 var max_hp := 1.0
 var player: V2Player
 var active := false               # the player is in this robot's room
+var every := 1                    # moved every so many frames (the game: 3 while it roams where it is not drawn)
+var _held := 0.0
+var _held_n := randi() % 3        # (not all of them in the same frame)
 var auto := true                  # preview: cycle through the clips
 var _dummy_last := false          # the next round that strikes the dummy destroys it (`finish_off`)
 var dummy := false                # a target to practise on: it stands (the preview's Idle), a hit jars it, nothing more
@@ -1558,9 +1561,23 @@ func _sounds(delta: float) -> void:
 
 
 func _process(delta: float) -> void:
+	# (a robot that is not drawn and is only roaming is moved every `every` frames, by all the time since)
+	_held += delta
+	_held_n += 1
+	if _held_n < every:
+		return
 	var t := Time.get_ticks_usec()
-	_tick(delta)
+	_tick(_held)
+	_held = 0.0
+	_held_n = 0
 	V2World.took("robots", t)
+
+
+## A wreck that has come to rest: nothing about it changes any more but its smoke and its short circuits, which
+## only matter where it is seen (the game stops moving it while it is not drawn).
+func settled() -> bool:
+	return state == DEAD and _dead_for > 6.0 and _spin <= 0.0 and _crashed and _exploded \
+		and (_wreck_body != null or kind == "turret") and not (clip == "Death" and ap.is_playing())
 
 
 func _tick(delta: float) -> void:
@@ -1568,8 +1585,12 @@ func _tick(delta: float) -> void:
 	if ap.is_playing():
 		ap.advance(delta)
 	V2World.took("robots: clips", t)
+	t = Time.get_ticks_usec()
 	_feet_read()
+	V2World.took("robots: feet", t)
+	t = Time.get_ticks_usec()
 	var fired := V2Fx.fired(ap, _events, _ev, _flashes)
+	V2World.took("robots: flashes", t)
 	if state == PREVIEW:
 		_label.text = "%s  ·  %s" % [kind.to_upper(), clip]
 		for node in fired:                             # along the barrel
@@ -1623,13 +1644,23 @@ func _tick(delta: float) -> void:
 		return
 	if player == null:
 		return
+	t = Time.get_ticks_usec()
 	_sounds(delta)
+	V2World.took("robots: sounds", t)
+	t = Time.get_ticks_usec()
 	_look(delta)
+	V2World.took("robots: look", t)
+	t = Time.get_ticks_usec()
 	if state == SHOOT:
 		for node in fired:
 			_fire(node as Node3D)
+	V2World.took("robots: fire", t)
+	t = Time.get_ticks_usec()
 	if kind == "turret":
 		_turret(delta)
 	else:
 		_mobile(delta)
+	V2World.took("robots: move", t)
+	t = Time.get_ticks_usec()
 	_springs(delta)
+	V2World.took("robots: springs", t)

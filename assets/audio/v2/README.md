@@ -2,7 +2,10 @@
 
 All CC0. Built by `tools/build_v2_audio.py` from the raw downloads in `assets_src/audio_v2/`
 (`tools/fetch_v2_audio.sh` gets them; sources and licences: `licenses.csv`, rows "V2 sounds").
-Files are `<key>_NN.ogg`; a key plays one of its files at random with a little pitch scatter.
+Files are `<key>_NN.wav` (what is played once) or `<key>_NN.ogg` (the three loops); a key plays one of its files
+at random with a little pitch scatter. The build encodes every sound as Vorbis and then decodes the one-shots to
+16-bit WAV again: the same sound, six times the bytes (8 MB), because the engine sets up a Vorbis decoder for
+every play of an .ogg (0.5 ms on a desktop, 1 ms in a browser) and a WAV starts for nothing.
 
 **The guns are designed, not just cut.** The source is The Free Firearm Sound Library (real firearms, recorded in
 a field at 24 bit / 96 kHz). A raw shot from it, measured: a 15-25 ms crack, 28 dB of crest factor, nearly all of

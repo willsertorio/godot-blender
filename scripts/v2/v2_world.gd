@@ -63,7 +63,7 @@ static func took(system: String, since_usec: int) -> void:
 ## The report for F3: milliseconds a frame for each system over the `frames` since the last one, the biggest first,
 ## then what the engine itself reports (its whole process step, its physics step), and what is left of the process
 ## step when the game's own code is taken out (the engine's animation, particles, tweens, culling and draw list).
-static func prof_text(frames: int) -> String:
+static func prof_text(frames: int, calls: bool = false) -> String:
 	var parts: Array = []
 	var own := 0.0
 	var names := prof.keys()
@@ -73,7 +73,12 @@ static func prof_text(frames: int) -> String:
 		if not String(k).contains(":"):                    # ("robots: clips" is part of "robots")
 			own += ms
 		if ms >= 0.05:
-			parts.append("%s %.1f" % [k, ms])
+			# (what is not done every frame, with how often it was and what one costs: "sound 0.4 (12 x 0.31)")
+			var n := int(prof_n.get(k, 0))
+			if calls and n < frames * 0.8:
+				parts.append("%s %.1f (%d x %.2f)" % [k, ms, n, int(prof[k]) / 1000.0 / maxi(n, 1)])
+			else:
+				parts.append("%s %.1f" % [k, ms])
 	var process := 1000.0 * Performance.get_monitor(Performance.TIME_PROCESS)
 	var physics := 1000.0 * Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)
 	prof.clear()

@@ -305,9 +305,8 @@ func _warm_up() -> void:
 	_set_layer(things, int(dungeon.areas[maxi(dungeon.area_at(player.global_position), 0)].layer))
 	var sound := V2Sfx.enabled
 	V2Sfx.enabled = false
-	var fx_root := V2Fx.root
+	# (the effects' nodes stay: they are the first of V2Fx's pool, at rest until the first shot)
 	var marks := V2Fx._marks.size()
-	V2Fx.root = things                                     # (so that they go when `things` goes)
 	var p := at + Vector3(0, 1.0, 0)
 	V2Fx.tracer(p - side, p + side, V2Fx.RED)
 	V2Fx.tracer(p - side + Vector3(0, 0.2, 0), p + side + Vector3(0, 0.2, 0), Color(1.0, 0.85, 0.5))
@@ -317,11 +316,12 @@ func _warm_up() -> void:
 	V2Fx.sparkle(p + Vector3(0, 0.4, 0), 8, -60.0)
 	V2Fx.arc(p, p + Vector3(0.3, 0.3, 0))
 	V2Fx.puff(p, Vector3.UP, Color(0.42, 0.43, 0.46), 0.5)
+	V2Fx.puff(p, -fwd, V2Fx.GUNSMOKE, 0.1, 2, 0.6, 0.2, 0.4)           # (the player's gun smoke, the robots')
+	V2Fx.puff(p, -fwd, V2Fx.GUNSMOKE, 0.22, 2, 0.7, 0.22, 0.5)
 	V2Fx.explosion(at + Vector3(0, 0.1, 0))
 	V2Fx.burst(p)
 	V2Fx.scorch(Vector3(at.x, 0.0, at.z), Vector3.UP)
 	V2Fx.set_smoke(V2Fx.smoke_column(things, things.to_local(p), 0.6), true)
-	V2Fx.root = fx_root
 	player.overlay.visible = true
 	hud.blur_hold = 1.0
 	hud._hit_t = 1.0
@@ -331,8 +331,9 @@ func _warm_up() -> void:
 	hud._hit_t = 0.0
 	player.overlay.visible = false
 	V2Sfx.enabled = sound
+	V2Fx.settle()
 	while V2Fx._marks.size() > marks:                      # (the bullet marks made here are not left on the floor)
-		V2Fx._marks.pop_back()
+		(V2Fx._marks.pop_back() as Node).queue_free()
 	things.queue_free()
 
 
@@ -941,7 +942,13 @@ func _robots_tick() -> void:
 		var area := dungeon.area_at(r.global_position)
 		r.active = d < 34.0
 		r.visible = area < 0 or (dungeon.areas[area].node as Node3D).visible
-		r.set_process(d < 48.0 or r.state == V2Robot.TRAVEL or r.state == V2Robot.DEAD)
+		# awake: within 48 m, or on its way to the player; a wreck until it has come to rest, and then where it
+		# is drawn. One that roams where it is not drawn is moved every third frame.
+		if r.state == V2Robot.DEAD:
+			r.set_process(r.visible or not r.settled())
+		else:
+			r.set_process(d < 48.0 or r.state == V2Robot.TRAVEL)
+		r.every = 3 if r.state == V2Robot.ROAM and not r.visible and not r._sees else 1
 		if r.state == V2Robot.DEAD or r.kind == "turret":
 			continue
 		if r.state == V2Robot.TRAVEL:
@@ -1099,7 +1106,7 @@ func _hud_update(delta: float) -> void:
 				Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0,
 				"\ndrawing: cpu %.1f ms, gpu %.1f ms" % [cpu, gpu] if gpu > 0.0 or cpu > 0.0 else ""]
 			# where the rest goes, by system (**user, of the browser build: "game code ~33 ms": which code?**)
-			_perf.text += "\n" + V2World.prof_text(_perf_n) + "   robots awake %d of %d" % [
+			_perf.text += "\n" + V2World.prof_text(_perf_n, _perf_log) + "   robots awake %d of %d" % [
 				robots.filter(func(r: V2Robot) -> bool: return r.is_processing()).size(), robots.size()]
 			if _perf_log:
 				print("[perf] ", _perf.text.replace("\n", " | "))

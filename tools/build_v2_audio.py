@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""V2 sounds: cut, design, level and name the CC0 recordings in assets_src/audio_v2/ -> assets/audio/v2/<key>_NN.ogg.
+"""V2 sounds: cut, design, level and name the CC0 recordings in assets_src/audio_v2/ -> assets/audio/v2/<key>_NN.wav (the loops: .ogg).
 
     python3 -I tools/build_v2_audio.py            # all keys (then: godot --headless --import)
     python3 -I tools/build_v2_audio.py --report   # the numbers of what is in assets/audio/v2 (nothing is written)
@@ -553,7 +553,22 @@ def write(key, i, a):
     a = np.clip(finish(a, name), -1, 1).astype(np.float32)
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "f32le", "-ac", str(a.shape[1]), "-ar", str(SR), "-i", "-",
                     "-c:a", "libvorbis", "-q:a", "6", os.path.join(OUT, name)], input=a.tobytes(), check=True)
+    if key not in LOOPS:
+        to_wav(os.path.join(OUT, name))
     return a
+
+
+# What is played once is kept as WAV, the Vorbis file decoded: the same sound, six times the bytes (7 MB for all
+# of them). The game sets up a Vorbis decoder for every play of an .ogg, 0.5 ms on a desktop and 1 ms in a
+# browser, and a fight starts twenty sounds a second; a WAV starts for nothing. The loops, started once, stay .ogg.
+LOOPS = ("drone_rotor", "exit_hum", "room_tone")
+
+
+def to_wav(ogg):
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", ogg, "-c:a", "pcm_s16le", ogg[:-4] + ".wav"], check=True)
+    os.remove(ogg)
+    if os.path.exists(ogg + ".import"):
+        os.remove(ogg + ".import")
 
 
 BANDS = ((20, 80), (80, 200), (200, 500), (500, 1500), (1500, 4000), (4000, 10000), (10000, 20000))
@@ -574,7 +589,7 @@ def numbers(a):
 def report():
     print("%-22s %5s %6s %6s %6s   %s" % ("file", "s", "loud", "peak", "T-20", "energy per band, dB: " + " ".join("%d-%d" % b for b in BANDS)))
     for f in sorted(os.listdir(OUT)):
-        if f.endswith(".ogg"):
+        if f.endswith(".ogg") or f.endswith(".wav"):
             a = load(os.path.join(OUT, f), channels(os.path.join(OUT, f)) == 2)
             L, pk, t20, bands = numbers(a)
             print("%-22s %5.2f %6.1f %6.1f %6.3f   %s" % (f, len(a) / SR, L, pk, t20, " ".join("%6.1f" % x for x in bands)))
@@ -584,8 +599,13 @@ if __name__ == "__main__":
     if "--report" in sys.argv:
         report()
         sys.exit(0)
+    if "--wav" in sys.argv:                                 # only: the one-shot .ogg files that are there -> .wav
+        for f in sorted(os.listdir(OUT)):
+            if f.endswith(".ogg") and f.rsplit("_", 1)[0] not in LOOPS:
+                to_wav(os.path.join(OUT, f))
+        sys.exit(0)
     for f in os.listdir(OUT) if os.path.isdir(OUT) else []:
-        if f.endswith(".ogg"):
+        if f.endswith(".ogg") or f.endswith(".wav"):
             os.remove(os.path.join(OUT, f))
     total = 0
     for key, variants in recipes().items():
