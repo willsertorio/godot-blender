@@ -40,6 +40,7 @@ func _ready() -> void:
 	V2Music.enabled = V2Sfx.enabled
 	V2Music.start(get_tree())                              # (the menu has music; the game only its own sounds)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	V2World.preload_run(get_tree(), func() -> bool: return _leaving or not is_inside_tree())
 	for a in args:
 		if a.begins_with("--title-capture="):
 			_shot(a.trim_prefix("--title-capture="))

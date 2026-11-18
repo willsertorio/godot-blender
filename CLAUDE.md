@@ -515,7 +515,8 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
     Failure; Mission complete is the tour's `13_won`), `--title --title-capture=FILE`.
   - Learned: `set_anchors_preset` on a control already in the tree keeps its (zero) size: use
     `set_anchors_and_offsets_preset` (everything pinned to the right or the bottom was off screen); the blur
-    shader's `textureLod` on the screen texture works in Compatibility; a Button's own icon is drawn at the
+    shader's `textureLod` on the screen texture works in Compatibility on the desktop **and gives black in the
+    browser** (see "V2 in the browser"); a Button's own icon is drawn at the
     texture's size (the words and icon are children of the button); headless `--play` prints nothing useful.
 - **Training in the first room** (**user's five points**: a dummy target (a spider on a yellow-striped box); aim
   with the pistol and shoot it; switch to the rifle, aim and shoot it; a med kit from a crate; E opens a door and
@@ -662,6 +663,38 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
 - F3 (and `-- --perf-log`, which prints it every second): `V2World.took(system, since)` brackets the game's own
   code: robots (and of it clips, pose), player, hud, game, dungeon, fx (making effects), sound, map; then the
   engine's process step, what of it is not the game's code, the physics step, nodes, robots awake.
+- **Pointer lock** (the game opened on the Esc card): a browser grants the lock only right after a click or a
+  key, and the game asked for it 9 s later, at the end of the opening. Now the title asks on the key that starts
+  the run (`V2Title._start`), `again()` on the button's click; on web the game never asks on its own. If the
+  lock is not held when control is given, or is lost and the player has never had it, a **CLICK TO PLAY** card
+  shows (`V2Game._click`), and any click or key takes the lock; the Esc card needs `_had_mouse`. (Chrome does not
+  pass the Esc that leaves the lock to the page: the card shows because the lock is gone.)
+- **The hit's blur** (the view went black at every hit): `textureLod` on a screen texture with mipmaps returns
+  black in the browser. `screen_blur.gdshader` is a two-pass Gaussian now (`dir`; 8 samples a side, `sigma =
+  0.74 * 2^amount` pixels, which matches the old look to 1.5 to 3.5 of 255 rms): `V2Hud._blur_h`, a
+  `BackBufferCopy`, `V2Hud.blur`. `-- --blur-demo=N` holds it at N; pictures: `--game-capture=DIR --part=blur`.
+- **Title -> game** (it took long and looked stuck). `-- --timing` prints where the start goes (`V2World.mark`,
+  and every frame over 80 ms). What was done:
+  the dungeon is built over frames (`V2Dungeon.build_staged`: a frame is let through every `SLICE` 30 ms) under
+  the title's white sheet with a bar on it (`V2World.progress`: "BUILDING DATASPACE"; the robots are made in
+  slices too); **the merge of the areas' meshes is 1.7 s in the browser instead of 12.8 s** (desktop 1.05 s
+  instead of 2.2 s): `SurfaceTool.append_from` for every placed piece ran vertex by vertex, 7.5 million vertices
+  a dungeon, and such helpers are six times slower in WASM. Now a piece is turned once for each way it faces
+  (`_turned`: 150 a dungeon) and placing it is a shift and an append of whole arrays, done by the engine
+  (`Transform3D * PackedVector3Array`; the indices travel as triples in a PackedVector3Array so that adding the
+  vertex count is a shift too; `bytes_to_var` makes that array from the index bytes without a loop). Checked
+  against the old merge: vertices, normals, colours, UVs and indices are the same to 0.1 mm; the tangents of
+  parts without UVs are not turned (nothing reads them: `v2_set.gdshader` sets its own, the plain materials have
+  no normal map; a part with UVs still goes through `append_from`). `V2_OLD_MERGE=1` turns every part the old
+  way (for a picture comparison: `--part=rooms --match=2` both ways differ only where two runs of one differ).
+  While the title shows, `V2World.preload_run` loads the set, the robots and the guns' glbs (one a frame,
+  instantiated once so their materials are built) and the sounds: in the game robots then take 0.2 s instead of
+  0.4 and the player 0.04 instead of 0.4. Before the white lifts, `V2Game._warm_up` draws for four frames,
+  in front of the camera, one of each robot, the props, every `V2Fx` effect, the gun and the hit's blur and
+  glow: the shaders compile under the sheet and not at the first shot. Not for the bot, the checks or the
+  pictures (they build at once: `V2Dungeon.build`).
+  Measured here in the browser, from the key to the room appearing: build 2.1 s, robots 1.0 s, warm-up 7.8 s
+  (software GL draws those frames slowly; on a GPU it is the shader compiles: not measured).
 - From the site branch: on web the sounds play on Master (a bus added at runtime is silent in Godot 4.3's web
   sample playback: no room reverb, no limiter), no point lights on shots / hits / bursts (`V2Fx.LIGHTS`), the 3D
   picture starts at 900 rows with 2x MSAA.

@@ -99,6 +99,7 @@ var _loot_rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
+	V2World.mark("game: _ready begins")
 	V2Fx.root = self
 	V2Fx.reset()
 	V2Sfx.root = self
@@ -137,6 +138,7 @@ func _ready() -> void:
 	_loot_rng.seed = hash(seed_used) + 11
 	_environment(0.38, 0.25, 22.0)
 	gen = DungeonGen.new().generate(seed_used, 0)           # (the threat level is applied here, not by the generator: see below)
+	V2World.mark("game: layout generated")
 	dungeon = V2Dungeon.new()
 	add_child(dungeon)
 	# (nothing is stood where the player appears: the middle of a room with an even number of cells is a cell corner)
@@ -155,7 +157,16 @@ func _ready() -> void:
 		for l in gen.loot_spawns:                          # (the room's crate holds the health kit of the fourth step)
 			if int(l.room) == gen.spawn_room:
 				l.payoff = "kit"
-	dungeon.build(gen)
+	# Built in steps, with the sheet up and a bar on it, when somebody is watching; at once for the checks.
+	var staged := not automated and not ("--training-test" in args)
+	if staged:
+		V2World.cover(get_tree(), V2World.open_from, 0.0)
+		V2World.progress(0.0)
+		await get_tree().process_frame
+		await dungeon.build_staged(gen, func(f: float) -> void: V2World.progress(0.7 * f))
+	else:
+		dungeon.build(gen)
+	V2World.mark("game: dungeon built")
 	V2Fx.layer_at = func(p: Vector3) -> int:               # (bullet marks, the dropped gun: lit by the room they are in)
 		var a := dungeon.area_at(p)
 		return int(dungeon.areas[a].layer) if a >= 0 else 0xFFFFF
@@ -168,6 +179,7 @@ func _ready() -> void:
 		if l.payoff == "kit" and _rng.randf() > _kit_weight() / (_kit_weight() + 7.0) * 11.0 / 4.0 and not (training and int(l.room) == gen.spawn_room):
 			crates[-1].what = "ammo" if _loot_rng.randf() < 0.57 else "health"
 	_exit()
+	V2World.mark("game: crates and exit")
 	var per_room: Dictionary = {}                          # the generator's robots, room by room: a share of each room's is kept
 	for e in gen.enemy_spawns:
 		if not per_room.has(e.room):
@@ -189,11 +201,25 @@ func _ready() -> void:
 			if extra > 0 and keep[room_id] < mini(per_room[room_id].size(), most):
 				keep[room_id] += 1
 				extra -= 1
+	var since := Time.get_ticks_msec()
+	var made := 0
+	var to_make := 0
+	for room_id in per_room:
+		to_make += int(keep[room_id])
 	for room_id in per_room:
 		for k in keep[room_id]:
 			_robot(per_room[room_id][k])
+			made += 1
+			if staged and Time.get_ticks_msec() - since >= V2Dungeon.SLICE:
+				V2World.progress(0.7 + 0.18 * made / maxi(to_make, 1))
+				await get_tree().process_frame
+				since = Time.get_ticks_msec()
 	for r in robots:                                       # the robots of a room keep off each other's firing positions
 		r.others = robots.filter(func(o: V2Robot) -> bool: return o.room == r.room)
+	V2World.mark("game: %d robots" % robots.size())
+	if staged:
+		V2World.progress(0.88)
+		await get_tree().process_frame
 	player = V2Player.new()
 	player.rules = true
 	player.grab = false                                    # (a click does not take the mouse back: the menu's buttons must work)
@@ -207,8 +233,11 @@ func _ready() -> void:
 		r.player = player
 	if training:
 		_training_build(dummy_at)
+	V2World.mark("game: player")
 	_hud()
 	V2Sfx.ambience("room_tone")
+	V2World.mark("game: hud; _ready ends")
+	_first_frames()
 	if automated or "--training-test" in args:
 		_bot = (load("res://scripts/v2/v2_game_bot.gd") as GDScript).new()
 		_bot.game = self
@@ -226,10 +255,98 @@ func _ready() -> void:
 	else:
 		if not OS.has_feature("web"):                      # (a browser: taken on the key that started the run, or by "click to play")
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		player.locked = true
+		player.overlay.visible = false
+		hud.modulate.a = 0.0
+		V2World.progress(0.92)
+		await _warm_up()
+		V2World.progress(1.0)
+		await get_tree().process_frame
+		V2World.progress(-1.0)
+		V2World.mark("game: warmed up; the opening starts")
 		_opening(training)
 		for a in args:                                     # (pictures of the opening: -- --title --open-capture=DIR)
 			if a.begins_with("--open-capture="):
 				V2World.film(self, a.trim_prefix("--open-capture="), "game", 16.0)
+
+
+## Everything a fight will draw for the first time is drawn once now, under the sheet, where a stall is not seen
+## (**user, of the browser build: "first-use shader compiles on the single browser thread"**: the engine compiles
+## a material's shader the first time something with it is drawn, on the one thread a browser gives it, so the
+## first shot, the first hit and the first robot each froze the picture): the gun and the gloves, a robot of each
+## kind, the exit's field, a wall display, a crate and the pickups, every effect (tracer, impacts, sparks, a short
+## circuit, smoke, an explosion, a burst, a bullet mark), the hit's blur and glow. Four metres in front of the
+## camera, on the room's render layer (its lights reach them: the same shader variants as in play), for four
+## frames, without sound; then all of it is taken away again.
+func _warm_up() -> void:
+	var cam := player.cam
+	var fwd := -cam.global_basis.z
+	fwd.y = 0.0
+	fwd = fwd.normalized()
+	var side := Vector3(-fwd.z, 0.0, fwd.x)
+	var at := player.global_position + fwd * 4.0
+	var things := Node3D.new()
+	add_child(things)
+	var k := 0
+	for kind in ["spider", "drone", "turret"]:
+		var scene: Node3D = (load(V2Assets.DIR + kind + ".glb") as PackedScene).instantiate()
+		things.add_child(scene)
+		V2Assets.apply(scene, kind)
+		scene.global_position = at + side * (k - 1) * 1.2 + Vector3(0, 0.3, 0)
+		scene.scale = Vector3.ONE * 0.3
+		k += 1
+	for prop_name in ["exit_portal", "wall_screen", "loot_crate", "ammo_box", "medkit", "medkit_white"]:
+		if _props.find_child(prop_name, true, false) != null:
+			var prop := _prop(prop_name)
+			things.add_child(prop)
+			prop.global_position = at + side * (k - 4) * 0.5 + Vector3(0, 1.2, 0)
+			prop.scale = Vector3.ONE * 0.2
+			k += 1
+	_set_layer(things, int(dungeon.areas[maxi(dungeon.area_at(player.global_position), 0)].layer))
+	var sound := V2Sfx.enabled
+	V2Sfx.enabled = false
+	var fx_root := V2Fx.root
+	var marks := V2Fx._marks.size()
+	V2Fx.root = things                                     # (so that they go when `things` goes)
+	var p := at + Vector3(0, 1.0, 0)
+	V2Fx.tracer(p - side, p + side, V2Fx.RED)
+	V2Fx.tracer(p - side + Vector3(0, 0.2, 0), p + side + Vector3(0, 0.2, 0), Color(1.0, 0.85, 0.5))
+	V2Fx.impact(p, -fwd, false)
+	V2Fx.impact(p + side * 0.4, -fwd, true)
+	V2Fx.sparks(p - side * 0.4, Vector3.UP, 8)
+	V2Fx.sparkle(p + Vector3(0, 0.4, 0), 8, -60.0)
+	V2Fx.arc(p, p + Vector3(0.3, 0.3, 0))
+	V2Fx.puff(p, Vector3.UP, Color(0.42, 0.43, 0.46), 0.5)
+	V2Fx.explosion(at + Vector3(0, 0.1, 0))
+	V2Fx.burst(p)
+	V2Fx.scorch(Vector3(at.x, 0.0, at.z), Vector3.UP)
+	V2Fx.set_smoke(V2Fx.smoke_column(things, things.to_local(p), 0.6), true)
+	V2Fx.root = fx_root
+	player.overlay.visible = true
+	hud.blur_hold = 1.0
+	hud._hit_t = 1.0
+	for i in 4:
+		await get_tree().process_frame
+	hud.blur_hold = -1.0
+	hud._hit_t = 0.0
+	player.overlay.visible = false
+	V2Sfx.enabled = sound
+	while V2Fx._marks.size() > marks:                      # (the bullet marks made here are not left on the floor)
+		V2Fx._marks.pop_back()
+	things.queue_free()
+
+
+## (-- --timing: how long each of the first frames takes: where the first-use work falls)
+func _first_frames() -> void:
+	if not ("--timing" in OS.get_cmdline_user_args()):
+		return
+	var last := Time.get_ticks_msec()
+	for i in 400:
+		await get_tree().process_frame
+		var now := Time.get_ticks_msec()
+		if now - last > 80 or i < 4:
+			print("[timing] frame %3d took %5d ms   (at %6d)" % [i, now - last, now])
+		last = now
 
 
 ## How a run opens (**user: "a fade in into the environment, then the gun appears with the inspecting motion, then
@@ -867,6 +984,8 @@ func _input(event: InputEvent) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _perf == null:                                      # (still being built)
+		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_F3:
 			_perf.visible = not _perf.visible

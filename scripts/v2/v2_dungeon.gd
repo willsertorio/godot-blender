@@ -65,10 +65,13 @@ var areas: Array = []                 # {room: bool, id, rect: Rect2 (world x z)
 var area_of: Dictionary = {}          # cell -> index into areas
 var locked_room := -1                 # set before `build`: every doorway of this room gets a door, shut and locked (the training)
 var blocked: Dictionary = {}          # cells no path leads through (something stands in their middle: the training cage)
+const SLICE := 30                     # milliseconds of building between two frames let through (`build_staged`)
 var keep_clear: Array = []            # set before `build`: [place, radius, its whole cell too?]: nothing is stood there
 var doors: Array = []                 # {a: cell (room), b: cell (corridor), at: Vector3, dir: Vector2i, door: bool, open: bool, leaves, lamps}
 var _door_at: Dictionary = {}         # [cell, cell] -> index into doors (both orders)
 var _kit: Dictionary = {}             # piece name -> [[Mesh, Transform3D, material name], ...]
+var _rot: Dictionary = {}             # while building: a piece turned one way -> its parts' arrays (`_turned`)
+var _shared: Dictionary = {}          # while building: piece -> per part what does not turn
 var _kit_scene: Node3D
 var _headless := false
 var _lamps: Dictionary = {}
@@ -86,10 +89,11 @@ static func center(c: Vector2i) -> Vector3:
 	return Vector3((c.x + 0.5) * CELL, 0.0, (c.y + 0.5) * CELL)
 
 
-func build(layout: DungeonGen) -> void:
+func _lay_out(layout: DungeonGen) -> void:
 	gen = layout
 	_headless = DisplayServer.get_name() == "headless"
 	_kit_scene = (load(V2Assets.DIR + "set.glb") as PackedScene).instantiate()
+	V2World.mark("dungeon: the set loaded")
 	for piece in _kit_scene.get_children():
 		var parts: Array = []
 		for n in piece.find_children("*", "MeshInstance3D", true, false):
@@ -135,9 +139,39 @@ func build(layout: DungeonGen) -> void:
 	for d in gen.deco_spawns:
 		_deco(d, rng)
 	_furnish(rng)
+	V2World.mark("dungeon: laid out, furnished")
+
+
+## Build it at once (the checks, the bot, the pictures).
+func build(layout: DungeonGen) -> void:
+	_lay_out(layout)
 	for i in areas.size():
 		_meshes(i)
+	_built()
+
+
+## Build it over several frames: merging an area's pieces into its two meshes is most of the time a run takes to
+## start (2.2 s of 3.2 on a desktop, several times that on a browser's one thread), and done in one go nothing can
+## be shown meanwhile. `progress` is called with 0..1 as the areas are done; a frame is let through whenever
+## `SLICE` milliseconds have gone by. (Await it.)
+func build_staged(layout: DungeonGen, progress: Callable) -> void:
+	_lay_out(layout)
+	var since := Time.get_ticks_msec()
+	for i in areas.size():
+		_meshes(i)
+		if Time.get_ticks_msec() - since >= SLICE:
+			progress.call(float(i + 1) / areas.size())
+			await get_tree().process_frame
+			since = Time.get_ticks_msec()
+	progress.call(1.0)
+	_built()
+
+
+func _built() -> void:
 	_kit_scene.queue_free()
+	V2World.mark("dungeon: %d areas' meshes merged (%d pieces turned)" % [areas.size(), _rot.size()])
+	_rot.clear()
+	_shared.clear()
 
 
 func _cells_of(r: Rect2i) -> Array:
@@ -262,6 +296,12 @@ func _corridor_cell(placed: Array, node: Node3D, c: Vector2i, along_x: bool) -> 
 ## An area's meshes: its shell (floor, walls, ceiling) merged into one mesh per material, and what stands in it
 ## into a second one (that one casts shadows). Two meshes an area, whatever is in it: a room with thirty things
 ## in it costs the draw calls of an empty one.
+##
+## How it is merged (it was `SurfaceTool.append_from` for every placed piece: 2.2 s a dungeon on a desktop, 12.8 s
+## in a browser, where the engine's vertex-by-vertex helpers run several times slower): a piece is turned once for
+## each way it faces (`_turned`: a floor tile lies one or two ways, a wall panel four), and placing it is then one
+## shift of that array and one append, both done by the engine on whole arrays. The indices travel as triples in a
+## PackedVector3Array so that "add the vertex count" is a shift as well. The result is the same arrays as before.
 func _meshes(i: int) -> void:
 	if _headless:
 		return
@@ -270,21 +310,55 @@ func _meshes(i: int) -> void:
 		var list: Array = group[0]
 		if list.is_empty():
 			continue
-		var tools: Dictionary = {}
+		var acc: Dictionary = {}                               # material key -> [V, N, T, C, UV, I3, any UV]
 		for p in list:
-			for part in _kit[p[0]]:
-				var key: String = part[2]
+			var at: Transform3D = p[1]
+			var turned: Array = _turned(p[0], at.basis)
+			var shared: Array = _shared[p[0]]
+			var parts: Array = _kit[p[0]]
+			var shift := Transform3D(Basis.IDENTITY, at.origin)
+			for k in parts.size():
+				var key: String = parts[k][2]
 				if key == "ELiquid":                       # (each room's tanks hold a liquid of its own colour)
 					key = "ELiquid#%d" % (int(a.id) % TANKS.size())
 				elif key == "EAccent" and a.room:          # (and the line round its walls has its theme's)
 					key = "EAccent#" + themes[a.id]
-				if not tools.has(key):
-					tools[key] = SurfaceTool.new()
-				(tools[key] as SurfaceTool).append_from(part[0], 0, (p[1] as Transform3D) * (part[1] as Transform3D))
+				if not acc.has(key):
+					acc[key] = [PackedVector3Array(), PackedVector3Array(), PackedFloat32Array(), PackedColorArray(),
+						PackedVector2Array(), PackedVector3Array(), false]
+				var to: Array = acc[key]
+				var t: Array = turned[k]
+				var sh: Array = shared[k]
+				var have: int = (to[0] as PackedVector3Array).size()
+				var count: int = sh[3]
+				to[0].append_array(shift * (t[0] as PackedVector3Array))
+				to[1].append_array(t[1])
+				to[2].append_array(t[2])
+				to[3].append_array(sh[0])
+				var uvs: PackedVector2Array = to[4]
+				if sh[1] != null:                          # (a surface has UVs if one of its parts has: the others' are zero)
+					if not to[6]:
+						uvs.resize(have)
+						to[6] = true
+					uvs.append_array(sh[1])
+				elif to[6]:
+					uvs.resize(have + count)
+				to[4] = uvs
+				to[5].append_array(Transform3D(Basis.IDENTITY, Vector3(have, have, have)) * (sh[2] as PackedVector3Array))
 		var mesh := ArrayMesh.new()
 		var mi := MeshInstance3D.new()
-		for key in tools:
-			(tools[key] as SurfaceTool).commit(mesh)
+		for key in acc:
+			var from: Array = acc[key]
+			var arrays: Array = []
+			arrays.resize(Mesh.ARRAY_MAX)
+			arrays[Mesh.ARRAY_VERTEX] = from[0]
+			arrays[Mesh.ARRAY_NORMAL] = from[1]
+			arrays[Mesh.ARRAY_TANGENT] = from[2]
+			arrays[Mesh.ARRAY_COLOR] = from[3]
+			if from[6]:
+				arrays[Mesh.ARRAY_TEX_UV] = from[4]
+			arrays[Mesh.ARRAY_INDEX] = PackedInt32Array(Array((from[5] as PackedVector3Array).to_byte_array().to_float32_array()))
+			mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 		mi.mesh = mesh
 		if OS.has_environment("V2_TRIS"):
 			var tr := 0
@@ -295,7 +369,7 @@ func _meshes(i: int) -> void:
 				per[p[0]] = per.get(p[0], 0) + 1
 			print("[tris] area %d (%s %s) %s: %dk  %s" % [i, "room" if a.room else "corridor", str(a.rect.size), "props" if group[1] else "shell", tr / 1000, str(per)])
 		var s := 0
-		for key: String in tools:
+		for key: String in acc:
 			var mat: Material = V2Assets.material(key) if not key.contains("#") else null
 			if key.begins_with("ELiquid#"):
 				mat = _liquid(int(key.get_slice("#", 1)))
@@ -307,6 +381,61 @@ func _meshes(i: int) -> void:
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if group[1] else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		mi.layers = a.layer
 		(a.node as Node3D).add_child(mi)
+
+
+## The parts of `piece` turned by `basis`, each [vertices, normals, tangents] about the piece's origin: made once
+## for each way a piece faces in this dungeon and kept until the dungeon is built. Vertices and normals are
+## turned by the engine a whole array at a time. Tangents cannot be (four floats a vertex), so a part that has
+## UVs, whose tangents mean something, goes through the engine's own merge helper, vertex by vertex, as all of
+## them did; a part without UVs keeps its tangents as they are: they were made up by the importer, and none of
+## the set's materials reads them (`v2_set.gdshader` sets its own, the plain ones have no normal map).
+func _turned(piece: String, basis: Basis) -> Array:
+	var key := "%s|%d %d %d %d %d %d %d %d %d" % [piece, roundi(basis.x.x * 8192.0), roundi(basis.x.y * 8192.0),
+		roundi(basis.x.z * 8192.0), roundi(basis.y.x * 8192.0), roundi(basis.y.y * 8192.0), roundi(basis.y.z * 8192.0),
+		roundi(basis.z.x * 8192.0), roundi(basis.z.y * 8192.0), roundi(basis.z.z * 8192.0)]
+	if _rot.has(key):
+		return _rot[key]
+	if not _shared.has(piece):
+		_shared[piece] = _untouched(piece)
+	var shared: Array = _shared[piece]
+	var parts: Array = _kit[piece]
+	var out: Array = []
+	for k in parts.size():
+		var x := Transform3D(basis, Vector3.ZERO) * (parts[k][1] as Transform3D)
+		var sh: Array = shared[k]
+		if sh[1] == null and x.basis.is_equal_approx(x.basis.orthonormalized()) and not OS.has_environment("V2_OLD_MERGE"):
+			out.append([x * (sh[4] as PackedVector3Array), Transform3D(x.basis, Vector3.ZERO) * (sh[5] as PackedVector3Array), sh[6]])
+		else:
+			var st := SurfaceTool.new()
+			st.append_from(parts[k][0], 0, x)
+			var arrays := st.commit_to_arrays()
+			out.append([arrays[Mesh.ARRAY_VERTEX], arrays[Mesh.ARRAY_NORMAL], arrays[Mesh.ARRAY_TANGENT]])
+	_rot[key] = out
+	return out
+
+
+## What of a piece's parts does not turn: [colours, UVs or null, the indices as triples, the vertex count], and
+## the part as it is stored: vertices, normals, tangents.
+func _untouched(piece: String) -> Array:
+	var out: Array = []
+	for part in _kit[piece]:
+		var arrays := (part[0] as Mesh).surface_get_arrays(0)
+		assert(arrays[Mesh.ARRAY_NORMAL] != null and arrays[Mesh.ARRAY_TANGENT] != null and arrays[Mesh.ARRAY_COLOR] != null
+			and arrays[Mesh.ARRAY_INDEX] != null, piece + ": a part without normals, tangents, colours or indices")
+		var idx: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+		# (the indices as floats, three to a Vector3, without a loop here: the bytes of a float array behind the
+		# header of a stored PackedVector3Array are a stored PackedVector3Array)
+		var head := var_to_bytes(PackedVector3Array()).slice(0, 8)
+		head.encode_s32(4, idx.size() / 3)
+		head.append_array(PackedFloat32Array(Array(idx)).to_byte_array())
+		var i3: PackedVector3Array = bytes_to_var(head)
+		assert(i3.size() * 3 == idx.size() and int(i3[i3.size() - 1].z) == idx[idx.size() - 1])
+		var count: int = (arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
+		var uv: Variant = arrays[Mesh.ARRAY_TEX_UV]
+		if uv != null and (uv as PackedVector2Array).size() != count:
+			uv = null
+		out.append([arrays[Mesh.ARRAY_COLOR], uv, i3, count, arrays[Mesh.ARRAY_VERTEX], arrays[Mesh.ARRAY_NORMAL], arrays[Mesh.ARRAY_TANGENT]])
+	return out
 
 
 func _liquid(k: int) -> StandardMaterial3D:

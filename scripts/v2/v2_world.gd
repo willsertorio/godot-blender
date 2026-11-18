@@ -82,6 +82,21 @@ static func prof_text(frames: int) -> String:
 		"   ".join(parts), process, maxf(process - own, 0.0), physics, int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))]
 
 
+## -- --timing: how long the steps of starting up take (the browser's console, or the terminal): `mark("what")`
+## prints the milliseconds since the last mark and since the program started.
+static var _mark_on := -1
+static var _mark_last := 0
+
+
+static func mark(what: String) -> void:
+	if _mark_on < 0:
+		_mark_on = 1 if "--timing" in OS.get_cmdline_user_args() else 0
+	if _mark_on == 1:
+		var now := Time.get_ticks_msec()
+		print("[timing] %-34s +%5d ms   (at %6d)" % [what, now - _mark_last, now])
+		_mark_last = now
+
+
 ## Physics layer of what stops the player and lets rounds and lines of sight through (the training cage's bars).
 const CAGE := 4
 const SHOTS := 0xFFFFFFFF ^ CAGE          # the collision mask of every ray that is a round or a look
@@ -107,6 +122,78 @@ static func cover(tree: SceneTree, color: Color, seconds: float) -> Tween:
 	var tw := tree.create_tween()
 	tw.tween_property(veil, "color:a", 1.0, seconds).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	return tw
+
+## Resources kept loaded from the title on (`preload_run`): what is in here is not loaded again when the run starts.
+static var kept: Array = []
+static var _preloaded := false
+
+
+## While the title is up and nobody is waiting: load, one thing a frame, what a run will need (the set, the three
+## robots, the two gun views, with their materials and textures; every sound), so that less is left for the wait
+## after the key. Stops as soon as `stop` says so (the player has started: the game loads what is left). (Await it.)
+static func preload_run(tree: SceneTree, stop: Callable) -> void:
+	if _preloaded:
+		return
+	_preloaded = true
+	mark("title: preloading starts")
+	for step in [["set", ""], ["spider", "spider"], ["drone", "drone"], ["turret", "turret"], ["view_pistol", "view_pistol"], ["view_rifle", "view_rifle"]]:
+		await tree.process_frame
+		if stop.call():
+			_preloaded = false
+			return
+		var scene := load(V2Assets.DIR + String(step[0]) + ".glb") as PackedScene
+		kept.append(scene)
+		await tree.process_frame
+		if stop.call():
+			_preloaded = false
+			return
+		var inst := scene.instantiate()                    # (its materials, built once and kept by V2Assets, and their textures)
+		V2Assets.apply(inst, String(step[1]))
+		inst.free()
+	var n := 0
+	for key in V2Sfx.SOUNDS:
+		V2Sfx._load(key)
+		n += 1
+		if n % 6 == 0:
+			await tree.process_frame
+			if stop.call():
+				_preloaded = false
+				return
+	mark("title: preloading done")
+
+
+## What is shown on the sheet while a run is built (**user, of the browser build: "title -> game takes long and
+## feels stuck"**): a small label and a thin bar that fills, 0..1. In the sheet's own layer, so it is over
+## everything and goes with the sheet. `progress(-1)` takes it away.
+static var _prog: Control
+static var _prog_fill: ColorRect
+
+
+static func progress(frac: float, label: String = "BUILDING DATASPACE") -> void:
+	if not is_instance_valid(veil):
+		return
+	if frac < 0.0:
+		if is_instance_valid(_prog):
+			_prog.queue_free()
+		_prog = null
+		return
+	if not is_instance_valid(_prog):
+		var dark := veil.color.get_luminance() < 0.5
+		var ink := UIPalette.TEXT if dark else UIPalette.GRAPHITE
+		_prog = Control.new()
+		_prog.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_prog.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		veil.get_parent().add_child(_prog)
+		var col := V2Ui.column(_prog, 10)
+		V2Ui.at(col, 0.5, 0.62, 0.0, 0.0)
+		var l := V2Ui.text(col, label, "bold", 12, Color(ink, 0.6), 0.3)
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		var track := V2Ui.rect(col, Color(ink, 0.16), 220, 2)
+		track.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		_prog_fill = V2Ui.rect(track, UIPalette.CYAN, 0, 2)
+		_prog_fill.position = Vector2.ZERO
+	_prog_fill.size = Vector2(220.0 * clampf(frac, 0.0, 1.0), 2.0)
+
 
 func _render_setup() -> void:
 	# (the UI concept's canvas: its pixel values are at 1440 x 810; a taller window shows more, it is not letterboxed)
