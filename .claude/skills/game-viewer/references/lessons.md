@@ -21,6 +21,8 @@
 - Multi-asset glbs (an environment set): one root node per piece, laid out apart in Blender; clone the node and
   zero its position. Fronts differ by convention: check which side a piece faces and point the camera there.
 - Frame the camera with the smaller of the vertical and horizontal FOV, or models overflow phones.
+- Without the materials port, glbs that use vertex colours as data (wear masks, rest-pose encodings) render with
+  rainbow vertex colours (seen on the gloves in the template test): that is the sign the port is needed.
 - `MeshoptDecoder` + `gltf-transform meshopt` shrank 38 MB of glbs to 8 MB with no visual change.
 
 ## Trajectory
@@ -34,5 +36,3 @@
 ## Hosting
 - GitHub Pages from a prebuilt `gh-pages` branch avoids building Godot in CI and merging into main.
 - `*.github.io`, Descript and similar hosts may be unreachable from the container: say so, and ask the user to check.
-- Without the materials port, glbs that use vertex colours as data (wear masks, rest-pose encodings) render with
-  rainbow vertex colours (seen on the gloves in the template test): that is the sign the port is needed.
