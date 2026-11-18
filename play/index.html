@@ -78,7 +78,22 @@ body {
 		</style>
 		<link id="-gd-engine-icon" rel="icon" type="image/png" href="index.icon.png" />
 <link rel="apple-touch-icon" href="index.apple-touch-icon.png"/>
-
+<script>
+/* Project Firewall, browser build. At the end of every frame the engine's shell (Emscripten, copying its offscreen
+   framebuffer to the canvas) asks WebGL whether the scissor test is on. The browser answers such a question by
+   waiting until the GPU process has worked through everything queued, so the page's one thread stood still for
+   most of each frame (Chrome, M1: "process step" 33 ms with 2 ms of drawing and 3 ms of scripts). The answer is
+   known here: it changes only through enable() and disable(). */
+(function () {
+	var P = WebGL2RenderingContext.prototype, on = new WeakMap(), SCISSOR_TEST = 0x0C11;
+	var enable = P.enable, disable = P.disable, getParameter = P.getParameter, isEnabled = P.isEnabled;
+	P.enable = function (cap) { if (cap === SCISSOR_TEST) on.set(this, true); return enable.call(this, cap); };
+	P.disable = function (cap) { if (cap === SCISSOR_TEST) on.set(this, false); return disable.call(this, cap); };
+	function known(gl) { if (gl.isContextLost()) { on.set(gl, false); return false; } return true; }
+	P.getParameter = function (name) { return name === SCISSOR_TEST && known(this) ? on.get(this) === true : getParameter.call(this, name); };
+	P.isEnabled = function (cap) { return cap === SCISSOR_TEST && known(this) ? on.get(this) === true : isEnabled.call(this, cap); };
+})();
+</script>
 	</head>
 	<body>
 		<canvas id="canvas">
@@ -97,7 +112,7 @@ body {
 
 		<script src="index.js"></script>
 		<script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":80774032,"index.wasm":35376909},"focusCanvas":true,"gdextensionLibs":[]};
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":86718016,"index.wasm":35376909},"focusCanvas":true,"gdextensionLibs":[]};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
 
