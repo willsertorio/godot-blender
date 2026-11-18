@@ -725,8 +725,12 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   video memory (the copy of the geometry). Not done: the HUD's and the gun's own draw calls, merging robot
   parts across materials.
 - From the site branch: on web the sounds play on Master (a bus added at runtime is silent in Godot 4.3's web
-  sample playback: no room reverb, no limiter), no point lights on shots / hits / bursts (`V2Fx.LIGHTS`), the 3D
-  picture starts at 900 rows with 2x MSAA.
+  sample playback: no room reverb, no limiter), no point lights on shots / hits / bursts (`V2Fx.LIGHTS`), 2x MSAA.
+- **Resolution (user: on the M1 in Chrome 720 rows give about 50 fps in combat)**: the browser build starts at
+  720 rows (the desktop at 1080). The game's Esc card has a row RESOLUTION, 720 / 900 / 1080 / FULL (the steps of
+  F4, which still works; the one in use is filled cyan); a choice applies at once (`V2World.set_rows`) and is kept
+  in `user://v2_settings.cfg` (IndexedDB in a browser: checked there, a choice is still in force after the page
+  is loaded again). Picture: `--game-capture=DIR --part=menu` at `--resolution 1440x810`.
 
 ## The environment set (approved by the user; it is what the game is built from)
 

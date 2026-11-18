@@ -1512,3 +1512,24 @@ func draws(_dir: String) -> void:
 		game._robots_tick()
 		await _wait(0.3)
 	get_tree().quit()
+
+
+## The Esc card with its RESOLUTION row (-- --game-capture=DIR --part=menu, at --resolution 1440x810): as it
+## opens, and after each choice is pressed (the 3D picture's size is printed).
+func menu(dir: String) -> void:
+	DirAccess.make_dir_recursive_absolute(dir)
+	player.invulnerable = true
+	for r in game.robots:
+		r.process_mode = Node.PROCESS_MODE_DISABLED
+	var kept := V2World.render_rows
+	await _wait(1.0)
+	game.menu_demo = true
+	await _wait(0.4)
+	await _shot(dir, "Menu")
+	for e in game._res_buttons:
+		(e[1] as Button).pressed.emit()
+		await _wait(0.3)
+		print("[menu] %s -> rows %d, 3D scale %.2f" % [(e[1] as Button).text, V2World.render_rows, get_viewport().scaling_3d_scale])
+		await _shot(dir, "Menu_" + (e[1] as Button).text)
+	game.set_rows(kept)
+	get_tree().quit()
