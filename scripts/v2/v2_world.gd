@@ -49,6 +49,124 @@ static var open_from := UIPalette.COMPLETE_BG
 ## dungeon in that time. With the sheet at the root there is nothing to see of it.)
 static var veil: ColorRect
 
+## Shadows drawn with fewer draw calls. A shadow knows no materials, so what throws one can be drawn into the
+## shadow map as one mesh of one surface (`SHADOWS_ONLY`, this material) while the meshes that are seen throw
+## none. `casts(material)`: would a surface of it have thrown a shadow? Not what is blended (the engine leaves
+## it out of the shadow pass), nor a shader that says `shadows_disabled`; all the others here cull back faces,
+## as this material does.
+static var _shade: StandardMaterial3D
+
+
+static func shade_material() -> StandardMaterial3D:
+	if _shade == null:
+		_shade = StandardMaterial3D.new()
+		_shade.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	return _shade
+
+
+static func casts(mat: Material) -> bool:
+	if mat is BaseMaterial3D:
+		var b := mat as BaseMaterial3D
+		return b.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED and b.cull_mode == BaseMaterial3D.CULL_BACK \
+			and not b.no_depth_test and b.depth_draw_mode != BaseMaterial3D.DEPTH_DRAW_DISABLED
+	if mat is ShaderMaterial:
+		var code := (mat as ShaderMaterial).shader.code
+		return not (code.contains("shadows_disabled") or code.contains("ALPHA") or code.contains("cull_disabled") or code.contains("cull_front"))
+	return mat == null
+
+
+## A model of rigid parts (a robot): the meshes that hang from one joint and do not move by themselves throw
+## their shadow as one mesh (see above): a spider is 63 surfaces in the picture and was 63 more in the shadow map,
+## and is 24 there now. `ap`: the model's clips (a mesh a clip moves is left alone). The merged meshes are made
+## once for each kind of model (`asset`). Returns how many shadow meshes were added.
+static var _shades: Dictionary = {}    # "asset|joint's path" -> ArrayMesh
+
+
+static func shade_joints(scene: Node3D, asset: String, ap: AnimationPlayer) -> int:
+	if DisplayServer.get_name() == "headless" or OS.has_environment("V2_SHADE_OFF"):      # (headless: no mesh data, and nothing is drawn; V2_SHADE_OFF=1: every part throws its own, to compare pictures)
+		return 0
+	var moved: Dictionary = {}
+	if ap != null:
+		var base := ap.get_node(ap.root_node)
+		for clip_name in ap.get_animation_list():
+			var anim := ap.get_animation(clip_name)
+			for i in anim.get_track_count():
+				var n := base.get_node_or_null(NodePath(String(anim.track_get_path(i)).get_slice(":", 0)))
+				if n != null:
+					moved[n] = true
+	var by_joint: Dictionary = {}
+	for n in scene.find_children("*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		if mi.mesh == null or moved.has(mi) or mi.skin != null or mi.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_ON:
+			continue
+		var all := true
+		for k in mi.mesh.get_surface_count():
+			all = all and casts(mi.get_active_material(k))
+		if not all:
+			continue
+		var joint := mi.get_parent()
+		if not by_joint.has(joint):
+			by_joint[joint] = []
+		(by_joint[joint] as Array).append(mi)
+	var made := 0
+	for joint: Node in by_joint:
+		var list: Array = by_joint[joint]
+		var surfaces := 0
+		for mi: MeshInstance3D in list:
+			surfaces += mi.mesh.get_surface_count()
+		if surfaces < 2:
+			continue
+		var key := "%s|%s" % [asset, scene.get_path_to(joint)]
+		if not _shades.has(key):
+			var verts := PackedVector3Array()
+			var tris := PackedVector3Array()
+			for mi: MeshInstance3D in list:
+				for k in mi.mesh.get_surface_count():
+					var arrays := mi.mesh.surface_get_arrays(k)
+					var v: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+					var idx: PackedInt32Array = arrays[Mesh.ARRAY_INDEX] if arrays[Mesh.ARRAY_INDEX] != null else PackedInt32Array(range(v.size()))
+					if mi.transform.basis.determinant() < 0.0:
+						idx.reverse()                      # (a mirrored part: its triangles turn the other way)
+					var have := verts.size()
+					verts.append_array(mi.transform * v)
+					tris.append_array(Transform3D(Basis.IDENTITY, Vector3(have, have, have)) * tri_floats(idx))
+			var arrays2: Array = []
+			arrays2.resize(Mesh.ARRAY_MAX)
+			arrays2[Mesh.ARRAY_VERTEX] = verts
+			arrays2[Mesh.ARRAY_INDEX] = tri_ints(tris)
+			var mesh := ArrayMesh.new()
+			mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays2)
+			_shades[key] = mesh
+		var shade := MeshInstance3D.new()
+		shade.name = "Shade"
+		shade.mesh = _shades[key]
+		shade.material_override = shade_material()
+		shade.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+		shade.layers = (list[0] as MeshInstance3D).layers
+		joint.add_child(shade)
+		for mi: MeshInstance3D in list:
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		made += 1
+	return made
+
+
+## A mesh's indices as floats, three to a Vector3, so that "add a vertex count to every index" is one shift of a
+## whole array by the engine (`Transform3D(Basis.IDENTITY, Vector3(n, n, n)) * triples`), and back. Without a
+## loop here: the bytes of a float array behind the header of a stored PackedVector3Array are a stored
+## PackedVector3Array. (Indices under 2^24 are whole numbers in a float.)
+static func tri_floats(idx: PackedInt32Array) -> PackedVector3Array:
+	var head := var_to_bytes(PackedVector3Array()).slice(0, 8)
+	head.encode_s32(4, idx.size() / 3)
+	head.append_array(PackedFloat32Array(Array(idx)).to_byte_array())
+	var triples: PackedVector3Array = bytes_to_var(head)
+	assert(triples.size() * 3 == idx.size() and (idx.is_empty() or int(triples[triples.size() - 1].z) == idx[idx.size() - 1]))
+	return triples
+
+
+static func tri_ints(triples: PackedVector3Array) -> PackedInt32Array:
+	return PackedInt32Array(Array(triples.to_byte_array().to_float32_array()))
+
+
 ## Where a frame's time goes, by system (F3): microseconds since the last report and how often. Every `_process`
 ## of the game's own code is bracketed with `var t := Time.get_ticks_usec()` ... `V2World.took("name", t)`.
 static var prof: Dictionary = {}

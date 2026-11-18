@@ -233,6 +233,7 @@ func setup(robot: String) -> void:
 	_label.global_position = _hit_joint.global_position + Vector3(0, 0.75, 0)
 	_smoke = V2Fx.smoke_column(_hit_joint, Vector3.ZERO, 0.6 if kind == "drone" else 0.8)
 	_target = position
+	V2World.shade_joints(scene, kind, ap)                  # (its shadow: one mesh a joint, not one a part)
 	_legs_find()
 	_measure_wreck()
 	_play("Idle", 1.0, true)

@@ -357,7 +357,7 @@ func _meshes(i: int) -> void:
 			arrays[Mesh.ARRAY_COLOR] = from[3]
 			if from[6]:
 				arrays[Mesh.ARRAY_TEX_UV] = from[4]
-			arrays[Mesh.ARRAY_INDEX] = PackedInt32Array(Array((from[5] as PackedVector3Array).to_byte_array().to_float32_array()))
+			arrays[Mesh.ARRAY_INDEX] = V2World.tri_ints(from[5])
 			mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 		mi.mesh = mesh
 		if OS.has_environment("V2_TRIS"):
@@ -370,17 +370,24 @@ func _meshes(i: int) -> void:
 			print("[tris] area %d (%s %s) %s: %dk  %s" % [i, "room" if a.room else "corridor", str(a.rect.size), "props" if group[1] else "shell", tr / 1000, str(per)])
 		var s := 0
 		for key: String in acc:
-			var mat: Material = V2Assets.material(key) if not key.contains("#") else null
-			if key.begins_with("ELiquid#"):
-				mat = _liquid(int(key.get_slice("#", 1)))
-			elif key.begins_with("EAccent#"):
-				mat = V2Assets.accent(THEMES[key.get_slice("#", 1)].accent)
-			mi.set_surface_override_material(s, mat)
+			mi.set_surface_override_material(s, _material(key))
 			s += 1
-		# (the shell casts no shadow: what stands in it does)
+		# (The shell casts no shadow: what stands in it does. Its shadow as a second mesh of one surface, as the
+		# robots' and the crates' are drawn (V2World.shade_joints), was tried: 13 draw calls fewer a view, and
+		# 43 MB more video memory for the copy of every area's furniture. Not kept.)
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if group[1] else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		mi.layers = a.layer
+		mi.name = "Stands" if group[1] else "Shell"
 		(a.node as Node3D).add_child(mi)
+
+
+## The material of a surface of an area's mesh, by its key (a tank's liquid and a room's accent have their own).
+func _material(key: String) -> Material:
+	if key.begins_with("ELiquid#"):
+		return _liquid(int(key.get_slice("#", 1)))
+	if key.begins_with("EAccent#"):
+		return V2Assets.accent(THEMES[key.get_slice("#", 1)].accent)
+	return V2Assets.material(key)
 
 
 ## The parts of `piece` turned by `basis`, each [vertices, normals, tangents] about the piece's origin: made once
@@ -422,14 +429,7 @@ func _untouched(piece: String) -> Array:
 		var arrays := (part[0] as Mesh).surface_get_arrays(0)
 		assert(arrays[Mesh.ARRAY_NORMAL] != null and arrays[Mesh.ARRAY_TANGENT] != null and arrays[Mesh.ARRAY_COLOR] != null
 			and arrays[Mesh.ARRAY_INDEX] != null, piece + ": a part without normals, tangents, colours or indices")
-		var idx: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
-		# (the indices as floats, three to a Vector3, without a loop here: the bytes of a float array behind the
-		# header of a stored PackedVector3Array are a stored PackedVector3Array)
-		var head := var_to_bytes(PackedVector3Array()).slice(0, 8)
-		head.encode_s32(4, idx.size() / 3)
-		head.append_array(PackedFloat32Array(Array(idx)).to_byte_array())
-		var i3: PackedVector3Array = bytes_to_var(head)
-		assert(i3.size() * 3 == idx.size() and int(i3[i3.size() - 1].z) == idx[idx.size() - 1])
+		var i3 := V2World.tri_floats(arrays[Mesh.ARRAY_INDEX])
 		var count: int = (arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
 		var uv: Variant = arrays[Mesh.ARRAY_TEX_UV]
 		if uv != null and (uv as PackedVector2Array).size() != count:

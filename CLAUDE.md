@@ -211,7 +211,8 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
   file brought to the same loudness that leaves 1 to 3 dB less of the crack, heavier and duller, the opposite.
   Everything goes through one bus (`V2Sfx.bus`): a short room reverb, then +3 dB into a hard
   limiter (the machine gun's rounds pile up).
-  Files: `assets/audio/v2/<key>_NN.ogg` (120, 1.6 MB), **all CC0, from opengameart.org**: the guns from The Free
+  Files: `assets/audio/v2/<key>_NN.wav` (117 one-shots, 8 MB: the built Vorbis files decoded again, see "V2 in
+  the browser") and `<key>_NN.ogg` (the three loops), **all CC0, from opengameart.org**: the guns from The Free
   Firearm Sound Library (pistol = Walther PPQ, machine gun = AR-15, spider = Tikka .30-06, drone = Carl Gustav M45,
   turret = AK-47), the rest from foley packs (rubberduck, Thimras, Fantozzi, BMacZero, qubodup and others).
   `tools/fetch_v2_audio.sh` downloads the raw files to `assets_src/audio_v2/` (git-ignored; needs `py7zr`),
@@ -695,6 +696,34 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   pictures (they build at once: `V2Dungeon.build`).
   Measured here in the browser, from the key to the room appearing: build 2.1 s, robots 1.0 s, warm-up 7.8 s
   (software GL draws those frames slowly; on a GPU it is the shader compiles: not measured).
+- **What a shot costs (measured with `--game-capture=x --part=bench`: every effect and sound made 20 times,
+  ms a call, three rounds; run it in the browser build too).** The user asked for pools of effect nodes and sound
+  players. They are in (`V2Fx._take` / `_rest` / `_put`: particles, tracers, glares, arcs and lights at rest are
+  hidden and used again, `settle()` after the warm-up; `V2Sfx._voice`: 40 players of each kind, the one with
+  least left to play is cut off), and they were not where the time went: **a sound cost 1.3 ms in the browser
+  (0.5 ms on the desktop) because the engine sets up a Vorbis decoder for every play of an .ogg**, even where the
+  browser plays a ready sample, and an impact, a burst, an explosion are mostly their sounds. So the one-shots
+  are 16-bit WAV now, decoded from the same Vorbis files (`tools/build_v2_audio.py` does it after encoding;
+  `--wav` converts what is there; +7 MB in the pck: 83 MB). Browser: a sound 1.3 -> 0.4 ms, an impact 1.8 -> 0.5,
+  a robot's burst 9 -> 3.5, an explosion 14 -> 4; desktop: 0.5 -> 0.03, 0.8 -> 0.13, 4 -> 0.45, 5 -> 0.55.
+  What is left of a sound in the browser is the engine's WebAudio code (nine nodes made for every sound);
+  keeping those assemblies for the next sound (a patch of the exported index.js) gave 20 % more and was not
+  kept. A placed sound further than its distance + 4 m from the camera is not started.
+- Robots: one that roams where it is not drawn is moved every third frame (`V2Robot.every`, by all the time
+  since); a wreck at rest (`settled()`) is not moved while it is not drawn (all wrecks were, for ever). With the
+  WAV sounds the three robots awake at the start cost 1.0 ms a frame in the browser (1.7 to 2.7 before: their
+  steps' sounds). `--perf-log` shows "robots: look / move / sounds / springs / feet / flashes / clips / pose".
+- **Draw calls** (`--game-capture=x --part=draws [--match=2,5]`: a view's count with one thing after another
+  taken away; `V2_DRAWS_REST=1` lists what is left). A view of 500: HUD 48, gun 58, robots 120 to 170 (a spider
+  is 63 surfaces, and was drawn again into the shadow map), what stands in the areas 18 + 15 more in the shadow
+  map for each area in the light's reach, crates 10 + 10 each. **Shadows are drawn as one mesh a joint**
+  (`V2World.shade_joints`, `shade_material`, `casts`: a `SHADOWS_ONLY` mesh of the same triangles, the meshes
+  that are seen cast none; robots 24 / 7 / 8 instead of 63 / 35 / 25, a crate 2, the cage, the portal):
+  190 / 431 / 502 draw calls in three views became 182 / 388 / 430. Same picture: with it on and off
+  (`V2_SHADE_OFF=1`) a view differs in a few specks at shadow edges. The same for each area's furniture
+  (one shadow mesh instead of 15 surfaces) was tried and not kept: 13 draw calls fewer a view for 43 MB more
+  video memory (the copy of the geometry). Not done: the HUD's and the gun's own draw calls, merging robot
+  parts across materials.
 - From the site branch: on web the sounds play on Master (a bus added at runtime is silent in Godot 4.3's web
   sample playback: no room reverb, no limiter), no point lights on shots / hits / bursts (`V2Fx.LIGHTS`), the 3D
   picture starts at 900 rows with 2x MSAA.

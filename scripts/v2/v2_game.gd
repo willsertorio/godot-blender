@@ -389,6 +389,7 @@ func _opening(full: bool) -> void:
 func _prop(prop_name: String) -> Node3D:
 	var n := (_props.find_child(prop_name, true, false) as Node3D).duplicate() as Node3D
 	n.position = Vector3.ZERO
+	V2World.shade_joints(n, prop_name, null)               # (its shadow: one mesh, and one for a crate's lid)
 	return n
 
 
