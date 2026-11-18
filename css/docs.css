@@ -64,9 +64,14 @@ a { color: var(--accent); }
 }
 
 /* GAME */
-.game { height: 100vh; padding: 24px; display: grid; place-items: center; background: #04070A; }
-.game iframe { width: min(100%, calc((100vh - 48px) * 16 / 9)); aspect-ratio: 16 / 9; border: 0; display: block; background: #000; }
-@media (max-width: 760px) { .game { height: auto; padding: 0; } .game iframe { width: 100%; } }
+.game { height: 100vh; padding: 20px 24px 24px; display: grid; place-items: center; background: #04070A; }
+.game-wrap { width: min(100%, calc((100vh - 96px) * 16 / 9)); }
+.tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+.tabs button { border: 0; background: none; color: var(--ink-2); font: 400 15px/1.3 var(--body); padding: 7px 12px; border-radius: 8px; cursor: pointer; }
+.tabs button:hover { color: var(--ink); background: var(--hover); }
+.tabs button[aria-selected="true"] { color: #FFFFFF; background: var(--accent-bg); }
+.game iframe { width: 100%; aspect-ratio: 16 / 9; border: 0; display: block; background: #000; }
+@media (max-width: 760px) { .game { height: auto; padding: 12px 0 0; } .game-wrap { width: 100%; } .tabs { padding: 0 12px; } }
 
 /* TRAJECTORY */
 .turns { list-style: none; margin: 0; padding: 0; }

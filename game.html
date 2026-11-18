@@ -16,7 +16,29 @@
   <a href="trajectory.html"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg><span>Trajectory</span></a>
 </nav>
 <main class="main game">
-  <iframe src="play/index.html" title="Project Firewall" allow="autoplay; fullscreen; gamepad" allowfullscreen></iframe>
+  <div class="game-wrap">
+    <div class="tabs" role="tablist" aria-label="Version">
+      <button role="tab" id="tab-redesign" data-src="play/index.html" aria-selected="true">Redesign</button>
+      <button role="tab" id="tab-model" data-src="model/index.html" aria-selected="false">Model answer</button>
+    </div>
+    <iframe id="frame" title="Project Firewall" allow="autoplay; fullscreen; gamepad" allowfullscreen></iframe>
+  </div>
 </main>
+<script>
+(() => {
+  const frame = document.getElementById('frame');
+  const tabs = [...document.querySelectorAll('.tabs [role=tab]')];
+  function show(id, push) {
+    const tab = tabs.find((t) => t.id === 'tab-' + id) || tabs[0];
+    tabs.forEach((t) => t.setAttribute('aria-selected', String(t === tab)));
+    // only one game runs at a time: the other one is unloaded
+    frame.src = tab.dataset.src;
+    if (push) history.replaceState(null, '', '#' + tab.id.slice(4));
+    frame.addEventListener('load', () => frame.focus(), { once: true });
+  }
+  tabs.forEach((t) => t.addEventListener('click', () => show(t.id.slice(4), true)));
+  show(location.hash.slice(1) || 'redesign', false);
+})();
+</script>
 </body>
 </html>
