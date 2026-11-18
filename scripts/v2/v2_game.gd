@@ -260,8 +260,10 @@ func _ready() -> void:
 		player.locked = true
 		player.overlay.visible = false
 		hud.modulate.a = 0.0
-		V2World.progress(0.92)
+		V2World.progress(0.82)
 		await _warm_up()
+		V2World.progress(0.86)
+		await _rehearse()
 		V2World.progress(1.0)
 		await get_tree().process_frame
 		V2World.progress(-1.0)
@@ -270,6 +272,97 @@ func _ready() -> void:
 		for a in args:                                     # (pictures of the opening: -- --title --open-capture=DIR)
 			if a.begins_with("--open-capture="):
 				V2World.film(self, a.trim_prefix("--open-capture="), "game", 16.0)
+
+
+## The run rehearsed under the sheet (**user, of the browser build: "every major movement freezes at first:
+## shooting both weapons, aiming, running, opening boxes, getting shot"; "do a bigger loading"**): whatever is
+## drawn, played or sounded for the first time costs the browser a stall (its GPU side prepares a program the
+## first time it is drawn with: measured here, the first shot's frame took 2 s longer than the next), so every
+## sound file is started once unheard, every clip of both guns is played for a few frames with the gun drawn
+## (rounds leave, strike nothing and cost nothing), the HUD is drawn in its states (hit, low health, healed, a
+## pickup's chip), the map and the Esc card are drawn once. Then everything is as it was.
+var rehearsing := false
+
+
+func _rehearse() -> void:
+	rehearsing = true
+	V2World.mark("game: rehearsal starts")
+	await V2Sfx.prime(get_tree())
+	V2World.progress(0.9)
+	var sound := V2Sfx.enabled
+	V2Sfx.enabled = false
+	var marks := V2Fx._marks.size()
+	var keep := {"weapon": player.weapon, "hp": player.hp, "rounds": player._rounds, "rules": player.rules,
+		"hit": player.shots_hit, "times": player.shot_times.duplicate(), "bend": player.worst_bend}
+	player.rehearsal = true
+	player.rules = false
+	player.overlay.visible = true
+	hud.modulate.a = 1.0
+	var frames := func(n: int) -> void:
+		for i in n:
+			await get_tree().process_frame
+	var k := 0
+	for w: String in player._views:
+		player.select_weapon(w)
+		await frames.call(2)
+		var ap: AnimationPlayer = player._views[w].ap
+		for clip: String in ap.get_animation_list():
+			if clip == "RESET":
+				continue
+			player.busy = clip
+			ap.play(clip, 0.0)
+			ap.seek(0.0, true)
+			var first := 0.0                               # (a clip that fires: until its first round has left)
+			var events: Array = player._views[w].events.get(clip, [])
+			if not events.is_empty():
+				first = float(events[0][0])
+			var n := 0
+			while n < 2 or (first > 0.0 and ap.current_animation == clip and ap.current_animation_position < first + 0.05 and n < 40):
+				await get_tree().process_frame
+				n += 1
+			ap.stop()
+			player.busy = ""
+		k += 1
+		V2World.progress(0.9 + 0.04 * k)
+	player.select_weapon(keep.weapon)
+	player.busy = ""
+	player._ap().play("Idle")
+	# the HUD in its states, the map, the Esc card
+	player.hurt(1.0, player.global_position + player.global_basis.x * 2.0 + Vector3(0, 1.4, 0))
+	await frames.call(2)
+	player.hp = 30.0
+	await frames.call(2)
+	player.hp = keep.hp
+	hud.say("READY")
+	await frames.call(2)
+	_map.visible = true
+	await frames.call(2)
+	_map.visible = false
+	menu_demo = true
+	await frames.call(2)
+	menu_demo = false
+	await frames.call(1)
+	# as it was
+	hud.modulate.a = 0.0
+	hud._hit_t = 0.0
+	hud._blur_t = 0.0
+	hud._toast_t = 0.0
+	player.hurt_flash = 0.0
+	player.overlay.visible = false
+	player.rules = keep.rules
+	player.rehearsal = false
+	player._rounds = keep.rounds
+	_rounds_heard = keep.rounds
+	player.shots_hit = keep.hit
+	player.shot_times = keep.times
+	player.worst_bend = keep.bend
+	player.hit_confirm = 0.0
+	V2Fx.settle()
+	while V2Fx._marks.size() > marks:
+		(V2Fx._marks.pop_back() as Node).queue_free()
+	V2Sfx.enabled = sound
+	rehearsing = false
+	V2World.mark("game: rehearsed")
 
 
 ## Everything a fight will draw for the first time is drawn once now, under the sheet, where a stall is not seen
@@ -934,7 +1027,7 @@ func _process(delta: float) -> void:
 func _robots_tick() -> void:
 	var at := player.global_position
 	var my_cell := V2Dungeon.cell_of(at)
-	var gunfire := player._rounds != _rounds_heard and not training      # the player has fired since the last tick (practice is not heard)
+	var gunfire := player._rounds != _rounds_heard and not training and not rehearsing      # the player has fired since the last tick (practice is not heard)
 	_rounds_heard = player._rounds
 	if dummy != null:                                      # (drawn with its room)
 		dummy.visible = (dungeon.areas[dungeon.area_of[gen.rooms[gen.spawn_room].rect.position]].node as Node3D).visible

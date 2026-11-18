@@ -256,6 +256,32 @@ static func _voice(key: String, placed: bool, msec: int) -> Node:
 	return v[0]
 
 
+## Every one-shot file started once, unheard (the game's loading; await it). A browser plays samples: the first
+## play of a file hands its sample over, 7 to 17 ms each measured there, and an action's first sounds came with
+## the action.
+static func prime(tree: SceneTree) -> void:
+	if not enabled or root == null:
+		return
+	var p := AudioStreamPlayer.new()
+	p.volume_db = -80.0
+	p.bus = bus()
+	root.add_child(p)
+	var since := Time.get_ticks_msec()
+	for key: String in SOUNDS:
+		if key in LOOPS:
+			continue
+		for s: AudioStream in _load(key):
+			p.stream = s
+			p.play()
+			if Time.get_ticks_msec() - since >= 12:
+				await tree.process_frame
+				if not is_instance_valid(p):
+					return
+				since = Time.get_ticks_msec()
+	p.stop()
+	p.queue_free()
+
+
 ## A looping source on `parent`; not playing yet. null if the key has no sound.
 static func loop(key: String, parent: Node3D) -> AudioStreamPlayer3D:
 	if not enabled or not SOUNDS.has(key):

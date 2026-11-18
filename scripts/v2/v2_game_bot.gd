@@ -1533,3 +1533,89 @@ func menu(dir: String) -> void:
 		await _shot(dir, "Menu_" + (e[1] as Button).text)
 	game.set_rows(kept)
 	get_tree().quit()
+
+
+## What the FIRST use of things costs (-- --play --game-capture=x --part=firsts, in the browser build): each
+## sound's first play against its second, and for each of the player's actions, the first time and the second,
+## the longest the engine's process step took in a frame after it (in a browser that is where a shader built at
+## first use blocks the page; the frame's own length there is the software GPU's). `--warm`: the game's loading
+## (`_warm_up`, `_rehearse`) is done first: what is left.
+func firsts(_dir: String) -> void:
+	player.invulnerable = true
+	for r in game.robots:
+		r.process_mode = Node.PROCESS_MODE_DISABLED
+	if "--warm" in OS.get_cmdline_user_args():
+		await game._warm_up()
+		await game._rehearse()
+		game.hud.modulate.a = 1.0
+		player.overlay.visible = true
+		print("[firsts] after the warm-up and the rehearsal")
+	await _wait(1.0)
+	var at := player.global_position - player.global_transform.basis.z * 3.0 + Vector3(0, 1.2, 0)
+	var total := 0.0
+	var worst: Array = []
+	for key: String in V2Sfx.SOUNDS:
+		var t := Time.get_ticks_usec()
+		V2Sfx.play(key, at if float(V2Sfx.SOUNDS[key][4]) > 0.0 else Vector3.INF, -60.0)
+		var a := (Time.get_ticks_usec() - t) / 1000.0
+		total += a
+		worst.append(a)
+		await _frame()
+	worst.sort()
+	print("[firsts] sounds: all first plays together %.0f ms, the longest %.1f ms" % [total, worst[-1]])
+	var what := [""]
+	var longest := func(frames: int) -> float:
+		var top := 0.0
+		V2World.prof.clear()
+		for i in frames:
+			await get_tree().process_frame
+			var ms := 1000.0 * Performance.get_monitor(Performance.TIME_PROCESS)
+			if ms > top:
+				top = ms
+				what[0] = V2World.prof_text(1).get_slice("\n", 0)
+			V2World.prof.clear()
+		return top
+	print("[firsts] at rest: the engine's process step %.0f ms at most" % (await longest.call(4)))
+	var steps := {
+		"fire": func() -> void: player.act("Fire"),
+		"aim": func() -> void: player.act("ADS"),
+		"aimed fire": func() -> void: player.act("Fire"),
+		"reload": func() -> void:
+			player.busy = ""
+			player.act("Reload"),
+		"sprint": func() -> void:
+			player.busy = ""
+			player.act("Sprint"),
+		"switch gun": func() -> void:
+			player.busy = ""
+			player.switch_weapon(),
+		"fire 2": func() -> void: player.act("Fire"),
+		"aim 2": func() -> void:
+			player.busy = ""
+			player.act("ADS"),
+		"hurt": func() -> void:
+			player.busy = ""
+			player.invulnerable = false
+			player.hurt(5.0, player.global_position + Vector3(2, 1, 0))
+			player.invulnerable = true,
+		"crate": func() -> void:
+			for c in game.crates:
+				if not c.open:
+					game.open_crate(c)
+					break,
+		"door": func() -> void:
+			for i in dungeon.doors.size():
+				if not dungeon.doors[i].open:
+					game.open_door(i)
+					break,
+		"robot hit": func() -> void: V2Fx.impact(at, Vector3.UP, true),
+		"robot destroyed": func() -> void: V2Fx.burst(at),
+		"map": func() -> void: game._map.visible = not game._map.visible,
+	}
+	for round in 2:
+		for step: String in steps:
+			(steps[step] as Callable).call()
+			var top: float = await longest.call(5)
+			print("[firsts] round %d  %-16s engine blocked %5.0f ms at most  (%s)" % [round + 1, step, top, what[0]])
+			await _wait(0.3)
+	get_tree().quit()

@@ -59,6 +59,7 @@ var hit_confirm := 0.0              # > 0 just after one of the player's rounds 
 var shots_hit := 0
 var bot_aim := false                # the aim held by code (the checks)
 var bot_jump := false               # a jump asked for by code (the bot at a wreck)
+var rehearsal := false              # (the game's loading: rounds are fired for the picture's sake, they strike nothing)
 var locked := false                 # no moving, looking or shooting (the run's opening: the gun is still coming up)
 var hurt_amount := 0.0              # how much the last round took (the HUD blurs the picture by it)
 var _hurt_snd := 0.0
@@ -730,14 +731,14 @@ func _frame(delta: float) -> void:
 			if robot == null and res.collider.has_meta("wreck"):       # (the box that makes a wreck solid: the wreck is struck)
 				robot = res.collider.get_meta("wreck")
 			V2Fx.impact(to, res.normal, robot != null)
-			if robot != null:
+			if robot != null and not rehearsal:
 				robot.hit(DAMAGE[weapon], aim, to, res.collider.get_meta("joint") if res.collider.has_meta("joint") else null)
 				hit_confirm = 0.15
 				shots_hit += 1
 		shot_times.append(_clock)
 		V2Sfx.play(weapon + "_shot")
 		_rounds += 1
-		if weapon == "pistol" or _rounds % 2 == 0:         # the case reaches the floor half a second later
+		if (weapon == "pistol" or _rounds % 2 == 0) and not rehearsal:      # the case reaches the floor half a second later
 			get_tree().create_timer(randf_range(0.42, 0.6)).timeout.connect(V2Sfx.play.bind("casing"))
 		if from.distance_to(to) > 6.0 and weapon in AUTO:
 			worst_bend = maxf(worst_bend, rad_to_deg(aim.angle_to(to - from)))

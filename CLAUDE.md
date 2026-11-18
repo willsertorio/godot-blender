@@ -724,6 +724,22 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   (one shadow mesh instead of 15 surfaces) was tried and not kept: 13 draw calls fewer a view for 43 MB more
   video memory (the copy of the geometry). Not done: the HUD's and the gun's own draw calls, merging robot
   parts across materials.
+- **First use stalls (user: "every major movement freezes at first: shooting both weapons, aiming, running,
+  opening boxes, getting shot"; "do a bigger loading")**. What it is: the engine builds a shader the first time
+  something is drawn with it (and a variant for each lighting situation), and in a browser that blocks the page;
+  the first play of a sound file hands its sample over (7 to 17 ms each here). Measure it with
+  `--play --game-capture=x --part=firsts` in the browser build: for each of the player's actions, the first time
+  and the second, the longest the engine's process step took (`--warm` = with the game's loading done first).
+  **Leave the room and the robots drawn**: hiding them takes their lights away, which makes variants of its own.
+  Without the loading, here: first shot 6.5 s, first hit taken 9.4 s, first crate 8.7 s; aiming, reloading,
+  sprinting, a door: nothing. So after `_warm_up` the loading goes on with `V2Game._rehearse` under the sheet:
+  `V2Sfx.prime` starts every one-shot file once unheard; every clip of both guns is played for two frames with
+  the gun drawn (a firing clip until its first round has left: `V2Player.rehearsal` = rounds strike nothing, no
+  casings; `rules` off = nothing is used up); the HUD is drawn at full alpha in its states (hit, low health,
+  healed, a chip), the map and the Esc card once; then everything is put back (`settle`, the marks, the
+  counters). **With it: first shot 13 ms, first hit 15 ms, first crate 16 ms; all sounds' first plays 230 -> 56
+  ms.** About a hundred frames more of loading (some 2 s on a GPU: not measured there). Not covered: a lighting
+  situation the first room does not have (the first time in a corridor, say), the end screens.
 - From the site branch: on web the sounds play on Master (a bus added at runtime is silent in Godot 4.3's web
   sample playback: no room reverb, no limiter), no point lights on shots / hits / bursts (`V2Fx.LIGHTS`), 2x MSAA.
 - **Resolution (user: on the M1 in Chrome 720 rows give about 50 fps in combat)**: the browser build starts at
