@@ -19,7 +19,7 @@
   --display: "Funnel Display", system-ui, sans-serif;
   --body: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --h1-home: 72px; --h1: 64px; --h2-lg: 48px; --h2: 40px; --h3: 26.5px; --card: 20px;
+  --h1-home: 40px; --h1: 40px; --h2-lg: 34px; --h2: 30px; --h3: 22px; --card: 18px;
   color-scheme: dark;
 }
 
@@ -92,7 +92,7 @@ a { color: var(--accent); }
 /* WORKFLOW */
 .steps { list-style: none; counter-reset: step; padding: 0; margin: 28px 0 0; }
 .steps > li { counter-increment: step; position: relative; padding: 0 0 8px 52px; }
-.steps > li::before { content: counter(step); position: absolute; left: 0; top: 28px; width: 32px; height: 32px; border-radius: 50%; background: var(--accent-bg); color: #FFFFFF; font: 500 13px/1 var(--mono); display: grid; place-items: center; }
+.steps > li::before { content: counter(step); position: absolute; left: 0; top: 22px; width: 32px; height: 32px; border-radius: 50%; background: var(--accent-bg); color: #FFFFFF; font: 500 13px/1 var(--mono); display: grid; place-items: center; }
 .steps > li > h2 { margin-top: 12px; border-top: 0; padding-top: 20px; }
 .steps > li + li > h2 { border-top: 1px solid var(--line); }
 .steps img { display: block; width: 100%; height: auto; margin: 14px 0 8px; border: 1px solid var(--line); border-radius: 6px; }
@@ -110,6 +110,6 @@ a { color: var(--accent); }
 .video iframe { display: block; width: 100%; aspect-ratio: 16 / 10; border: 0; border-radius: 6px; background: #000; }
 
 /* type steps down at 991, 767 and 479 px */
-@media (max-width: 991px) { :root { --h1-home: 60px; --h1: 54px; --h2-lg: 42px; --h2: 34px; --h3: 24px; } }
-@media (max-width: 767px) { :root { --h1-home: 48px; --h1: 44px; --h2-lg: 36px; --h2: 30px; --h3: 22px; --card: 19px; } }
-@media (max-width: 479px) { :root { --h1-home: 40px; --h1: 36px; --h2-lg: 30px; --h2: 26px; --h3: 20px; --card: 18px; } .lead { font-size: 17px; } }
+@media (max-width: 991px) { :root { --h1-home: 36px; --h1: 36px; --h2-lg: 31px; --h2: 28px; --h3: 21px; } }
+@media (max-width: 767px) { :root { --h1-home: 32px; --h1: 32px; --h2-lg: 28px; --h2: 26px; --h3: 20px; --card: 17px; } }
+@media (max-width: 479px) { :root { --h1-home: 28px; --h1: 28px; --h2-lg: 25px; --h2: 23px; --h3: 19px; --card: 16px; } .lead { font-size: 17px; } }

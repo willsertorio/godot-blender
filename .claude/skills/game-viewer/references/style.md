@@ -27,13 +27,15 @@ Overview `book-open-text`, Play `gamepad-2`, GDD `file-text`, Assets `box`, Traj
 
 ## Typography (the user's rules)
 
-- **Funnel Display**, weight 500, tracking -0.02em: headlines and titles. Homepage H1 72 px, page H1 64 px,
-  large H2 48 px (centred), H2 40 px (left), H3 26.5 px, card titles 20 px.
+- **Funnel Display**, weight 500, tracking -0.02em: headlines and titles. H1 40 px (homepage and pages alike),
+  large H2 34 px (centred), H2 30 px (left), H3 22 px, card titles 18 px. (The first rules had H1 72 / 64, H2 40,
+  H3 26.5: the user found the H1 too big, set it to the H2's size and scaled the rest down.)
 - **Geist**: body text, buttons and links. Lead 18 px / 1.65, body 16 px / 1.6, card body 15 px / 1.6,
   buttons 16.5 px weight 500, links 15 px.
 - **JetBrains Mono**, uppercase, tracking 0.14em: the "code" voice. Hero prompt 13 px, kickers 12 px in cyan,
   labels 11 px. (Viewer buttons and trajectory numbers/dates are labels.)
-- Headlines in sentence case. Sizes step down at 991, 767 and 479 px (CSS variables `--h1-home`, `--h1`, `--h2`...).
+- Headlines in sentence case. Sizes step down at 991, 767 and 479 px (CSS variables `--h1-home`, `--h1`, `--h2`...):
+  H1 40 / 36 / 32 / 28, H2 30 / 28 / 26 / 23, H3 22 / 21 / 20 / 19.
 - Self-host: fetch the latin woff2 from Google Fonts' CSS (send a desktop browser User-Agent to get woff2), put
   them in `site/fonts/` with each family's `OFL.txt` (github.com/google/fonts/tree/main/ofl/<family>).
 

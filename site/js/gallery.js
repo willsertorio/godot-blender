@@ -204,7 +204,7 @@ async function select(id, { replace = false } = {}) {
     holder.add(root);
   }
   mats.apply(root, it.node ? '' : asset);
-  root.traverse((o) => { if (o.isMesh) { o.castShadow = !o.material.transparent; o.receiveShadow = true; o.frustumCulled = it.kind !== 'view'; } });
+  root.traverse((o) => { if (o.isMesh) { o.castShadow = !o.material.transparent && !it.noShadow && it.kind !== 'robot'; o.receiveShadow = true; o.frustumCulled = it.kind !== 'view'; } });
 
   if (it.kind === 'view') {
     // Godot hangs the view from the camera through its Eye node: transform = Rx(90) * Eye^-1

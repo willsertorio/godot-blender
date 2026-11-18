@@ -44,7 +44,8 @@ every asset in 3D, and the conversation that built it. Reference implementation:
    model (`clip` = default clip, use **Idle**), `view` (a first-person gun-with-hands glb: opens in Player's view;
    `eye`/`kick` = camera node names, `fov_h` = horizontal FOV), `piece` (one node of a multi-asset glb: `node`;
    recentred; `below: true` for ceiling pieces seen from under), `scene` (a whole environment). Robots and guns
-   open on Idle.
+   open on Idle. Robots (`kind: robot`) cast no shadow in the viewer (user's choice); `noShadow: true` does the same
+   for any item.
 4. **Materials**: if the game's glbs carry their materials, nothing to do. If the engine rebuilds materials by name
    (no images in the glbs, custom shaders), port that to `site/js/materials.js` (example:
    references/materials-example.js, ported from Godot shaders with `onBeforeCompile`) and dump the engine's tables
@@ -69,7 +70,7 @@ every asset in 3D, and the conversation that built it. Reference implementation:
 
 Dark: page `#141414`, menu `#1B1B1B`, lines `#2A2A2A`, text `#E8E8E8` / `#A3A3A3`, accent cyan `#3FD0E8`, selected
 row `#2B2B2B` with 8 px radius. Menu: Lucide line icons (18 px, stroke 1.6) + sentence-case labels, Geist 15 px.
-Type: **Funnel Display 500, -0.02em** for headlines (home H1 72, H1 64, H2 40, H3 26.5); **Geist** for body
+Type: **Funnel Display 500, -0.02em** for headlines (H1 40, H2 30, H3 22; the user found larger H1s too big); **Geist** for body
 (16/1.6, lead 18/1.65, links 15); **JetBrains Mono uppercase 0.14em** for labels (11 px) and kickers (12 px cyan).
 Sizes step down at 991 / 767 / 479 px. All fonts self-hosted (woff2 + OFL file + a `licenses.csv` row).
 
