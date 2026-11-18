@@ -42,7 +42,7 @@ for m in re.finditer(r'^\t"(\w+)": \[\[.*?\], [\d.]+, (-?[\d.]+), ([\d.]+), ([\d
     table[m.group(1)] = (float(m.group(2)), float(m.group(3)))
 files = {}
 for f in sorted(os.listdir(DIR)):
-    if f.endswith(".ogg"):
+    if f.endswith(".ogg") or f.endswith(".wav"):
         files.setdefault(f.rsplit("_", 1)[0], []).append(os.path.join(DIR, f))
 rng = np.random.default_rng(3)
 cache = {}

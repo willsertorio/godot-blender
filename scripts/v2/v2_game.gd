@@ -78,9 +78,12 @@ var train_hits := 0
 var dummy: V2Robot
 var _train_kits := 0
 var _perf: Label
+var _perf_log := false             # -- --perf-log: F3's lines are printed every second (the browser's console)
 var _perf_t := 0.0
 var _perf_n := 0
 var _menu: Control
+var _click: Control                # "click to play": the mouse was never ours in this run (a browser)
+var _had_mouse := false
 var _top: CanvasLayer
 var _end: Control
 var _map: V2Map
@@ -96,6 +99,7 @@ var _loot_rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
+	V2World.mark("game: _ready begins")
 	V2Fx.root = self
 	V2Fx.reset()
 	V2Sfx.root = self
@@ -134,6 +138,7 @@ func _ready() -> void:
 	_loot_rng.seed = hash(seed_used) + 11
 	_environment(0.38, 0.25, 22.0)
 	gen = DungeonGen.new().generate(seed_used, 0)           # (the threat level is applied here, not by the generator: see below)
+	V2World.mark("game: layout generated")
 	dungeon = V2Dungeon.new()
 	add_child(dungeon)
 	# (nothing is stood where the player appears: the middle of a room with an even number of cells is a cell corner)
@@ -152,7 +157,16 @@ func _ready() -> void:
 		for l in gen.loot_spawns:                          # (the room's crate holds the health kit of the fourth step)
 			if int(l.room) == gen.spawn_room:
 				l.payoff = "kit"
-	dungeon.build(gen)
+	# Built in steps, with the sheet up and a bar on it, when somebody is watching; at once for the checks.
+	var staged := not automated and not ("--training-test" in args)
+	if staged:
+		V2World.cover(get_tree(), V2World.open_from, 0.0)
+		V2World.progress(0.0)
+		await get_tree().process_frame
+		await dungeon.build_staged(gen, func(f: float) -> void: V2World.progress(0.7 * f))
+	else:
+		dungeon.build(gen)
+	V2World.mark("game: dungeon built")
 	V2Fx.layer_at = func(p: Vector3) -> int:               # (bullet marks, the dropped gun: lit by the room they are in)
 		var a := dungeon.area_at(p)
 		return int(dungeon.areas[a].layer) if a >= 0 else 0xFFFFF
@@ -165,6 +179,7 @@ func _ready() -> void:
 		if l.payoff == "kit" and _rng.randf() > _kit_weight() / (_kit_weight() + 7.0) * 11.0 / 4.0 and not (training and int(l.room) == gen.spawn_room):
 			crates[-1].what = "ammo" if _loot_rng.randf() < 0.57 else "health"
 	_exit()
+	V2World.mark("game: crates and exit")
 	var per_room: Dictionary = {}                          # the generator's robots, room by room: a share of each room's is kept
 	for e in gen.enemy_spawns:
 		if not per_room.has(e.room):
@@ -186,11 +201,25 @@ func _ready() -> void:
 			if extra > 0 and keep[room_id] < mini(per_room[room_id].size(), most):
 				keep[room_id] += 1
 				extra -= 1
+	var since := Time.get_ticks_msec()
+	var made := 0
+	var to_make := 0
+	for room_id in per_room:
+		to_make += int(keep[room_id])
 	for room_id in per_room:
 		for k in keep[room_id]:
 			_robot(per_room[room_id][k])
+			made += 1
+			if staged and Time.get_ticks_msec() - since >= V2Dungeon.SLICE:
+				V2World.progress(0.7 + 0.18 * made / maxi(to_make, 1))
+				await get_tree().process_frame
+				since = Time.get_ticks_msec()
 	for r in robots:                                       # the robots of a room keep off each other's firing positions
 		r.others = robots.filter(func(o: V2Robot) -> bool: return o.room == r.room)
+	V2World.mark("game: %d robots" % robots.size())
+	if staged:
+		V2World.progress(0.88)
+		await get_tree().process_frame
 	player = V2Player.new()
 	player.rules = true
 	player.grab = false                                    # (a click does not take the mouse back: the menu's buttons must work)
@@ -204,8 +233,11 @@ func _ready() -> void:
 		r.player = player
 	if training:
 		_training_build(dummy_at)
+	V2World.mark("game: player")
 	_hud()
 	V2Sfx.ambience("room_tone")
+	V2World.mark("game: hud; _ready ends")
+	_first_frames()
 	if automated or "--training-test" in args:
 		_bot = (load("res://scripts/v2/v2_game_bot.gd") as GDScript).new()
 		_bot.game = self
@@ -221,11 +253,101 @@ func _ready() -> void:
 		else:
 			_bot.test()
 	else:
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		if not OS.has_feature("web"):                      # (a browser: taken on the key that started the run, or by "click to play")
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		player.locked = true
+		player.overlay.visible = false
+		hud.modulate.a = 0.0
+		V2World.progress(0.92)
+		await _warm_up()
+		V2World.progress(1.0)
+		await get_tree().process_frame
+		V2World.progress(-1.0)
+		V2World.mark("game: warmed up; the opening starts")
 		_opening(training)
 		for a in args:                                     # (pictures of the opening: -- --title --open-capture=DIR)
 			if a.begins_with("--open-capture="):
 				V2World.film(self, a.trim_prefix("--open-capture="), "game", 16.0)
+
+
+## Everything a fight will draw for the first time is drawn once now, under the sheet, where a stall is not seen
+## (**user, of the browser build: "first-use shader compiles on the single browser thread"**: the engine compiles
+## a material's shader the first time something with it is drawn, on the one thread a browser gives it, so the
+## first shot, the first hit and the first robot each froze the picture): the gun and the gloves, a robot of each
+## kind, the exit's field, a wall display, a crate and the pickups, every effect (tracer, impacts, sparks, a short
+## circuit, smoke, an explosion, a burst, a bullet mark), the hit's blur and glow. Four metres in front of the
+## camera, on the room's render layer (its lights reach them: the same shader variants as in play), for four
+## frames, without sound; then all of it is taken away again.
+func _warm_up() -> void:
+	var cam := player.cam
+	var fwd := -cam.global_basis.z
+	fwd.y = 0.0
+	fwd = fwd.normalized()
+	var side := Vector3(-fwd.z, 0.0, fwd.x)
+	var at := player.global_position + fwd * 4.0
+	var things := Node3D.new()
+	add_child(things)
+	var k := 0
+	for kind in ["spider", "drone", "turret"]:
+		var scene: Node3D = (load(V2Assets.DIR + kind + ".glb") as PackedScene).instantiate()
+		things.add_child(scene)
+		V2Assets.apply(scene, kind)
+		scene.global_position = at + side * (k - 1) * 1.2 + Vector3(0, 0.3, 0)
+		scene.scale = Vector3.ONE * 0.3
+		k += 1
+	for prop_name in ["exit_portal", "wall_screen", "loot_crate", "ammo_box", "medkit", "medkit_white"]:
+		if _props.find_child(prop_name, true, false) != null:
+			var prop := _prop(prop_name)
+			things.add_child(prop)
+			prop.global_position = at + side * (k - 4) * 0.5 + Vector3(0, 1.2, 0)
+			prop.scale = Vector3.ONE * 0.2
+			k += 1
+	_set_layer(things, int(dungeon.areas[maxi(dungeon.area_at(player.global_position), 0)].layer))
+	var sound := V2Sfx.enabled
+	V2Sfx.enabled = false
+	# (the effects' nodes stay: they are the first of V2Fx's pool, at rest until the first shot)
+	var marks := V2Fx._marks.size()
+	var p := at + Vector3(0, 1.0, 0)
+	V2Fx.tracer(p - side, p + side, V2Fx.RED)
+	V2Fx.tracer(p - side + Vector3(0, 0.2, 0), p + side + Vector3(0, 0.2, 0), Color(1.0, 0.85, 0.5))
+	V2Fx.impact(p, -fwd, false)
+	V2Fx.impact(p + side * 0.4, -fwd, true)
+	V2Fx.sparks(p - side * 0.4, Vector3.UP, 8)
+	V2Fx.sparkle(p + Vector3(0, 0.4, 0), 8, -60.0)
+	V2Fx.arc(p, p + Vector3(0.3, 0.3, 0))
+	V2Fx.puff(p, Vector3.UP, Color(0.42, 0.43, 0.46), 0.5)
+	V2Fx.puff(p, -fwd, V2Fx.GUNSMOKE, 0.1, 2, 0.6, 0.2, 0.4)           # (the player's gun smoke, the robots')
+	V2Fx.puff(p, -fwd, V2Fx.GUNSMOKE, 0.22, 2, 0.7, 0.22, 0.5)
+	V2Fx.explosion(at + Vector3(0, 0.1, 0))
+	V2Fx.burst(p)
+	V2Fx.scorch(Vector3(at.x, 0.0, at.z), Vector3.UP)
+	V2Fx.set_smoke(V2Fx.smoke_column(things, things.to_local(p), 0.6), true)
+	player.overlay.visible = true
+	hud.blur_hold = 1.0
+	hud._hit_t = 1.0
+	for i in 4:
+		await get_tree().process_frame
+	hud.blur_hold = -1.0
+	hud._hit_t = 0.0
+	player.overlay.visible = false
+	V2Sfx.enabled = sound
+	V2Fx.settle()
+	while V2Fx._marks.size() > marks:                      # (the bullet marks made here are not left on the floor)
+		(V2Fx._marks.pop_back() as Node).queue_free()
+	things.queue_free()
+
+
+## (-- --timing: how long each of the first frames takes: where the first-use work falls)
+func _first_frames() -> void:
+	if not ("--timing" in OS.get_cmdline_user_args()):
+		return
+	var last := Time.get_ticks_msec()
+	for i in 400:
+		await get_tree().process_frame
+		var now := Time.get_ticks_msec()
+		if now - last > 80 or i < 4:
+			print("[timing] frame %3d took %5d ms   (at %6d)" % [i, now - last, now])
+		last = now
 
 
 ## How a run opens (**user: "a fade in into the environment, then the gun appears with the inspecting motion, then
@@ -267,6 +389,7 @@ func _opening(full: bool) -> void:
 func _prop(prop_name: String) -> Node3D:
 	var n := (_props.find_child(prop_name, true, false) as Node3D).duplicate() as Node3D
 	n.position = Vector3.ZERO
+	V2World.shade_joints(n, prop_name, null)               # (its shadow: one mesh, and one for a crate's lid)
 	return n
 
 
@@ -780,7 +903,10 @@ func _process(delta: float) -> void:
 				exit_found = true
 		else:
 			walked[a.id] = true
+	var t := Time.get_ticks_usec()
 	dungeon.update(at, V2Player.GUN_LAYER)
+	V2World.took("dungeon", t)
+	t = Time.get_ticks_usec()
 	if training and state == PLAYING:
 		_training_tick()
 	if state == PLAYING:
@@ -796,7 +922,10 @@ func _process(delta: float) -> void:
 	if state == LOST:
 		_death(delta)
 	_pickups(delta)
+	V2World.took("game", t)
+	t = Time.get_ticks_usec()
 	_hud_update(delta)
+	V2World.took("hud", t)
 
 
 ## Twice a second: which robots are awake and drawn, and which go after the player.
@@ -814,7 +943,13 @@ func _robots_tick() -> void:
 		var area := dungeon.area_at(r.global_position)
 		r.active = d < 34.0
 		r.visible = area < 0 or (dungeon.areas[area].node as Node3D).visible
-		r.set_process(d < 48.0 or r.state == V2Robot.TRAVEL or r.state == V2Robot.DEAD)
+		# awake: within 48 m, or on its way to the player; a wreck until it has come to rest, and then where it
+		# is drawn. One that roams where it is not drawn is moved every third frame.
+		if r.state == V2Robot.DEAD:
+			r.set_process(r.visible or not r.settled())
+		else:
+			r.set_process(d < 48.0 or r.state == V2Robot.TRAVEL)
+		r.every = 3 if r.state == V2Robot.ROAM and not r.visible and not r._sees else 1
 		if r.state == V2Robot.DEAD or r.kind == "turret":
 			continue
 		if r.state == V2Robot.TRAVEL:
@@ -848,7 +983,17 @@ func _pickups(delta: float) -> void:
 			node.queue_free()
 
 
+func _input(event: InputEvent) -> void:
+	if _click != null and _click.visible and ((event is InputEventMouseButton and event.pressed)
+			or (event is InputEventKey and event.pressed and not event.echo and not (event.keycode in [KEY_F3, KEY_F4, KEY_ESCAPE]))):
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED       # (inside the event: that is when a browser allows it)
+		if event is InputEventMouseButton:
+			get_viewport().set_input_as_handled()          # (the click that takes the mouse fires no round)
+
+
 func _unhandled_input(event: InputEvent) -> void:
+	if _perf == null:                                      # (still being built)
+		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_F3:
 			_perf.visible = not _perf.visible
@@ -879,6 +1024,11 @@ func _hud() -> void:
 	_ui.add_child(hud)
 	hud.setup(self, _fx)
 	_perf = hud.perf
+	_perf_log = "--perf-log" in OS.get_cmdline_user_args()
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--blur-demo="):
+			hud.blur_hold = float(a.trim_prefix("--blur-demo="))
+	_perf.visible = _perf_log
 	var map_layer := CanvasLayer.new()
 	map_layer.layer = 5
 	add_child(map_layer)
@@ -903,6 +1053,22 @@ func _hud() -> void:
 	var buttons := V2Ui.row(col, 12)
 	V2Ui.button(buttons, "RESUME", func() -> void: Input.mouse_mode = Input.MOUSE_MODE_CAPTURED, UIPalette.CYAN, "chevron_right")
 	V2Ui.button(buttons, "STOP HERE", to_title)
+	# The mouse was never ours in this run (**user, of the browser build: "the game opens on the Esc card"**: a
+	# browser gives the pointer lock only in answer to a click or a key, and may refuse even then): not the
+	# pause card, which says the player left, but an invitation; any click or key takes the mouse.
+	_click = Control.new()
+	_click.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_click.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_click.visible = false
+	_top.add_child(_click)
+	V2Ui.full(_click, Color(0, 0, 0, 0.3))
+	var cc := V2Ui.panel(_click, UIPalette.hud_panel(true), [30, 20, 30, 22])
+	V2Ui.at(cc, 0.5, 0.5, 0.0, 0.0)
+	var ccol := V2Ui.column(cc, 6)
+	var line := V2Ui.text(ccol, "CLICK TO PLAY", "extrabold", 22, UIPalette.TEXT, 0.2)
+	line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var sub := V2Ui.text(ccol, "The browser hands over the mouse on a click", "regular", 13, UIPalette.LABEL)
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 
 func to_title() -> void:
@@ -912,6 +1078,7 @@ func to_title() -> void:
 
 
 func again() -> void:
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED           # (on the button's click or Enter: see the title's `_start`)
 	V2World.cover(get_tree(), UIPalette.COMPLETE_BG, 0.0)  # (no frame of the engine's clear colour between the two runs)
 	get_tree().reload_current_scene()
 
@@ -919,7 +1086,12 @@ func again() -> void:
 func _hud_update(delta: float) -> void:
 	hud.update(delta)
 	hud.visible = not _map.visible                         # (the map has the screen to itself)
-	_menu.visible = state == PLAYING and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE and _bot == null
+	# (on the desktop the mouse is ours from the first frame; in a browser `mouse_mode` says whether the pointer
+	# lock is really held)
+	var ours := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+	_had_mouse = _had_mouse or ours
+	_menu.visible = state == PLAYING and not ours and _had_mouse and _bot == null
+	_click.visible = state == PLAYING and not ours and not _had_mouse and _bot == null
 	if _map.visible:
 		_map.queue_redraw()
 	if _perf.visible:
@@ -933,7 +1105,12 @@ func _hud_update(delta: float) -> void:
 				_perf_n / _perf_t, 1000.0 * _perf_t / _perf_n, _render_text(),
 				Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1000.0,
 				Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0,
-				"\ndrawing: cpu %.1f ms, gpu %.1f ms   game code %.1f ms" % [cpu, gpu, 1000.0 * Performance.get_monitor(Performance.TIME_PROCESS)] if gpu > 0.0 or cpu > 0.0 else ""]
+				"\ndrawing: cpu %.1f ms, gpu %.1f ms" % [cpu, gpu] if gpu > 0.0 or cpu > 0.0 else ""]
+			# where the rest goes, by system (**user, of the browser build: "game code ~33 ms": which code?**)
+			_perf.text += "\n" + V2World.prof_text(_perf_n, _perf_log) + "   robots awake %d of %d" % [
+				robots.filter(func(r: V2Robot) -> bool: return r.is_processing()).size(), robots.size()]
+			if _perf_log:
+				print("[perf] ", _perf.text.replace("\n", " | "))
 			_perf_t = 0.0
 			_perf_n = 0
 

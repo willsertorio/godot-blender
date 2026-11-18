@@ -49,6 +49,177 @@ static var open_from := UIPalette.COMPLETE_BG
 ## dungeon in that time. With the sheet at the root there is nothing to see of it.)
 static var veil: ColorRect
 
+## Shadows drawn with fewer draw calls. A shadow knows no materials, so what throws one can be drawn into the
+## shadow map as one mesh of one surface (`SHADOWS_ONLY`, this material) while the meshes that are seen throw
+## none. `casts(material)`: would a surface of it have thrown a shadow? Not what is blended (the engine leaves
+## it out of the shadow pass), nor a shader that says `shadows_disabled`; all the others here cull back faces,
+## as this material does.
+static var _shade: StandardMaterial3D
+
+
+static func shade_material() -> StandardMaterial3D:
+	if _shade == null:
+		_shade = StandardMaterial3D.new()
+		_shade.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	return _shade
+
+
+static func casts(mat: Material) -> bool:
+	if mat is BaseMaterial3D:
+		var b := mat as BaseMaterial3D
+		return b.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED and b.cull_mode == BaseMaterial3D.CULL_BACK \
+			and not b.no_depth_test and b.depth_draw_mode != BaseMaterial3D.DEPTH_DRAW_DISABLED
+	if mat is ShaderMaterial:
+		var code := (mat as ShaderMaterial).shader.code
+		return not (code.contains("shadows_disabled") or code.contains("ALPHA") or code.contains("cull_disabled") or code.contains("cull_front"))
+	return mat == null
+
+
+## A model of rigid parts (a robot): the meshes that hang from one joint and do not move by themselves throw
+## their shadow as one mesh (see above): a spider is 63 surfaces in the picture and was 63 more in the shadow map,
+## and is 24 there now. `ap`: the model's clips (a mesh a clip moves is left alone). The merged meshes are made
+## once for each kind of model (`asset`). Returns how many shadow meshes were added.
+static var _shades: Dictionary = {}    # "asset|joint's path" -> ArrayMesh
+
+
+static func shade_joints(scene: Node3D, asset: String, ap: AnimationPlayer) -> int:
+	if DisplayServer.get_name() == "headless" or OS.has_environment("V2_SHADE_OFF"):      # (headless: no mesh data, and nothing is drawn; V2_SHADE_OFF=1: every part throws its own, to compare pictures)
+		return 0
+	var moved: Dictionary = {}
+	if ap != null:
+		var base := ap.get_node(ap.root_node)
+		for clip_name in ap.get_animation_list():
+			var anim := ap.get_animation(clip_name)
+			for i in anim.get_track_count():
+				var n := base.get_node_or_null(NodePath(String(anim.track_get_path(i)).get_slice(":", 0)))
+				if n != null:
+					moved[n] = true
+	var by_joint: Dictionary = {}
+	for n in scene.find_children("*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		if mi.mesh == null or moved.has(mi) or mi.skin != null or mi.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_ON:
+			continue
+		var all := true
+		for k in mi.mesh.get_surface_count():
+			all = all and casts(mi.get_active_material(k))
+		if not all:
+			continue
+		var joint := mi.get_parent()
+		if not by_joint.has(joint):
+			by_joint[joint] = []
+		(by_joint[joint] as Array).append(mi)
+	var made := 0
+	for joint: Node in by_joint:
+		var list: Array = by_joint[joint]
+		var surfaces := 0
+		for mi: MeshInstance3D in list:
+			surfaces += mi.mesh.get_surface_count()
+		if surfaces < 2:
+			continue
+		var key := "%s|%s" % [asset, scene.get_path_to(joint)]
+		if not _shades.has(key):
+			var verts := PackedVector3Array()
+			var tris := PackedVector3Array()
+			for mi: MeshInstance3D in list:
+				for k in mi.mesh.get_surface_count():
+					var arrays := mi.mesh.surface_get_arrays(k)
+					var v: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+					var idx: PackedInt32Array = arrays[Mesh.ARRAY_INDEX] if arrays[Mesh.ARRAY_INDEX] != null else PackedInt32Array(range(v.size()))
+					if mi.transform.basis.determinant() < 0.0:
+						idx.reverse()                      # (a mirrored part: its triangles turn the other way)
+					var have := verts.size()
+					verts.append_array(mi.transform * v)
+					tris.append_array(Transform3D(Basis.IDENTITY, Vector3(have, have, have)) * tri_floats(idx))
+			var arrays2: Array = []
+			arrays2.resize(Mesh.ARRAY_MAX)
+			arrays2[Mesh.ARRAY_VERTEX] = verts
+			arrays2[Mesh.ARRAY_INDEX] = tri_ints(tris)
+			var mesh := ArrayMesh.new()
+			mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays2)
+			_shades[key] = mesh
+		var shade := MeshInstance3D.new()
+		shade.name = "Shade"
+		shade.mesh = _shades[key]
+		shade.material_override = shade_material()
+		shade.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+		shade.layers = (list[0] as MeshInstance3D).layers
+		joint.add_child(shade)
+		for mi: MeshInstance3D in list:
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		made += 1
+	return made
+
+
+## A mesh's indices as floats, three to a Vector3, so that "add a vertex count to every index" is one shift of a
+## whole array by the engine (`Transform3D(Basis.IDENTITY, Vector3(n, n, n)) * triples`), and back. Without a
+## loop here: the bytes of a float array behind the header of a stored PackedVector3Array are a stored
+## PackedVector3Array. (Indices under 2^24 are whole numbers in a float.)
+static func tri_floats(idx: PackedInt32Array) -> PackedVector3Array:
+	var head := var_to_bytes(PackedVector3Array()).slice(0, 8)
+	head.encode_s32(4, idx.size() / 3)
+	head.append_array(PackedFloat32Array(Array(idx)).to_byte_array())
+	var triples: PackedVector3Array = bytes_to_var(head)
+	assert(triples.size() * 3 == idx.size() and (idx.is_empty() or int(triples[triples.size() - 1].z) == idx[idx.size() - 1]))
+	return triples
+
+
+static func tri_ints(triples: PackedVector3Array) -> PackedInt32Array:
+	return PackedInt32Array(Array(triples.to_byte_array().to_float32_array()))
+
+
+## Where a frame's time goes, by system (F3): microseconds since the last report and how often. Every `_process`
+## of the game's own code is bracketed with `var t := Time.get_ticks_usec()` ... `V2World.took("name", t)`.
+static var prof: Dictionary = {}
+static var prof_n: Dictionary = {}
+
+
+static func took(system: String, since_usec: int) -> void:
+	prof[system] = int(prof.get(system, 0)) + Time.get_ticks_usec() - since_usec
+	prof_n[system] = int(prof_n.get(system, 0)) + 1
+
+
+## The report for F3: milliseconds a frame for each system over the `frames` since the last one, the biggest first,
+## then what the engine itself reports (its whole process step, its physics step), and what is left of the process
+## step when the game's own code is taken out (the engine's animation, particles, tweens, culling and draw list).
+static func prof_text(frames: int, calls: bool = false) -> String:
+	var parts: Array = []
+	var own := 0.0
+	var names := prof.keys()
+	names.sort_custom(func(a: String, b: String) -> bool: return int(prof[a]) > int(prof[b]))
+	for k in names:
+		var ms := int(prof[k]) / 1000.0 / maxi(frames, 1)
+		if not String(k).contains(":"):                    # ("robots: clips" is part of "robots")
+			own += ms
+		if ms >= 0.05:
+			# (what is not done every frame, with how often it was and what one costs: "sound 0.4 (12 x 0.31)")
+			var n := int(prof_n.get(k, 0))
+			if calls and n < frames * 0.8:
+				parts.append("%s %.1f (%d x %.2f)" % [k, ms, n, int(prof[k]) / 1000.0 / maxi(n, 1)])
+			else:
+				parts.append("%s %.1f" % [k, ms])
+	var process := 1000.0 * Performance.get_monitor(Performance.TIME_PROCESS)
+	var physics := 1000.0 * Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)
+	prof.clear()
+	prof_n.clear()
+	return "ms a frame: %s\nengine: process step %.1f, of it not the game's code %.1f   physics step %.1f   nodes %d" % [
+		"   ".join(parts), process, maxf(process - own, 0.0), physics, int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))]
+
+
+## -- --timing: how long the steps of starting up take (the browser's console, or the terminal): `mark("what")`
+## prints the milliseconds since the last mark and since the program started.
+static var _mark_on := -1
+static var _mark_last := 0
+
+
+static func mark(what: String) -> void:
+	if _mark_on < 0:
+		_mark_on = 1 if "--timing" in OS.get_cmdline_user_args() else 0
+	if _mark_on == 1:
+		var now := Time.get_ticks_msec()
+		print("[timing] %-34s +%5d ms   (at %6d)" % [what, now - _mark_last, now])
+		_mark_last = now
+
+
 ## Physics layer of what stops the player and lets rounds and lines of sight through (the training cage's bars).
 const CAGE := 4
 const SHOTS := 0xFFFFFFFF ^ CAGE          # the collision mask of every ray that is a round or a look
@@ -74,6 +245,78 @@ static func cover(tree: SceneTree, color: Color, seconds: float) -> Tween:
 	var tw := tree.create_tween()
 	tw.tween_property(veil, "color:a", 1.0, seconds).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	return tw
+
+## Resources kept loaded from the title on (`preload_run`): what is in here is not loaded again when the run starts.
+static var kept: Array = []
+static var _preloaded := false
+
+
+## While the title is up and nobody is waiting: load, one thing a frame, what a run will need (the set, the three
+## robots, the two gun views, with their materials and textures; every sound), so that less is left for the wait
+## after the key. Stops as soon as `stop` says so (the player has started: the game loads what is left). (Await it.)
+static func preload_run(tree: SceneTree, stop: Callable) -> void:
+	if _preloaded:
+		return
+	_preloaded = true
+	mark("title: preloading starts")
+	for step in [["set", ""], ["spider", "spider"], ["drone", "drone"], ["turret", "turret"], ["view_pistol", "view_pistol"], ["view_rifle", "view_rifle"]]:
+		await tree.process_frame
+		if stop.call():
+			_preloaded = false
+			return
+		var scene := load(V2Assets.DIR + String(step[0]) + ".glb") as PackedScene
+		kept.append(scene)
+		await tree.process_frame
+		if stop.call():
+			_preloaded = false
+			return
+		var inst := scene.instantiate()                    # (its materials, built once and kept by V2Assets, and their textures)
+		V2Assets.apply(inst, String(step[1]))
+		inst.free()
+	var n := 0
+	for key in V2Sfx.SOUNDS:
+		V2Sfx._load(key)
+		n += 1
+		if n % 6 == 0:
+			await tree.process_frame
+			if stop.call():
+				_preloaded = false
+				return
+	mark("title: preloading done")
+
+
+## What is shown on the sheet while a run is built (**user, of the browser build: "title -> game takes long and
+## feels stuck"**): a small label and a thin bar that fills, 0..1. In the sheet's own layer, so it is over
+## everything and goes with the sheet. `progress(-1)` takes it away.
+static var _prog: Control
+static var _prog_fill: ColorRect
+
+
+static func progress(frac: float, label: String = "BUILDING DATASPACE") -> void:
+	if not is_instance_valid(veil):
+		return
+	if frac < 0.0:
+		if is_instance_valid(_prog):
+			_prog.queue_free()
+		_prog = null
+		return
+	if not is_instance_valid(_prog):
+		var dark := veil.color.get_luminance() < 0.5
+		var ink := UIPalette.TEXT if dark else UIPalette.GRAPHITE
+		_prog = Control.new()
+		_prog.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_prog.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		veil.get_parent().add_child(_prog)
+		var col := V2Ui.column(_prog, 10)
+		V2Ui.at(col, 0.5, 0.62, 0.0, 0.0)
+		var l := V2Ui.text(col, label, "bold", 12, Color(ink, 0.6), 0.3)
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		var track := V2Ui.rect(col, Color(ink, 0.16), 220, 2)
+		track.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		_prog_fill = V2Ui.rect(track, UIPalette.CYAN, 0, 2)
+		_prog_fill.position = Vector2.ZERO
+	_prog_fill.size = Vector2(220.0 * clampf(frac, 0.0, 1.0), 2.0)
+
 
 func _render_setup() -> void:
 	# (the UI concept's canvas: its pixel values are at 1440 x 810; a taller window shows more, it is not letterboxed)

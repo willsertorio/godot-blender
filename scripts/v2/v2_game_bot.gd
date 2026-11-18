@@ -316,6 +316,9 @@ func play_runs(_n: int) -> void:
 	# (one dungeon per process: tools/v2_bot.sh runs it N times. The clock runs four times as fast: the physics
 	# steps stay 1/60 s, there are only more of them a second)
 	Engine.time_scale = 4.0
+	for a in OS.get_cmdline_user_args():                   # (-- --bot-speed=1: at the game's own pace, to measure it)
+		if a.begins_with("--bot-speed="):
+			Engine.time_scale = maxf(float(a.trim_prefix("--bot-speed=")), 0.25)
 	await _wait(0.3)
 	var r := await play_level()
 	print("[bot] %s  seed %d  threat %d  rooms %d  robots %d  time %.0f s  health %d (lowest after a room %d)  kills %d  kits left %d  rounds left %d  shots %d (%d %% hit)" % [
@@ -702,7 +705,9 @@ func training_test() -> void:
 		await _until(func() -> bool: return target._react == "", 8.0)
 		await _wait(0.6)
 	target.force_react = ""
-	ok = _check("training: the dummy reels with its feet planted", worst < 0.005 and folded < 0.05 and body_moved > 0.04 and target._legs.size() == 4,
+	# (the buckle: how far the legs fold depends on the frame the reaction turns back in: 17 to 59 mm over runs
+	# of this check, the deepest when several checks run side by side and frames are long)
+	ok = _check("training: the dummy reels with its feet planted", worst < 0.005 and folded < 0.08 and body_moved > 0.04 and target._legs.size() == 4,
 		"through all five reactions its body was up to %.0f mm off its place, a foot at most %.1f mm off where its clip has it (%.0f mm as its legs fold in the buckle)" % [
 			body_moved * 1000.0, worst * 1000.0, folded * 1000.0]) and ok
 	player.bot_aim = false
@@ -1357,3 +1362,153 @@ func reactions(dir: String) -> void:
 		await _wait(0.8)
 	get_tree().quit()
 
+
+## The hit's blur at four strengths from one place (-- --game-capture=DIR --part=blur): Blur_0.0 (none), 1.5,
+## 3.0 (a hit), 4.5 (Signal lost). For comparing two versions of the shader.
+func blur(dir: String) -> void:
+	DirAccess.make_dir_recursive_absolute(dir)
+	player.invulnerable = true
+	for r in game.robots:
+		r.set_process(false)
+	await _wait(1.0)
+	for amount in [0.0, 1.5, 3.0, 4.5]:
+		game.hud.blur_hold = amount
+		await _wait(0.4)
+		await _shot(dir, "Blur_%.1f" % amount)
+	get_tree().quit()
+
+
+
+## What making effects and sounds costs (-- --game-capture=DIR --part=bench; the numbers matter in the browser:
+## `node tools/web_run.js OUT --args="--play --seed=33 --game-capture=x --part=bench"`): each effect is made
+## `N` times in front of the player and each sound played, in milliseconds a call, three rounds with a pause
+## between them (the first round holds what is only paid once: loading, a shader, a sample handed to the browser).
+func bench(_dir: String) -> void:
+	const N := 20
+	player.invulnerable = true
+	for r in game.robots:
+		r.process_mode = Node.PROCESS_MODE_DISABLED
+	dungeon.visible = false                                # (what is measured is the making, not the drawing: quick frames)
+	await _wait(1.0)
+	var at := player.global_position + Vector3(0, 1.2, 0) - player.global_transform.basis.z * 5.0
+	var eye := player.global_position + Vector3(0, 1.5, 0)
+	var fx := {
+		"tracer": func() -> void: V2Fx.tracer(eye, at, Color(1.0, 0.8, 0.5)),
+		"impact": func() -> void: V2Fx.impact(at, Vector3.UP),
+		"impact metal": func() -> void: V2Fx.impact(at, Vector3.UP, true),
+		"sparks": func() -> void: V2Fx.sparks(at),
+		"sparkle": func() -> void: V2Fx.sparkle(at),
+		"arc": func() -> void: V2Fx.arc(at, at + Vector3(0.4, 0.3, 0)),
+		"burst": func() -> void: V2Fx.burst(at),
+		"explosion": func() -> void: V2Fx.explosion(at),
+	}
+	var keys := ["pistol_shot", "rifle_shot", "casing", "impact_concrete", "impact_metal", "spider_shot", "turret_shot", "spider_step", "servo", "robot_hit", "step"]
+	for round in 3:
+		var line := "[bench] round %d  fx ms a call:" % (round + 1)
+		for name: String in fx:
+			var t := Time.get_ticks_usec()
+			for k in N:
+				(fx[name] as Callable).call()
+			line += "  %s %.2f" % [name, (Time.get_ticks_usec() - t) / 1000.0 / N]
+			await _wait(0.1)
+		print(line)
+		line = "[bench] round %d  sound ms a call:" % (round + 1)
+		for key: String in keys:
+			var t := Time.get_ticks_usec()
+			for k in N:
+				V2Sfx.play(key, at if k % 2 == 0 else Vector3.INF)
+			line += "  %s %.2f" % [key, (Time.get_ticks_usec() - t) / 1000.0 / N]
+			await _wait(0.1)
+		print(line)
+		print("[bench] round %d  nodes %d" % [round + 1, int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))])
+		await _wait(3.0)
+	print("[bench] done  nodes %d" % int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)))
+	get_tree().quit()
+
+
+## Where the draw calls of a view come from (-- --game-capture=DIR --part=draws [--match=2,5]): from a corner of
+## each room, the count as the game draws it and with one thing after another taken away.
+func draws(_dir: String) -> void:
+	player.invulnerable = true
+	for r in game.robots:
+		r.process_mode = Node.PROCESS_MODE_DISABLED
+	var want: Array = []
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--match="):
+			want = Array(a.trim_prefix("--match=").split(","))
+	var sun: DirectionalLight3D = null
+	for n in game.find_children("*", "DirectionalLight3D", true, false):
+		if (n as DirectionalLight3D).shadow_enabled:
+			sun = n
+	var count := func() -> int:
+		await _wait(0.25)
+		return int(RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME))
+	await _wait(1.0)
+	for i in gen.rooms.size():
+		if not want.is_empty() and not want.has(str(i)):
+			continue
+		var room: DungeonGen.Room = gen.rooms[i]
+		var lo := Vector3(room.rect.position.x * 4.0, 0, room.rect.position.y * 4.0)
+		var hi := Vector3(room.rect.end.x * 4.0, 0, room.rect.end.y * 4.0)
+		_look_at(lo + Vector3(1.6, 0, 1.6), (lo + hi) / 2.0 + Vector3(0, 1.3, 0))
+		await _wait(0.6)
+		var all: int = await count.call()
+		game.set_process(false)                            # (it would show again what is hidden here)
+		game._ui.visible = false
+		game.hud.visible = false
+		var no_hud: int = await count.call()
+		player.overlay.visible = false
+		var no_gun: int = await count.call()
+		for r in game.robots:
+			r.visible = false
+		var no_robots: int = await count.call()
+		if sun != null:
+			sun.shadow_enabled = false
+		var no_shadow: int = await count.call()
+		var meshes: Array = []
+		for a in dungeon.areas:
+			for c in (a.node as Node3D).get_children():
+				if String(c.name) == "Stands":
+					meshes.append(c)
+		for m in meshes:
+			m.visible = false
+		var no_props: int = await count.call()
+		var areas_seen := 0
+		var shown: Array = []
+		for a in dungeon.areas:
+			if (a.node as Node3D).visible:
+				areas_seen += 1
+				shown.append(a.node)
+			(a.node as Node3D).visible = false
+		var nothing: int = await count.call()
+		print("[draws] room %d: %d in all = HUD %d + gun %d + robots %d + shadows %d + what stands in the %d areas drawn %d + their shells, doors, lamps %d + the rest %d" % [
+			i, all, all - no_hud, no_hud - no_gun, no_gun - no_robots, no_robots - no_shadow, areas_seen, no_shadow - no_props, no_props - nothing, nothing])
+		if OS.has_environment("V2_DRAWS_REST"):                # what is left: the game's own children, their surfaces seen / casting
+			for c in game.get_children() + dungeon.get_children():
+				var seen := 0
+				var cast := 0
+				var list: Array = c.find_children("*", "MeshInstance3D", true, false)
+				if c is MeshInstance3D:
+					list.append(c)
+				for m in list:
+					var mi := m as MeshInstance3D
+					if mi.mesh != null and mi.is_visible_in_tree() and mi.global_position.distance_to(player.global_position) < 40.0:
+						seen += mi.mesh.get_surface_count()
+						if mi.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF:
+							cast += mi.mesh.get_surface_count()
+				if seen > 0:
+					print("[draws]    %s (%s): %d surfaces within 40 m, %d casting" % [c.name, c.get_class(), seen, cast])
+		for n in shown:
+			n.visible = true
+		game.hud.visible = true
+		game.set_process(true)
+		for m in meshes:
+			m.visible = true
+		if sun != null:
+			sun.shadow_enabled = true
+		player.overlay.visible = true
+		game._ui.visible = true
+		dungeon.update(player.global_position, 0)
+		game._robots_tick()
+		await _wait(0.3)
+	get_tree().quit()

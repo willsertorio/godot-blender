@@ -4,7 +4,7 @@ class_name V2Sfx
 ##   V2Sfx.play("rifle_shot")                 the player's own sounds
 ##   V2Sfx.play("impact_metal", point)        somewhere in the room
 ##   V2Sfx.loop("drone_rotor", node)          a looping source that rides on a node; the caller drives pitch / volume
-## Files: `assets/audio/v2/<key>_*.ogg`, any number per key: real recordings, CC0, cut and levelled by
+## Files: `assets/audio/v2/<key>_*.wav` (the loops: .ogg), any number per key: real recordings, CC0, cut and levelled by
 ## `tools/build_v2_audio.py` (guns: The Free Firearm Sound Library; the rest: foley from opengameart.org).
 ## A key without files there falls back to its stand-in from V1's Kenney set (arcade sounds; none is in use now).
 ## Everything goes through one bus: a little room reverb (one shared space is what makes sounds from different
@@ -86,7 +86,6 @@ static var log: Array[String] = []
 static var heard: Dictionary = {}     # every key played since the start (the checks read this)
 static var _streams: Dictionary = {}  # key -> [streams]
 static var _real: Dictionary = {}     # key -> true when its files come from assets/audio/v2
-static var _voices: Dictionary = {}   # key -> [players]
 static var _bus := ""
 
 
@@ -167,6 +166,12 @@ static func _pitch(key: String, pitch: float) -> float:
 
 ## Play `key` once: at `at` (world) if given, else in the listener's head.
 static func play(key: String, at: Vector3 = Vector3.INF, db: float = 0.0, pitch: float = 1.0) -> void:
+	var t := Time.get_ticks_usec()
+	_play(key, at, db, pitch)
+	V2World.took("sound", t)
+
+
+static func _play(key: String, at: Vector3 = Vector3.INF, db: float = 0.0, pitch: float = 1.0) -> void:
 	heard[key] = true
 	log.append(key)
 	if log.size() > 400:
@@ -177,36 +182,78 @@ static func play(key: String, at: Vector3 = Vector3.INF, db: float = 0.0, pitch:
 	if list.is_empty():
 		return
 	var sp: Array = SOUNDS[key]
-	var voices: Array = _voices.get(key, [])
-	voices = voices.filter(func(v: Variant) -> bool: return is_instance_valid(v))
-	if voices.size() >= MAX_VOICES:
-		(voices.pop_front() as Node).queue_free()
-	var player: Node
-	if at == Vector3.INF:
-		var p2 := AudioStreamPlayer.new()
-		p2.stream = list[randi() % list.size()]
-		p2.volume_db = float(sp[2]) + db
-		p2.pitch_scale = _pitch(key, pitch)
-		p2.bus = bus()
-		player = p2
-	else:
-		var p3 := AudioStreamPlayer3D.new()
-		p3.stream = list[randi() % list.size()]
-		p3.volume_db = float(sp[2]) + db
-		p3.pitch_scale = _pitch(key, pitch)
-		p3.max_distance = maxf(float(sp[4]), 10.0)
-		p3.unit_size = 4.0
-		p3.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
-		p3.attenuation_filter_db = -6.0                    # (the engine's default takes 24 dB off the treble with distance: across a room that is a blanket over a gun)
-		p3.bus = bus()
-		player = p3
-	root.add_child(player)
+	if at != Vector3.INF:                                  # (out of earshot: a placed sound is cut off at its distance)
+		var cam := root.get_viewport().get_camera_3d() if root.is_inside_tree() else null
+		if cam != null and cam.global_position.distance_to(at) > maxf(float(sp[4]), 10.0) + 4.0:
+			return
+	var stream: AudioStream = list[randi() % list.size()]
+	var rate := _pitch(key, pitch)
+	var player := _voice(key, at != Vector3.INF, int(1000.0 * stream.get_length() / maxf(rate, 0.05)) + 80)
+	player.set("stream", stream)
+	player.set("volume_db", float(sp[2]) + db)
+	player.set("pitch_scale", rate)
 	if player is AudioStreamPlayer3D:
+		(player as AudioStreamPlayer3D).max_distance = maxf(float(sp[4]), 10.0)
 		(player as AudioStreamPlayer3D).global_position = at
-	player.connect("finished", player.queue_free)
 	player.call("play")
-	voices.append(player)
-	_voices[key] = voices
+
+
+# The players are made once and used again (a player was made, added to the tree and freed for every sound: in
+# a fight that is twenty and more a second). `_voices` holds them, [player, the key it plays, busy until (ms)],
+# those heard in the head apart from those with a place; a player is free when its sound has run out. With all
+# `POOL` busy, or `MAX_VOICES` of one key, the one that has least left to play is cut off and used.
+const POOL := 40
+static var _voices: Array = [[], []]
+static var _voices_root: Node
+
+
+static func _voice(key: String, placed: bool, msec: int) -> Node:
+	if _voices_root != root:                               # (a new scene: the old players went with the old one)
+		_voices = [[], []]
+		_voices_root = root
+	var list: Array = _voices[1 if placed else 0]
+	var now := Time.get_ticks_msec()
+	var free := -1
+	var same := 0
+	var oldest_same := -1
+	var oldest := -1
+	for i in list.size():
+		var v: Array = list[i]
+		if int(v[2]) <= now:
+			if free < 0:
+				free = i
+			continue
+		if oldest < 0 or int(v[2]) < int(list[oldest][2]):
+			oldest = i
+		if v[1] == key:
+			same += 1
+			if oldest_same < 0 or int(v[2]) < int(list[oldest_same][2]):
+				oldest_same = i
+	var use := free
+	if same >= MAX_VOICES:
+		use = oldest_same
+	elif free < 0 and list.size() >= POOL:
+		use = oldest
+	if use < 0:
+		var player: Node
+		if placed:
+			var p3 := AudioStreamPlayer3D.new()
+			p3.unit_size = 4.0
+			p3.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
+			p3.attenuation_filter_db = -6.0                # (the engine's default takes 24 dB off the treble with distance: across a room that is a blanket over a gun)
+			p3.bus = bus()
+			player = p3
+		else:
+			var p2 := AudioStreamPlayer.new()
+			p2.bus = bus()
+			player = p2
+		root.add_child(player)
+		list.append([player, key, now + msec])
+		return player
+	var v: Array = list[use]
+	v[1] = key
+	v[2] = now + msec
+	return v[0]
 
 
 ## A looping source on `parent`; not playing yet. null if the key has no sound.

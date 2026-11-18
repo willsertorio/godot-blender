@@ -211,7 +211,8 @@ V1 (everything else in this file) is frozen at commit `d4507b9` (`VERSIONS.md`);
   file brought to the same loudness that leaves 1 to 3 dB less of the crack, heavier and duller, the opposite.
   Everything goes through one bus (`V2Sfx.bus`): a short room reverb, then +3 dB into a hard
   limiter (the machine gun's rounds pile up).
-  Files: `assets/audio/v2/<key>_NN.ogg` (120, 1.6 MB), **all CC0, from opengameart.org**: the guns from The Free
+  Files: `assets/audio/v2/<key>_NN.wav` (117 one-shots, 8 MB: the built Vorbis files decoded again, see "V2 in
+  the browser") and `<key>_NN.ogg` (the three loops), **all CC0, from opengameart.org**: the guns from The Free
   Firearm Sound Library (pistol = Walther PPQ, machine gun = AR-15, spider = Tikka .30-06, drone = Carl Gustav M45,
   turret = AK-47), the rest from foley packs (rubberduck, Thimras, Fantozzi, BMacZero, qubodup and others).
   `tools/fetch_v2_audio.sh` downloads the raw files to `assets_src/audio_v2/` (git-ignored; needs `py7zr`),
@@ -515,7 +516,8 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
     Failure; Mission complete is the tour's `13_won`), `--title --title-capture=FILE`.
   - Learned: `set_anchors_preset` on a control already in the tree keeps its (zero) size: use
     `set_anchors_and_offsets_preset` (everything pinned to the right or the bottom was off screen); the blur
-    shader's `textureLod` on the screen texture works in Compatibility; a Button's own icon is drawn at the
+    shader's `textureLod` on the screen texture works in Compatibility on the desktop **and gives black in the
+    browser** (see "V2 in the browser"); a Button's own icon is drawn at the
     texture's size (the words and icon are children of the button); headless `--play` prints nothing useful.
 - **Training in the first room** (**user's five points**: a dummy target (a spider on a yellow-striped box); aim
   with the pistol and shoot it; switch to the rifle, aim and shoot it; a med kit from a crate; E opens a door and
@@ -642,6 +644,89 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   `exit`, `ui`, `room_tone` (a very low ventilation loop, `V2Sfx.ambience`; title too), `ricochet`.
 - Static state survives a scene change (`V2Fx._marks`, `V2Sfx.root`, the game's `missions`): every scene's `_ready`
   sets the roots and calls `V2Fx.reset()`.
+
+## V2 in the browser (the user tested it: Chrome, M1, in an iframe, 30 to 40 fps)
+
+- Build: `tools/web_build.sh` = the "Web (site)" preset of `export_presets.cfg` (V2 only, pck 77 MB) ->
+  `build/site/play` (the site of the branch `claude/epic-dijkstra-kge96s` embeds it). Run it here:
+  `node tools/web_run.js OUT --args="--play --seed=33 --no-training --perf-log" --steps="wait:70,shot:game"`
+  (headless Chromium on SwiftShader: a frame of the game takes seconds to draw, so a screenshot needs minutes,
+  but the page's own thread is measured truly). `--probe=10` counts and times every WebGL call and each frame's
+  callback. The game's arguments go into the page's `GODOT_CONFIG.args` after a `--`.
+- **What made it slow (measured with the probe, it was not the game's code):** at the end of every frame
+  Emscripten's shell copies its offscreen framebuffer to the canvas and first asks WebGL
+  `getParameter(SCISSOR_TEST)`. The browser answers that by waiting for the GPU process to work through the whole
+  frame, so the page's one thread stood still: here 2,600 ms of a 2,610 ms frame callback, on the user's M1 the
+  "33 ms of game code" that F3 showed (that figure was the engine's process step, which holds the draw and the
+  swap). `tools/web/head_include.html` (the preset's `html/head_include`: after editing it, copy it into
+  `export_presets.cfg` again, escaped) answers the question on the page: it changes only through `enable` /
+  `disable`. After: 13 ms a frame callback here, 4 ms of it in 11,800 WebGL calls (607 draws), 3 ms scripts.
+- F3 (and `-- --perf-log`, which prints it every second): `V2World.took(system, since)` brackets the game's own
+  code: robots (and of it clips, pose), player, hud, game, dungeon, fx (making effects), sound, map; then the
+  engine's process step, what of it is not the game's code, the physics step, nodes, robots awake.
+- **Pointer lock** (the game opened on the Esc card): a browser grants the lock only right after a click or a
+  key, and the game asked for it 9 s later, at the end of the opening. Now the title asks on the key that starts
+  the run (`V2Title._start`), `again()` on the button's click; on web the game never asks on its own. If the
+  lock is not held when control is given, or is lost and the player has never had it, a **CLICK TO PLAY** card
+  shows (`V2Game._click`), and any click or key takes the lock; the Esc card needs `_had_mouse`. (Chrome does not
+  pass the Esc that leaves the lock to the page: the card shows because the lock is gone.)
+- **The hit's blur** (the view went black at every hit): `textureLod` on a screen texture with mipmaps returns
+  black in the browser. `screen_blur.gdshader` is a two-pass Gaussian now (`dir`; 8 samples a side, `sigma =
+  0.74 * 2^amount` pixels, which matches the old look to 1.5 to 3.5 of 255 rms): `V2Hud._blur_h`, a
+  `BackBufferCopy`, `V2Hud.blur`. `-- --blur-demo=N` holds it at N; pictures: `--game-capture=DIR --part=blur`.
+- **Title -> game** (it took long and looked stuck). `-- --timing` prints where the start goes (`V2World.mark`,
+  and every frame over 80 ms). What was done:
+  the dungeon is built over frames (`V2Dungeon.build_staged`: a frame is let through every `SLICE` 30 ms) under
+  the title's white sheet with a bar on it (`V2World.progress`: "BUILDING DATASPACE"; the robots are made in
+  slices too); **the merge of the areas' meshes is 1.7 s in the browser instead of 12.8 s** (desktop 1.05 s
+  instead of 2.2 s): `SurfaceTool.append_from` for every placed piece ran vertex by vertex, 7.5 million vertices
+  a dungeon, and such helpers are six times slower in WASM. Now a piece is turned once for each way it faces
+  (`_turned`: 150 a dungeon) and placing it is a shift and an append of whole arrays, done by the engine
+  (`Transform3D * PackedVector3Array`; the indices travel as triples in a PackedVector3Array so that adding the
+  vertex count is a shift too; `bytes_to_var` makes that array from the index bytes without a loop). Checked
+  against the old merge: vertices, normals, colours, UVs and indices are the same to 0.1 mm; the tangents of
+  parts without UVs are not turned (nothing reads them: `v2_set.gdshader` sets its own, the plain materials have
+  no normal map; a part with UVs still goes through `append_from`). `V2_OLD_MERGE=1` turns every part the old
+  way (for a picture comparison: `--part=rooms --match=2` both ways differ only where two runs of one differ).
+  While the title shows, `V2World.preload_run` loads the set, the robots and the guns' glbs (one a frame,
+  instantiated once so their materials are built) and the sounds: in the game robots then take 0.2 s instead of
+  0.4 and the player 0.04 instead of 0.4. Before the white lifts, `V2Game._warm_up` draws for four frames,
+  in front of the camera, one of each robot, the props, every `V2Fx` effect, the gun and the hit's blur and
+  glow: the shaders compile under the sheet and not at the first shot. Not for the bot, the checks or the
+  pictures (they build at once: `V2Dungeon.build`).
+  Measured here in the browser, from the key to the room appearing: build 2.1 s, robots 1.0 s, warm-up 7.8 s
+  (software GL draws those frames slowly; on a GPU it is the shader compiles: not measured).
+- **What a shot costs (measured with `--game-capture=x --part=bench`: every effect and sound made 20 times,
+  ms a call, three rounds; run it in the browser build too).** The user asked for pools of effect nodes and sound
+  players. They are in (`V2Fx._take` / `_rest` / `_put`: particles, tracers, glares, arcs and lights at rest are
+  hidden and used again, `settle()` after the warm-up; `V2Sfx._voice`: 40 players of each kind, the one with
+  least left to play is cut off), and they were not where the time went: **a sound cost 1.3 ms in the browser
+  (0.5 ms on the desktop) because the engine sets up a Vorbis decoder for every play of an .ogg**, even where the
+  browser plays a ready sample, and an impact, a burst, an explosion are mostly their sounds. So the one-shots
+  are 16-bit WAV now, decoded from the same Vorbis files (`tools/build_v2_audio.py` does it after encoding;
+  `--wav` converts what is there; +7 MB in the pck: 83 MB). Browser: a sound 1.3 -> 0.4 ms, an impact 1.8 -> 0.5,
+  a robot's burst 9 -> 3.5, an explosion 14 -> 4; desktop: 0.5 -> 0.03, 0.8 -> 0.13, 4 -> 0.45, 5 -> 0.55.
+  What is left of a sound in the browser is the engine's WebAudio code (nine nodes made for every sound);
+  keeping those assemblies for the next sound (a patch of the exported index.js) gave 20 % more and was not
+  kept. A placed sound further than its distance + 4 m from the camera is not started.
+- Robots: one that roams where it is not drawn is moved every third frame (`V2Robot.every`, by all the time
+  since); a wreck at rest (`settled()`) is not moved while it is not drawn (all wrecks were, for ever). With the
+  WAV sounds the three robots awake at the start cost 1.0 ms a frame in the browser (1.7 to 2.7 before: their
+  steps' sounds). `--perf-log` shows "robots: look / move / sounds / springs / feet / flashes / clips / pose".
+- **Draw calls** (`--game-capture=x --part=draws [--match=2,5]`: a view's count with one thing after another
+  taken away; `V2_DRAWS_REST=1` lists what is left). A view of 500: HUD 48, gun 58, robots 120 to 170 (a spider
+  is 63 surfaces, and was drawn again into the shadow map), what stands in the areas 18 + 15 more in the shadow
+  map for each area in the light's reach, crates 10 + 10 each. **Shadows are drawn as one mesh a joint**
+  (`V2World.shade_joints`, `shade_material`, `casts`: a `SHADOWS_ONLY` mesh of the same triangles, the meshes
+  that are seen cast none; robots 24 / 7 / 8 instead of 63 / 35 / 25, a crate 2, the cage, the portal):
+  190 / 431 / 502 draw calls in three views became 182 / 388 / 430. Same picture: with it on and off
+  (`V2_SHADE_OFF=1`) a view differs in a few specks at shadow edges. The same for each area's furniture
+  (one shadow mesh instead of 15 surfaces) was tried and not kept: 13 draw calls fewer a view for 43 MB more
+  video memory (the copy of the geometry). Not done: the HUD's and the gun's own draw calls, merging robot
+  parts across materials.
+- From the site branch: on web the sounds play on Master (a bus added at runtime is silent in Godot 4.3's web
+  sample playback: no room reverb, no limiter), no point lights on shots / hits / bursts (`V2Fx.LIGHTS`), the 3D
+  picture starts at 900 rows with 2x MSAA.
 
 ## The environment set (approved by the user; it is what the game is built from)
 
