@@ -27,9 +27,13 @@ const NO_SHADOW := ["Floor", "Wall", "Ceiling", "Trim", "Cable", "TrayCable", "L
 # 4x anti-aliasing. The picture is drawn smaller and stretched; the HUD stays at the window's pixels. F4 steps
 # through these in the game and the lab (static: the choice lasts over scene changes).
 const RENDER_ROWS := [1080, 900, 720, 0]
-## The browser build starts at 900 rows and 2x anti-aliasing: in Chrome on an M1 the game ran at 33 fps at
-## 1080 rows with 4x, and stuttered in combat.
-static var render_rows := 900 if OS.has_feature("web") else 1080
+## The browser build starts at 720 rows and 2x anti-aliasing (**user: in Chrome on an M1, 720 gives about 50 fps
+## in combat**; at 1080 rows with 4x it ran at 33 fps and stuttered). The choice (F4, or RESOLUTION on the game's
+## Esc card: `set_rows`) is kept in `SETTINGS` (user://, which a browser keeps in IndexedDB) and read at the
+## first `_render_setup`.
+static var render_rows := 720 if OS.has_feature("web") else 1080
+const SETTINGS := "user://v2_settings.cfg"
+static var _settings_read := false
 
 var rooms: Array[Node3D] = []
 var _low := false                 # --quality=low: no shadows, no glow, no MSAA
@@ -326,6 +330,14 @@ func _render_setup() -> void:
 	win.content_scale_size = Vector2i(1440, 810)
 	if OS.has_feature("web") and get_viewport().msaa_3d > Viewport.MSAA_2X:
 		get_viewport().msaa_3d = Viewport.MSAA_2X
+	if not _settings_read:
+		_settings_read = true
+		var cfg := ConfigFile.new()
+		if cfg.load(SETTINGS) == OK:
+			var rows := int(cfg.get_value("render", "rows", render_rows))
+			if rows in RENDER_ROWS:
+				render_rows = rows
+		mark("3D picture: %s rows" % ("the window's" if render_rows == 0 else str(render_rows)))
 	_render_apply()
 	if not get_window().size_changed.is_connected(_render_apply):
 		get_window().size_changed.connect(_render_apply)
@@ -337,8 +349,17 @@ func _render_apply() -> void:
 
 
 func _render_next() -> void:
-	render_rows = RENDER_ROWS[(RENDER_ROWS.find(render_rows) + 1) % RENDER_ROWS.size()]
+	set_rows(RENDER_ROWS[(RENDER_ROWS.find(render_rows) + 1) % RENDER_ROWS.size()])
+
+
+## The 3D picture's rows from now on (one of RENDER_ROWS), at once, and remembered for the next sitting.
+func set_rows(rows: int) -> void:
+	render_rows = rows
 	_render_apply()
+	var cfg := ConfigFile.new()
+	cfg.load(SETTINGS)
+	cfg.set_value("render", "rows", rows)
+	cfg.save(SETTINGS)
 
 
 ## For the F3 line: what the 3D picture is drawn at.

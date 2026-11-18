@@ -82,6 +82,8 @@ var _perf_log := false             # -- --perf-log: F3's lines are printed every
 var _perf_t := 0.0
 var _perf_n := 0
 var _menu: Control
+var menu_demo := false               # (for the pictures: the Esc card shown)
+var _res_buttons: Array = []         # the Esc card's RESOLUTION row: [rows, Button]
 var _click: Control                # "click to play": the mouse was never ours in this run (a browser)
 var _had_mouse := false
 var _top: CanvasLayer
@@ -1002,6 +1004,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			_perf_n = 0
 		elif event.keycode == KEY_F4:                      # the 3D picture's size: 1080 / 900 / 720 rows / the window's
 			_render_next()
+			_res_show()
 			_perf.visible = true
 			_perf.text = _render_text() + " ..."
 			_perf_t = 0.0
@@ -1053,6 +1056,24 @@ func _hud() -> void:
 	var buttons := V2Ui.row(col, 12)
 	V2Ui.button(buttons, "RESUME", func() -> void: Input.mouse_mode = Input.MOUSE_MODE_CAPTURED, UIPalette.CYAN, "chevron_right")
 	V2Ui.button(buttons, "STOP HERE", to_title)
+	# RESOLUTION: the 3D picture's rows (the same steps as F4), the one in use filled; picked at once
+	var res := V2Ui.column(col, 8)
+	V2Ui.text(res, "RESOLUTION", "bold", 12, UIPalette.LABEL, 0.24)
+	var choices := V2Ui.row(res, 8)
+	for rows: int in [720, 900, 1080, 0]:
+		var b := Button.new()
+		b.text = "FULL" if rows == 0 else str(rows)
+		b.custom_minimum_size = Vector2(76, 40)
+		b.focus_mode = Control.FOCUS_NONE
+		b.add_theme_font_override("font", V2Ui.font("bold", 15, 0.12))
+		b.add_theme_font_size_override("font_size", 15)
+		b.pressed.connect(func() -> void:
+			V2Sfx.play("ui")
+			set_rows(rows)
+			_res_show())
+		choices.add_child(b)
+		_res_buttons.append([rows, b])
+	_res_show()
 	# The mouse was never ours in this run (**user, of the browser build: "the game opens on the Esc card"**: a
 	# browser gives the pointer lock only in answer to a click or a key, and may refuse even then): not the
 	# pause card, which says the player left, but an invitation; any click or key takes the mouse.
@@ -1069,6 +1090,24 @@ func _hud() -> void:
 	line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var sub := V2Ui.text(ccol, "The browser hands over the mouse on a click", "regular", 13, UIPalette.LABEL)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+
+## The RESOLUTION row: the choice in use is filled cyan, the others outlined.
+func _res_show() -> void:
+	for e in _res_buttons:
+		var b: Button = e[1]
+		var on: bool = int(e[0]) == V2World.render_rows
+		for st in ["normal", "hover", "pressed", "focus"]:
+			var sb: StyleBoxFlat = UIPalette.button_filled(UIPalette.CYAN) if on else UIPalette.button_outline()
+			if st in ["hover", "pressed"]:
+				if on:
+					sb.bg_color = UIPalette.CYAN.lightened(0.18)
+				else:
+					sb.bg_color = Color(1, 1, 1, 0.1)
+					sb.border_color = UIPalette.TEXT
+			b.add_theme_stylebox_override(st, sb)
+		for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+			b.add_theme_color_override(c, UIPalette.GRAPHITE if on else UIPalette.TEXT)
 
 
 func to_title() -> void:
@@ -1090,7 +1129,7 @@ func _hud_update(delta: float) -> void:
 	# lock is really held)
 	var ours := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 	_had_mouse = _had_mouse or ours
-	_menu.visible = state == PLAYING and not ours and _had_mouse and _bot == null
+	_menu.visible = (state == PLAYING and not ours and _had_mouse and _bot == null) or menu_demo
 	_click.visible = state == PLAYING and not ours and not _had_mouse and _bot == null
 	if _map.visible:
 		_map.queue_redraw()
