@@ -1,25 +1,108 @@
 ---
-name: game-viewer
-description: Build a documentation-style showcase site for a game project (Godot + Blender or similar) — Overview with video and a step-by-step workflow, a playable web build, the GDD, a three.js 3D viewer of the game's models with their animation clips, and the development conversation (trajectory) — in the Project Firewall style (dark docs layout, icon menu, Funnel Display / Geist / JetBrains Mono), and publish it to GitHub Pages. Use when asked for a game viewer, showcase site, portfolio page or "a page like Project Firewall's" for a game.
+name: "game-viewer"
+description: "Build a dark documentation-style site for game work and publish it to GitHub Pages: a game showcase (Project Firewall) or a redesign viewer (model version vs redesign samples). Use for a game viewer, showcase or samples site."
 ---
 
 # Game viewer
 
-A static site that presents a game to a client: what it is and how it was made, the game itself, its design document,
-every asset in 3D, and the conversation that built it. Reference implementation: Project Firewall
-(`willsertorio/godot-blender`, branch `claude/epic-dijkstra-kge96s`, folder `site/`; live on its `gh-pages` branch).
+Static sites in one visual system (dark docs layout, left icon menu, Geist type) for two kinds of request:
 
-## What the user wants from it (learned on Project Firewall)
+- **Showcase** of one game: what it is and how it was made, the playable game, its GDD, every asset in 3D and the
+  conversation that built it. Reference: Project Firewall (`willsertorio/godot-blender`, branch
+  `claude/epic-dijkstra-kge96s`, folder `site/`; live on its `gh-pages` branch).
+- **Redesign viewer** of several samples from a data collection: an Overview of the workflow, then one page per
+  sample with the model's original game next to the redesign, the rubric checks, the design trajectory and the GDD.
+  Reference: `willsertorio/experiments`, folder `game_viewer/201127` (live at
+  willsertorio.github.io/experiments/game_viewer/201127/). Its `css/docs.css` is the current stylesheet and supersedes
+  `template/css/docs.css` and references/style.md where they differ: copy it from there for any new site.
 
-- **A documentation page, not a marketing site.** Left menu, content column, no hero, no cards, no footer, and
-  **no text you wrote**: only the user's own material (their GDD, their account of the process, their messages).
-  When you think a label or explanation is needed, ask first.
-- Menu, in this order: **Overview, Play, GDD, Assets, Trajectory**. Overview is the first page (`index.html`).
-  The video goes at the top of Overview, not in its own tab (a VIDEO tab next to PLAY read as odd).
-- Show screenshots before pushing; send a zip or push only when asked. Polish text with the user before building.
-- Keep client names out of a public site ("the client") unless the user says otherwise; the repo is public.
+## What the user wants (learned on both sites)
 
-## Pages (template/ has each one)
+- **A documentation page, not a marketing site.** Left menu, content column, no hero, no footer, and
+  **no text you wrote** beyond labels: the content is the user's own material. Draft text only when asked, keep it
+  concise, show it in chat for correction, and say which lines are your wording.
+- **Small, quiet type.** Geist only (see Style). The user rejected a display headline face and large headings.
+- **Preview before shipping.** Publish the site as a private Artifact for a visual check first; zip or push only when
+  asked. Every change after that: republish the same artifact, then push when the user says so.
+- **Public repos.** Keep out client names, the designer's or reviewer's names, source-game IDs (they name real
+  games and IP), private platform links and any `metadata.json` that points at the client's servers. Say what was
+  left out.
+- Confirm a counted figure across the whole dataset before stating it as a rule: rubric counts, for example, vary
+  per game (core loop has one rubric per loop step). Write ranges as estimates, e.g. "About 35 (34 to 37)".
+
+## Style
+
+Dark: page `#141414`, menu `#1B1B1B`, lines `#2A2A2A`, text `#E8E8E8` / `#A3A3A3`, accent cyan `#3FD0E8` (links and
+rubric checks only), selected row `#2B2B2B`, radius 8 px. Menu 220 px: Lucide line icons (18 px, stroke 1.6) and
+sentence-case labels, Geist 14 px; group labels (e.g. "Samples") in Geist Mono 11 px uppercase grey. On phones
+(< 760 px) the menu becomes a sticky horizontal bar.
+
+Type, Geist only:
+- **Geist 600, letter-spacing -0.01em** for headings: H1 22 px, H2 17 px, H3 15 px (21 / 16 at 767 px,
+  20 / 16 at 479 px). They should read as bold text, not as titles.
+- **Geist** body 15/1.6; lead 16/1.6 in grey, max 68ch; tables, accordions, buttons and links 14 px.
+- **Geist Mono** 11 px uppercase, letter-spacing 0.08em, grey (not cyan) for labels and kickers: WHO / WHAT / OUTPUT,
+  turn numbers, dates, table headers, counts like "71 turns" or "14 / 14 pass".
+- Self-host: Google Fonts is blocked in the container; get the woff2 files from npm (`@fontsource-variable/geist@5`,
+  `@fontsource-variable/geist-mono@5`, files `*-latin-wght-normal.woff2`) with each package's LICENSE as the OFL file,
+  plus a `licenses.csv` row per font and one for Lucide (ISC).
+
+## Redesign viewer
+
+Pages: `index.html` (Overview) and one page per sample, in the order the user gives. Menu: Overview, then a
+"Samples" group with one gamepad icon per sample. Build the pages from one Python generator (shared menu, data
+embedded at build time, no runtime fetch) so the menu and order stay identical.
+
+**Overview**: `h1` "Overview", a `p.lead` intro in the user's words, then the workflow as **one box per step**
+(`ol.boxes > li.step`: background `#1B1B1B`, 1 px border, radius 8, padding 14 x 18, gap 10). Each box: a 22 px
+number circle and the step title in one row, then a two-column `dl` (label 76 px | text) with **Who**, **What** (the
+action done) and **Output** (a short list). Labels stack above the text under 480 px. Tried and rejected: steps as
+loose headed sections (too long), a horizontal column layout, and extra "Goals" boxes inside a step (fold that
+content into the What line). The Training data step was removed; the workflow the user approved is: Brief (Client;
+PRD + game generated by the model) -> GDD and rubrics (AI pipeline) -> Visual slice (Visual artist, incl. rubric
+checks) -> Visual slice review (Senior visual designer, two layers) -> Full game (Game dev specialist) -> Full game
+review (Senior game dev specialist). Reuse it, updated to the new data, unless the user says otherwise.
+
+**Sample page** (wide column, max 1480 px):
+1. Title row: `h1` game name with a Geist Mono label under it ("71 turns"), and a **GDD** button on the right that
+   opens the GDD (rendered from its Markdown) in a `<dialog>` modal; close with x, Esc or a click outside.
+2. **Model version | Redesign** side by side (no section heading): each pane has a label row with an "Open full
+   screen" link and a 16:9 frame with the game in an iframe (`games/<slug>/model.html`, `games/<slug>/redesign.html`);
+   one column under 1100 px.
+3. **Rubrics** and **Design trajectory** as collapsible sections (`details.sec`, closed by default, chevron, H2 in
+   the summary, a count on the right). Rubrics: a table grouped by rubric family (Rubric item | Result | Reviewer
+   comment) with a green check or red cross. Trajectory: one `details.acc` row per turn (number, first line of the
+   prompt, date); open shows the full prompt, the designer's note and the model reply trimmed to about 900
+   characters. No images.
+
+**Data from a task export** (`exported_tasks_*.jsonl`, one task per line, can be 200+ MB: process it with code, never
+read it into the conversation). Per task: `game_title`, `game_id` (source game: do not publish), `genre`,
+`dimension` (2D/3D), `prompt`, `gdd` (Markdown), `core_loop_steps`, `rubric_checks_core_loop` and
+`rubric_checks_presentation` (`rubric_item`, `result_score` 0/1, `result_comment`), `rubrics_*` (all rubric texts;
+`initial_model_eval` was empty), `agent_build.build_turns[]` (`turn_prompt`, `turn_notes`, `mini_app.agent_text`,
+`mini_app.started_at`, screenshot/diff/trajectory file ids), `agent_build.core_loop_html` (id of the final HTML, the
+redesign), `task_details` (rate, reason, review_layer, elapsed seconds) and `task_chain` (the pipeline run with
+`require_3d`, plus earlier build and review rounds with the reviewers' feedback). File links point at the labeling
+platform: private, blocked from the container, so ask the user for any file you need. Scrub e-mails and signed URLs
+and check for personal names before publishing.
+
+**Model versions**: the model's original games come from the client's batches (`samples/NN_<game_id>/` with
+`prd.md`, `game.html`, `metadata.json`, screenshots). Match on `game_id`, confirm the PRD concept equals the export's
+`prompt`, copy only `game.html`. A batch may not hold every game; say which IDs are missing and ask for the batch.
+
+**Preview as an Artifact**: the main page is wrapped by the artifact skeleton, so publish a copy of `index.html`
+with the doctype, html/head/body tags and the charset/viewport metas stripped (title e.g. "Game Redesigns") as the
+page, and every other file (sample pages, css, fonts, games) through `files` with `root` = the site folder. The page
+is served as `index.html`, so menu links keep working. Republish the same file path for each change.
+
+**Publish**: to `willsertorio/experiments`, `game_viewer/<DDMMYY>/` on `main` (Pages serves `main`; the URL is
+`willsertorio.github.io/experiments/game_viewer/<DDMMYY>/`). Attach the repo with push access, clone with
+`--depth 1 --filter=blob:none --sparse` and `git sparse-checkout set game_viewer/<DDMMYY>` (the repo is large), copy
+the site without the preview page, commit with the attribution lines and push with `-c push.negotiate=true`. Never
+commit from a `--no-checkout` clone: every file shows as deleted and a commit would wipe the repo. The container
+cannot reach `*.github.io` or the Pages API: ask the user to check the live page.
+
+## Showcase pages (template/ has each one)
 
 | Page | File | Content |
 |---|---|---|
@@ -29,17 +112,21 @@ every asset in 3D, and the conversation that built it. Reference implementation:
 | Assets | `assets.html` | Model list (groups separated by `<hr>`) + viewer: Textured / Clay / Wireframe, Player's view / Orbit for first-person weapon views, clip buttons, speed, scrubber. List in `data/assets.json`. |
 | Trajectory | `trajectory.html` | Every message the user typed, numbered with UTC date; click to open Claude's reply and the steps (tool calls). `data/trajectory.json`. |
 
-## Workflow
+Menu, in this order: **Overview, Play, GDD, Assets, Trajectory**. The video goes at the top of Overview, not in its
+own tab (a VIDEO tab next to PLAY read as odd). Apply the Style above, not the template's Funnel Display / JetBrains
+Mono sizes.
+
+## Showcase workflow
 
 1. **Gather**: the GDD text (ask if it is not in the repo), the game's models (`.glb`), the video embed URL, the
    user's account of the process (a transcript is fine: turn it into the Overview steps, then polish together),
    the session transcript for Trajectory (see below).
 2. **Copy** `template/` to `site/` in the repo, add `site/.gdignore` (Godot must not import the site), fill the
-   `{{...}}` placeholders. Vendor three.js (no CDN dependency):
+   `{{...}}` placeholders, replace `css/docs.css` with the current one (see top). Vendor three.js (no CDN dependency):
    `npm install three@0.170.0` in a scratch dir, then copy `build/three.module.min.js`, `LICENSE`, and from
    `examples/jsm/`: `controls/OrbitControls.js`, `loaders/GLTFLoader.js`, `utils/BufferGeometryUtils.js`,
    `utils/SkeletonUtils.js`, `environments/RoomEnvironment.js`, `libs/meshopt_decoder.module.js` into
-   `site/vendor/three/` (addons under `addons/`, same subfolders). Fonts: `site/fonts/` (see references/style.md).
+   `site/vendor/three/` (addons under `addons/`, same subfolders).
 3. **Assets list**: `data/assets.json` (format: references/assets-example.json). Item kinds: `robot`/any animated
    model (`clip` = default clip, use **Idle**), `view` (a first-person gun-with-hands glb: opens in Player's view;
    `eye`/`kick` = camera node names, `fov_h` = horizontal FOV), `piece` (one node of a multi-asset glb: `node`;
@@ -59,24 +146,26 @@ every asset in 3D, and the conversation that built it. Reference implementation:
    signed URLs). A session cannot read another session's container: the owning session must export its transcript
    (`~/.claude/projects/<cwd>/<session>.jsonl`) to a branch, with the user's consent there. Review it for private
    details before publishing; the repo is public.
-7. **Build**: copy `scripts/build_site.sh` to the repo, set its CONFIG, run it. Check every page in headless
-   Chromium (desktop 1440 x 900 and phone 390 x 844, `deviceScaleFactor: 2` for pictures you send; no horizontal
-   scroll; lazy images need a scroll before a full-page shot). Send screenshots.
+7. **Build**: copy `scripts/build_site.sh` to the repo, set its CONFIG, run it.
 8. **Publish**: `scripts/publish_gh_pages.sh "Site build ..."` (prebuilt files on `gh-pages`; include the commit
    attribution lines in the message). The user turns Pages on once: Settings -> Pages -> Deploy from a branch ->
-   `gh-pages` / root. This container cannot reach `*.github.io`; ask the user to check the live page.
+   `gh-pages` / root. Ask the user to check the live page.
 
-## Style (details and tokens: references/style.md)
+## Checking (both kinds)
 
-Dark: page `#141414`, menu `#1B1B1B`, lines `#2A2A2A`, text `#E8E8E8` / `#A3A3A3`, accent cyan `#3FD0E8`, selected
-row `#2B2B2B` with 8 px radius. Menu: Lucide line icons (18 px, stroke 1.6) + sentence-case labels, Geist 15 px.
-Type: **Funnel Display 500, -0.02em** for headlines (H1 40, H2 30, H3 22; the user found larger H1s too big); **Geist** for body
-(16/1.6, lead 18/1.65, links 15); **JetBrains Mono uppercase 0.14em** for labels (11 px) and kickers (12 px cyan).
-Sizes step down at 991 / 767 / 479 px. All fonts self-hosted (woff2 + OFL file + a `licenses.csv` row).
+Headless Chromium (`/opt/pw-browsers/chromium`; add `--use-gl=angle --use-angle=swiftshader
+--enable-unsafe-swiftshader` for WebGL games), served with `python3 -m http.server`: desktop 1440 x 900 and phone
+390 x 844, no horizontal page scroll, no page errors, every game iframe loads. Open one accordion and the GDD modal
+once. Send screenshots or the artifact, not a description.
 
 ## Pitfalls already paid for (references/lessons.md has the rest)
 
+- `.doc ol` padding beats a single class like `.boxes`: write `.doc .boxes { padding-left: 0 }`.
+- `.steps li` styles leak into nested lists: use `.steps > li`; nested `ul` inside an `ol` shows hollow circles
+  unless `list-style: disc` is set.
+- Editing the generator with a string search: `s.index('OVERVIEW =')` also matches inside `ICON_OVERVIEW =` and
+  duplicated half the file. Match a full line or a unique marker.
 - `gltf-transform optimize` merges materials that differ by name only: use `gltf-transform meshopt`.
 - An embed whose recording is 16:10 inside a 16:9 frame shows black bars: match `aspect-ratio` to the recording.
 - Sticky/fixed menus break full-page screenshots; check the real page, not only the stitched shot.
-- `.steps li` styles leak into nested lists: use `.steps > li`.
+- Some games load a library from a CDN (e.g. pixi.js on jsDelivr): fine on Pages, but they need a connection.
