@@ -740,6 +740,20 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   counters). **With it: first shot 13 ms, first hit 15 ms, first crate 16 ms; all sounds' first plays 230 -> 56
   ms.** About a hundred frames more of loading (some 2 s on a GPU: not measured there). Not covered: a lighting
   situation the first room does not have (the first time in a corridor, say), the end screens.
+- **A black 3D view with the HUD still going (user, Chrome on the M1: "it blacked out after some shots"; the
+  background colour where the room and the gun were, for the rest of the run)**. Not reproduced by the bot, on
+  the desktop or in the headless browser, with stalls or with the loading's rehearsal (`--training
+  --game-capture=x --part=blackout [--warm] [--hitch]`). What was found (`--part=nan`: effects and sounds given
+  numbers that are not numbers): the desktop shrugs them off, **but in a browser a sound's volume or pitch that
+  is not finite makes the page throw ("Failed to set the 'value' property on 'AudioParam'") in the middle of
+  the engine's frame**, and the run here stopped drawing at that point. Guards, each where it belongs:
+  `tools/web/head_include.html` (second script: such a value is not handed to the browser, a volume becomes 0,
+  a pitch stays; the first is reported in the console with its stack; **after editing that file run
+  `python3 -I tools/web/embed_head.py`**, which copies it into the preset); `V2Sfx._play` and `V2Fx`'s public
+  functions leave on a place, direction, level or pitch that is not a number; `V2Player` checks the camera
+  every frame (not finite, squashed, or far off its place: the bad part is set right and named, `view_fault`,
+  shown by F3 and printed as `[view] fault`). **Which number was bad in the user's run is not known**: if it
+  comes back, F3 and the browser's console say.
 - From the site branch: on web the sounds play on Master (a bus added at runtime is silent in Godot 4.3's web
   sample playback: no room reverb, no limiter), no point lights on shots / hits / bursts (`V2Fx.LIGHTS`), 2x MSAA.
 - **Resolution (user: on the M1 in Chrome 720 rows give about 50 fps in combat)**: the browser build starts at

@@ -1619,3 +1619,109 @@ func firsts(_dir: String) -> void:
 			print("[firsts] round %d  %-16s engine blocked %5.0f ms at most  (%s)" % [round + 1, step, top, what[0]])
 			await _wait(0.3)
 	get_tree().quit()
+
+
+## Does the view survive the training's shots? (-- --training --game-capture=DIR --part=blackout [--warm]; the
+## user's browser showed the HUD over a black view "after some shots".) The dummy is shot through both steps by
+## the real path; every half second: the step, whether the camera's numbers are finite, and how bright the 3D
+## picture is in its middle and at a corner.
+func blackout(dir: String) -> void:
+	DirAccess.make_dir_recursive_absolute(dir)
+	if "--warm" in OS.get_cmdline_user_args():
+		await game._warm_up()
+		await game._rehearse()
+		game.hud.modulate.a = 1.0
+		player.overlay.visible = true
+		player.locked = false
+	await _wait(1.0)
+	var target: V2Robot = game.dummy
+	var to_spawn: Vector3 = game.start_at - target.global_position
+	to_spawn.y = 0.0
+	var feet := target.global_position
+	feet.y = 0.0
+	var stand := feet + to_spawn.normalized() * 2.8
+	_look_at(stand, target.hit_point())
+	player.bot_aim = true
+	player.act("ADS")
+	await _until(func() -> bool: return player._aimed > 0.9, 2.0)
+	var n := 0
+	for i in 60:
+		if game.train_step == 1 and player.weapon != "rifle":
+			player.bot_aim = false
+			await _until(func() -> bool: return player.busy == "", 3.0)
+			player.switch_weapon()
+			await _until(func() -> bool: return player.busy == "" and player.weapon == "rifle", 4.0)
+			player.bot_aim = true
+			player.act("ADS")
+			await _until(func() -> bool: return player._aimed > 0.9, 2.0)
+		if game.train_step < 2:
+			if is_instance_valid(target):
+				_look_at(stand, target.hit_point())
+			if player.weapon == "rifle":
+				player.bot_fire = i % 3 != 2
+			else:
+				player.act("Fire")
+		else:
+			player.bot_fire = false
+		await _wait(0.25)
+		if "--hitch" in OS.get_cmdline_user_args():        # (a stall like a browser's first-use one, in mid fire)
+			OS.delay_msec(1500 if i % 2 == 0 else 400)
+		await _wait(0.25)
+		var img := get_viewport().get_texture().get_image()
+		var mid := img.get_pixel(img.get_width() / 2, img.get_height() * 3 / 5)
+		var corner := img.get_pixel(img.get_width() / 8, img.get_height() * 7 / 8)
+		var xf := player.cam.global_transform
+		var finite := xf.is_finite() and player.view_cam.global_transform.is_finite()
+		print("[blackout] %4.1f s  step %d  hits %d  %s  camera %s  middle %.2f  corner %.2f  blur %s  dummy %s" % [i * 0.5, game.train_step, game.train_hits,
+			player.weapon, "finite" if finite else "NOT FINITE", mid.get_luminance(), corner.get_luminance(), str(game.hud.blur.visible),
+			"wreck" if (is_instance_valid(target) and target.state == V2Robot.DEAD) else "alive"])
+		if not finite or (mid.get_luminance() < 0.03 and corner.get_luminance() < 0.03):
+			await _shot(dir, "Blackout_%d" % n)
+			n += 1
+			if n >= 2:
+				break
+		if game.train_step >= 2 and i > 30:
+			break
+	await _shot(dir, "Blackout_end")
+	get_tree().quit()
+
+
+## Does one object with numbers that are not numbers blank the 3D picture? (-- --game-capture=DIR --part=nan)
+func nan(dir: String) -> void:
+	DirAccess.make_dir_recursive_absolute(dir)
+	await _wait(1.0)
+	var look := func(what: String) -> void:
+		await _wait(0.5)
+		var img := get_viewport().get_texture().get_image()
+		var a := img.get_pixel(img.get_width() / 2, img.get_height() * 3 / 5).get_luminance()
+		var b := img.get_pixel(img.get_width() / 8, img.get_height() / 3).get_luminance()
+		print("[nan] %-44s middle %.2f  side %.2f" % [what, a, b])
+	await look.call("as it is")
+	var at := player.global_position - player.global_transform.basis.z * 3.0 + Vector3(0, 1.2, 0)
+	var bad := Vector3(NAN, NAN, NAN)
+	V2Fx.impact(at, Vector3.ZERO)
+	await look.call("an impact with a normal of zero")
+	V2Fx.impact(at, bad)
+	await look.call("an impact with a normal that is not a number")
+	await _wait(2.0)
+	await look.call("  two seconds later")
+	V2Fx.impact(bad, Vector3.UP)
+	await look.call("an impact at a place that is not a number")
+	var snd := AudioStreamPlayer3D.new()                   # (past the game's own guard: what the page's audio is handed)
+	snd.stream = V2Sfx._load("servo")[0]
+	game.add_child(snd)
+	snd.global_position = at
+	snd.play()
+	await _frame()
+	snd.global_position = bad
+	snd.pitch_scale = 1.0
+	await look.call("a playing sound moved to a place that is not a number")
+	await _wait(2.0)
+	await look.call("  two seconds later")
+	V2Fx.tracer(at, bad, V2Fx.YELLOW)
+	V2Fx.sparkle(bad, 8)
+	V2Fx.puff(bad, bad, V2Fx.GUNSMOKE, 0.1, 2, 0.6, 0.2, 0.4)
+	await look.call("a tracer, a short circuit, smoke: not numbers")
+	await _wait(3.0)
+	await look.call("  three seconds later")
+	get_tree().quit()

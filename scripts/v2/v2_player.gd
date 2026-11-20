@@ -59,6 +59,8 @@ var hit_confirm := 0.0              # > 0 just after one of the player's rounds 
 var shots_hit := 0
 var bot_aim := false                # the aim held by code (the checks)
 var bot_jump := false               # a jump asked for by code (the bot at a wreck)
+var view_fault := ""                # the last thing found wrong with the camera's numbers and set right ("" = never)
+var view_faults := 0
 var rehearsal := false              # (the game's loading: rounds are fired for the picture's sake, they strike nothing)
 var locked := false                 # no moving, looking or shooting (the run's opening: the gun is still coming up)
 var hurt_amount := 0.0              # how much the last round took (the HUD blurs the picture by it)
@@ -651,6 +653,42 @@ func _frame(delta: float) -> void:
 	elif kick != null:
 		var rx := Transform3D(Basis(Vector3.RIGHT, PI / 2.0), Vector3.ZERO)
 		ct = ct * (rx * kick.transform * rx.affine_inverse())
+	# A view that cannot be drawn is not shown (**user, in the browser: "it blacked out after some shots"**: the
+	# HUD went on over the background colour, nothing 3D drawn by either camera, for the rest of the run): if a
+	# number of the camera is not a number, or the camera is squashed flat or far off its place, the parts are
+	# looked at one by one, the bad one is set right and named (`view_fault`: F3, the console), and this frame's
+	# camera is the plain one, the player's pitch at eye height.
+	var det := ct.basis.determinant()
+	if not ct.is_finite() or det < 0.5 or det > 2.0 or ct.origin.length() > 5.0:
+		var why: Array = []
+		if not is_finite(_pitch):
+			why.append("pitch %s" % _pitch)
+			_pitch = 0.0
+		if not is_finite(_kick):
+			why.append("kick %s" % _kick)
+			_kick = 0.0
+		if not is_finite(_yaw):
+			why.append("yaw %s" % _yaw)
+			_yaw = 0.0
+		if not is_finite(_eye) or _eye < 0.1 or _eye > 3.0:
+			why.append("eye %s" % _eye)
+			_eye = EYE
+		if not is_finite(_aimed):
+			why.append("aimed %s" % _aimed)
+			_aimed = 0.0
+		if kick != null and fallen < 0.0:
+			var kd := kick.transform.basis.determinant()
+			if not kick.transform.is_finite() or kd < 0.5 or kd > 2.0 or kick.transform.origin.length() > 2.0:
+				why.append("the %s's CamKick in '%s' at %.2f s: %s" % [weapon, _ap().current_animation, _ap().current_animation_position, str(kick.transform)])
+				kick.transform = Transform3D.IDENTITY
+		if why.is_empty():
+			why.append("camera %s" % str(ct))
+		var fault := ", ".join(why)
+		if fault != view_fault:
+			view_fault = fault
+			view_faults += 1
+			print("[view] fault %d: %s" % [view_faults, fault])
+		ct = Transform3D(Basis(Vector3.RIGHT, _pitch), Vector3(0, _eye, 0))
 	cam.transform = ct
 	var ap := _ap()
 	var view: Dictionary = _views[weapon]

@@ -182,6 +182,10 @@ static func _play(key: String, at: Vector3 = Vector3.INF, db: float = 0.0, pitch
 	if list.is_empty():
 		return
 	var sp: Array = SOUNDS[key]
+	# (a place, a level or a pitch that is not a number: no sound. In a browser such a number, handed on to the
+	# page's audio, throws in the middle of the engine's frame: see tools/web/head_include.html)
+	if (at != Vector3.INF and not at.is_finite()) or not is_finite(db) or not is_finite(pitch) or pitch <= 0.0:
+		return
 	if at != Vector3.INF:                                  # (out of earshot: a placed sound is cut off at its distance)
 		var cam := root.get_viewport().get_camera_3d() if root.is_inside_tree() else null
 		if cam != null and cam.global_position.distance_to(at) > maxf(float(sp[4]), 10.0) + 4.0:
