@@ -1725,3 +1725,58 @@ func nan(dir: String) -> void:
 	await _wait(3.0)
 	await look.call("  three seconds later")
 	get_tree().quit()
+
+
+## Does the view survive a door opening? (-- --play --no-training --game-capture=x --part=doors, in the browser
+## build: the user's video shows the 3D picture gone the moment E opened the second door.) The player is put in
+## front of every door in turn, as close as a player gets, E is pressed as the game takes it, and what the engine
+## draws is printed before and after.
+func doors(_dir: String) -> void:
+	player.invulnerable = true
+	await _wait(1.0)
+	var vp := game.get_viewport().get_viewport_rid()
+	var info := func() -> String:
+		return "draw calls %d  3D found %d drawn %d" % [int(RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME)),
+			RenderingServer.viewport_get_render_info(vp, RenderingServer.VIEWPORT_RENDER_INFO_TYPE_VISIBLE, RenderingServer.VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME),
+			RenderingServer.viewport_get_render_info(vp, RenderingServer.VIEWPORT_RENDER_INFO_TYPE_VISIBLE, RenderingServer.VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME)]
+	for i in dungeon.doors.size():
+		var d: Dictionary = dungeon.doors[i]
+		if not d.door or d.open:
+			continue
+		var at: Vector3 = d.at
+		var out := Vector3((d.dir as Vector2i).x, 0, (d.dir as Vector2i).y)
+		for side in [-1.0, 1.0]:
+			if d.open:
+				break
+			var stand: Vector3 = at - out * side * 1.1
+			if dungeon.area_at(stand) < 0:
+				continue
+			_look_at(stand, at + Vector3(0, 1.5, 0))
+			await _wait(0.6)
+			var before: String = info.call()
+			game.interact()
+			await _wait(0.3)
+			var soon: String = info.call()
+			await _wait(1.5)
+			print("[doors] door %d at %.1f %.1f  open %s  before: %s | 0.3 s after E: %s | 1.8 s after: %s  | %s" % [i, at.x, at.z, d.open, before, soon, info.call(), player.view_text()])
+	print("[doors] done")
+
+
+## The watch on the 3D picture (-- --play --no-training --game-capture=x --part=watch): the view is lost on
+## purpose, three ways; each time the watch must notice, write its report and bring the picture back.
+func watch(_dir: String) -> void:
+	player.invulnerable = true
+	await _wait(1.5)
+	var w: Node = game.view_watch
+	if w == null:
+		print("[watch] no watch (headless)")
+		return
+	for how in ["hide", "camera", "hide"]:
+		var before: int = w.call("found")
+		w.call("lose", how)
+		await _wait(0.2)
+		var during: int = w.call("found")
+		await _wait(4.0)
+		print("[watch] lost by '%s': found %d -> %d -> %d  back by: '%s'  report lines %d" % [how, before, during, w.call("found"), w.get("recovered_by"), (w.get("report") as Array).size()])
+		w.set("recovered_by", "")
+	print("[watch] done")

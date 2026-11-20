@@ -749,7 +749,15 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   particles placed at not-a-number or infinity (release engine, desktop and browser: the rest is still drawn),
   the scaled 3D picture on a canvas of their size, the canvas hidden for a while in an iframe, anything in the
   game's scripts hiding the world. Not reproduced on SwiftShader. F3 has a line "3D: found n drawn n" (many found,
-  none drawn = shaders not binding; none found = culling). Ask for the browser's console before changing anything. The engine's browser code hands on a mouse movement as
+  none drawn = shaders not binding; none found = culling). Ask for the browser's console before changing anything.
+  **The user's video** (console open, no errors, canvas under 720 rows so not the scaled picture): gone in one
+  frame, "at a different spot every time". **The watch** (`scripts/v2/v2_view_watch.gd`, added by the game when
+  not headless; `-- --no-view-watch`): when the engine finds nothing to draw in 3D for 20 frames it prints
+  everything about the view (`[view-watch]` lines: viewport, both cameras, visibility, every 3D node not at a
+  finite place, the sun, the last sounds, the browser's canvas / WebGL context) and tries, one after another,
+  `cameras`, `buffers`, `shadows`, `show`, `retree`, `camera node`, naming on an orange line at the foot of the
+  screen the one that brought the picture back. Its check: `--play --no-training --game-capture=x --part=watch`
+  (loses the view on purpose; desktop and browser). `--part=doors` opens every door and prints what is drawn. The engine's browser code hands on a mouse movement as
   `movementX * canvas.width / rect.width` (`_godot_js_input_mouse_move_cb` in the exported index.js); when the
   canvas has no size on the page at that moment the movement is infinite, or not a number, and
   `V2Player._input` added it to `_yaw`: the player's turn was not a number from then on, and with it both

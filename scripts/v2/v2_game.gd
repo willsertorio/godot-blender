@@ -78,6 +78,7 @@ var train_hits := 0
 var dummy: V2Robot
 var _train_kits := 0
 var _perf: Label
+var view_watch: Node              # the watch on the 3D picture (v2_view_watch.gd); null headless
 var _perf_log := false             # -- --perf-log: F3's lines are printed every second (the browser's console)
 var _perf_t := 0.0
 var _perf_n := 0
@@ -1126,6 +1127,28 @@ func _hud() -> void:
 		if a.begins_with("--blur-demo="):
 			hud.blur_hold = float(a.trim_prefix("--blur-demo="))
 	_perf.visible = _perf_log
+	# the watch on the 3D picture (see v2_view_watch.gd: the user's browser loses it; this notes when and how,
+	# and brings it back), with its own line at the foot of the screen
+	if DisplayServer.get_name() != "headless" and not ("--no-view-watch" in OS.get_cmdline_user_args()):
+		var watch_layer := CanvasLayer.new()
+		watch_layer.layer = 7
+		add_child(watch_layer)
+		var note := Label.new()
+		note.add_theme_font_override("font", V2Ui.font("bold", 13))
+		note.add_theme_font_size_override("font_size", 13)
+		note.add_theme_color_override("font_color", UIPalette.ORANGE)
+		note.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		note.visible = false
+		watch_layer.add_child(note)
+		note.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+		note.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		note.grow_vertical = Control.GROW_DIRECTION_BEGIN
+		note.offset_bottom = -6
+		view_watch = (load("res://scripts/v2/v2_view_watch.gd") as GDScript).new()
+		view_watch.set("game", self)
+		view_watch.set("label", note)
+		add_child(view_watch)
 	var map_layer := CanvasLayer.new()
 	map_layer.layer = 5
 	add_child(map_layer)
