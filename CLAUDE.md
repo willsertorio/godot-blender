@@ -740,20 +740,26 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   counters). **With it: first shot 13 ms, first hit 15 ms, first crate 16 ms; all sounds' first plays 230 -> 56
   ms.** About a hundred frames more of loading (some 2 s on a GPU: not measured there). Not covered: a lighting
   situation the first room does not have (the first time in a corridor, say), the end screens.
-- **A black 3D view with the HUD still going (user, Chrome on the M1: "it blacked out after some shots"; the
-  background colour where the room and the gun were, for the rest of the run)**. Not reproduced by the bot, on
-  the desktop or in the headless browser, with stalls or with the loading's rehearsal (`--training
-  --game-capture=x --part=blackout [--warm] [--hitch]`). What was found (`--part=nan`: effects and sounds given
-  numbers that are not numbers): the desktop shrugs them off, **but in a browser a sound's volume or pitch that
-  is not finite makes the page throw ("Failed to set the 'value' property on 'AudioParam'") in the middle of
-  the engine's frame**, and the run here stopped drawing at that point. Guards, each where it belongs:
-  `tools/web/head_include.html` (second script: such a value is not handed to the browser, a volume becomes 0,
-  a pitch stays; the first is reported in the console with its stack; **after editing that file run
-  `python3 -I tools/web/embed_head.py`**, which copies it into the preset); `V2Sfx._play` and `V2Fx`'s public
-  functions leave on a place, direction, level or pitch that is not a number; `V2Player` checks the camera
-  every frame (not finite, squashed, or far off its place: the bad part is set right and named, `view_fault`,
-  shown by F3 and printed as `[view] fault`). **Which number was bad in the user's run is not known**: if it
-  comes back, F3 and the browser's console say.
+- **A black 3D view with the HUD still going (user, Chrome on the M1, on the site: "it blacked out after some
+  shots", then "all black after the menu"; F3 there: 60 fps, 24 draw calls, 2k triangles = the engine runs and
+  draws nothing 3D)**. **What it was: the mouse.** The engine's browser code hands on a mouse movement as
+  `movementX * canvas.width / rect.width` (`_godot_js_input_mouse_move_cb` in the exported index.js); when the
+  canvas has no size on the page at that moment the movement is infinite, or not a number, and
+  `V2Player._input` added it to `_yaw`: the player's turn was not a number from then on, and with it both
+  cameras. The pitch is clamped, so it stayed a number and the first camera check (which looked at the camera's
+  own transform, not at the yaw) said nothing. No bot, check or headless run moves a real mouse, so none of them
+  showed it (`--part=blackout`, `--part=nan`). Reproduced in the headless browser by hiding the canvas for the
+  length of one `mousemove` (`tools/web_run.js ... --args="--play --no-training --no-loading --perf-log"
+  --steps="wait:120,click,wait:6,lock,eval:c=document.querySelector('canvas');c.style.display='none';window.dispatchEvent(new MouseEvent('mousemove'));c.style.display='';1,wait:70"`
+  : an `eval` step may hold no comma). Now: a movement that is not finite or is over 3000 pixels is dropped
+  (`_fault`, named in F3 and the console as `[view] fault`), the yaw is wrapped, and every frame yaw, pitch,
+  aim, kick, the player's place, the gun's seat, the field of view and which cameras are current are checked and
+  set right. **F3 has a line "view: yaw ... pitch ... aimed ... fov ... at ... gun ... areas drawn n of N"**:
+  read it first when a picture is missing. `-- --no-loading` skips the warm-up and the rehearsal (tests).
+  Found on the way and kept: in a browser a sound's volume or pitch that is not finite makes the page throw in
+  the middle of the engine's frame (`--part=nan`); `tools/web/head_include.html` (second script) does not hand
+  such a value on (**after editing that file run `python3 -I tools/web/embed_head.py`**), and `V2Sfx._play` /
+  `V2Fx`'s public functions leave on a place, direction, level or pitch that is not a number.
 - From the site branch: on web the sounds play on Master (a bus added at runtime is silent in Godot 4.3's web
   sample playback: no room reverb, no limiter), no point lights on shots / hits / bursts (`V2Fx.LIGHTS`), 2x MSAA.
 - **Resolution (user: on the M1 in Chrome 720 rows give about 50 fps in combat)**: the browser build starts at
