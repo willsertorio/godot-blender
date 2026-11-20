@@ -78,6 +78,7 @@ var train_hits := 0
 var dummy: V2Robot
 var _train_kits := 0
 var _perf: Label
+var view_watch: Node              # the watch on the 3D picture (v2_view_watch.gd); null headless
 var _perf_log := false             # -- --perf-log: F3's lines are printed every second (the browser's console)
 var _perf_t := 0.0
 var _perf_n := 0
@@ -1126,6 +1127,28 @@ func _hud() -> void:
 		if a.begins_with("--blur-demo="):
 			hud.blur_hold = float(a.trim_prefix("--blur-demo="))
 	_perf.visible = _perf_log
+	# the watch on the 3D picture (see v2_view_watch.gd: the user's browser loses it; this notes when and how,
+	# and brings it back), with its own line at the foot of the screen
+	if DisplayServer.get_name() != "headless" and not ("--no-view-watch" in OS.get_cmdline_user_args()):
+		var watch_layer := CanvasLayer.new()
+		watch_layer.layer = 7
+		add_child(watch_layer)
+		var note := Label.new()
+		note.add_theme_font_override("font", V2Ui.font("bold", 13))
+		note.add_theme_font_size_override("font_size", 13)
+		note.add_theme_color_override("font_color", UIPalette.ORANGE)
+		note.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		note.visible = false
+		watch_layer.add_child(note)
+		note.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+		note.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		note.grow_vertical = Control.GROW_DIRECTION_BEGIN
+		note.offset_bottom = -6
+		view_watch = (load("res://scripts/v2/v2_view_watch.gd") as GDScript).new()
+		view_watch.set("game", self)
+		view_watch.set("label", note)
+		add_child(view_watch)
 	var map_layer := CanvasLayer.new()
 	map_layer.layer = 5
 	add_child(map_layer)
@@ -1246,7 +1269,21 @@ func _hud_update(delta: float) -> void:
 			for a in dungeon.areas:
 				if (a.node as Node3D).visible:
 					shown += 1
-			_perf.text += "\n%s  areas drawn %d of %d%s" % [player.view_text(), shown, dungeon.areas.size(), "" if dungeon.visible else "  DUNGEON HIDDEN"]
+			var really := 0                            # (and those that are in fact visible: nothing above them hidden)
+			for a in dungeon.areas:
+				if (a.node as Node3D).is_visible_in_tree():
+					really += 1
+			_perf.text += "\n%s  areas drawn %d of %d (in tree %d)%s%s" % [player.view_text(), shown, dungeon.areas.size(), really,
+				"" if dungeon.visible else "  DUNGEON HIDDEN", "" if visible else "  GAME NODE HIDDEN"]
+			# what the engine did with the world's picture: things it found in view, and what it drew of them
+			# (many found and none drawn = their shaders do not bind; none found = nothing passes the culling)
+			var world_vp := get_viewport().get_viewport_rid()
+			_perf.text += "\n3D: found %d  drawn %d  shadows: found %d drawn %d  3D scale %.3f  msaa %d" % [
+				RenderingServer.viewport_get_render_info(world_vp, RenderingServer.VIEWPORT_RENDER_INFO_TYPE_VISIBLE, RenderingServer.VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME),
+				RenderingServer.viewport_get_render_info(world_vp, RenderingServer.VIEWPORT_RENDER_INFO_TYPE_VISIBLE, RenderingServer.VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME),
+				RenderingServer.viewport_get_render_info(world_vp, RenderingServer.VIEWPORT_RENDER_INFO_TYPE_SHADOW, RenderingServer.VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME),
+				RenderingServer.viewport_get_render_info(world_vp, RenderingServer.VIEWPORT_RENDER_INFO_TYPE_SHADOW, RenderingServer.VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME),
+				get_viewport().scaling_3d_scale, get_viewport().msaa_3d]
 			if player.view_fault != "":
 				_perf.text += "\nview set right %d times, last: %s" % [player.view_faults, player.view_fault]
 			if _perf_log:

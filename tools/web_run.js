@@ -1,7 +1,7 @@
 // Runs the browser build (build/site/play) in headless Chromium and drives it: for checking the web export here.
 //   node tools/web_run.js OUTDIR [--args="--play --seed=33"] [--size=960x540] [--steps="wait:6,shot:title,key:Enter,wait:20,shot:game"]
 // Steps: wait:SECONDS, shot:NAME (OUTDIR/NAME.png), key:KEY (press), down:KEY / up:KEY, click (at the middle),
-// move:DX,DY (mouse), eval:JS. The game's prints and errors go to OUTDIR/console.log.
+// move:DX,DY (mouse), eval:JS, size:WxH (the window); with --frame (the game in an iframe): hide, show, css:STYLE. The game's prints and errors go to OUTDIR/console.log.
 // The game's command line (what follows "--" on the desktop) is given with --args: the page's GODOT_CONFIG.args.
 const { chromium } = require('playwright');
 const http = require('http'), fs = require('fs'), path = require('path');
@@ -14,6 +14,10 @@ const types = { '.html': 'text/html', '.js': 'application/javascript', '.wasm': 
 fs.mkdirSync(out, { recursive: true });
 const server = http.createServer((req, res) => {
   let p = decodeURIComponent(req.url.split('?')[0]); if (p === '/') p = '/index.html';
+  if (p === '/__frame') {                            // --frame: the game in an iframe, as the site has it
+    res.writeHead(200, { 'Content-Type': 'text/html' });
+    return res.end('<!doctype html><body style="margin:0;background:#123"><iframe id="g" src="/" allow="autoplay; fullscreen" style="border:0;width:100vw;height:100vh;display:block"></iframe></body>');
+  }
   const f = path.join(root, p);
   if (!f.startsWith(root) || !fs.existsSync(f)) { res.writeHead(404); return res.end(); }
   let body = fs.readFileSync(f);
@@ -62,6 +66,9 @@ const server = http.createServer((req, res) => {
     else if (k === 'down') await page.keyboard.down(v);
     else if (k === 'up') await page.keyboard.up(v);
     else if (k === 'click') await page.mouse.click(W / 2, H / 2);
+    else if (k === 'size') { const [w, h] = v.split('x').map(Number); await page.setViewportSize({ width: w, height: h }); }
+    else if (k === 'hide' || k === 'show') await page.evaluate(d => { document.getElementById('g').style.display = d; }, k === 'hide' ? 'none' : 'block');
+    else if (k === 'css') await page.evaluate(c => { document.getElementById('g').style.cssText += ';' + c; }, v);
     else if (k === 'move') { const [dx, dy] = v.split('/').map(Number); await page.mouse.move(W / 2 + dx, H / 2 + dy, { steps: 6 }); }
     else if (k === 'eval') log.write('eval: ' + JSON.stringify(await page.evaluate(v)) + '\n');
     else if (k === 'lock') log.write('pointer lock element: ' + (await page.evaluate(() => document.pointerLockElement ? document.pointerLockElement.tagName : 'none')) + '\n');
