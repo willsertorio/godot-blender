@@ -1246,7 +1246,21 @@ func _hud_update(delta: float) -> void:
 			for a in dungeon.areas:
 				if (a.node as Node3D).visible:
 					shown += 1
-			_perf.text += "\n%s  areas drawn %d of %d%s" % [player.view_text(), shown, dungeon.areas.size(), "" if dungeon.visible else "  DUNGEON HIDDEN"]
+			var really := 0                            # (and those that are in fact visible: nothing above them hidden)
+			for a in dungeon.areas:
+				if (a.node as Node3D).is_visible_in_tree():
+					really += 1
+			_perf.text += "\n%s  areas drawn %d of %d (in tree %d)%s%s" % [player.view_text(), shown, dungeon.areas.size(), really,
+				"" if dungeon.visible else "  DUNGEON HIDDEN", "" if visible else "  GAME NODE HIDDEN"]
+			# what the engine did with the world's picture: things it found in view, and what it drew of them
+			# (many found and none drawn = their shaders do not bind; none found = nothing passes the culling)
+			var world_vp := get_viewport().get_viewport_rid()
+			_perf.text += "\n3D: found %d  drawn %d  shadows: found %d drawn %d  3D scale %.3f  msaa %d" % [
+				RenderingServer.viewport_get_render_info(world_vp, RenderingServer.VIEWPORT_RENDER_INFO_TYPE_VISIBLE, RenderingServer.VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME),
+				RenderingServer.viewport_get_render_info(world_vp, RenderingServer.VIEWPORT_RENDER_INFO_TYPE_VISIBLE, RenderingServer.VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME),
+				RenderingServer.viewport_get_render_info(world_vp, RenderingServer.VIEWPORT_RENDER_INFO_TYPE_SHADOW, RenderingServer.VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME),
+				RenderingServer.viewport_get_render_info(world_vp, RenderingServer.VIEWPORT_RENDER_INFO_TYPE_SHADOW, RenderingServer.VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME),
+				get_viewport().scaling_3d_scale, get_viewport().msaa_3d]
 			if player.view_fault != "":
 				_perf.text += "\nview set right %d times, last: %s" % [player.view_faults, player.view_fault]
 			if _perf_log:

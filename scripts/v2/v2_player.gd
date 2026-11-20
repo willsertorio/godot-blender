@@ -239,7 +239,7 @@ func _fault(what: String) -> void:
 func view_text() -> String:
 	return "view: yaw %.2f pitch %.2f aimed %.2f fov %.0f  at %.1f %.1f %.1f  gun %s%s  %s" % [_yaw, _pitch, _aimed, cam.fov,
 		global_position.x, global_position.y, global_position.z, weapon, "" if (_views[weapon].scene as Node3D).visible else " (hidden)",
-		"overlay on" if overlay.visible else "overlay off"]
+		"overlay on" if overlay.visible else "overlay off"] + "  in tree: player %s cam %s gun %s" % [is_visible_in_tree(), cam.is_visible_in_tree(), (_views[weapon].scene as Node3D).is_visible_in_tree()]
 
 
 ## Where a robot aims: the chest (lower when crouched).

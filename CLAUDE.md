@@ -742,7 +742,14 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   situation the first room does not have (the first time in a corridor, say), the end screens.
 - **A black 3D view with the HUD still going (user, Chrome on the M1, on the site: "it blacked out after some
   shots", then "all black after the menu"; F3 there: 60 fps, 24 draw calls, 2k triangles = the engine runs and
-  draws nothing 3D)**. **What it was: the mouse.** The engine's browser code hands on a mouse movement as
+  draws nothing 3D)**. **Not solved.** What follows (the mouse) was found and fixed, and **was not the user's cause**: their next
+  screenshots show the view line sane (yaw, pitch, fov, place, areas marked drawn) and still 18 to 58 draw calls,
+  1 ms of drawing, the environment's background colour and nothing else in 3D; the first time it happened was the
+  moment the training dummy was destroyed, later from the start of a run. Ruled out here: an object, a light or
+  particles placed at not-a-number or infinity (release engine, desktop and browser: the rest is still drawn),
+  the scaled 3D picture on a canvas of their size, the canvas hidden for a while in an iframe, anything in the
+  game's scripts hiding the world. Not reproduced on SwiftShader. F3 has a line "3D: found n drawn n" (many found,
+  none drawn = shaders not binding; none found = culling). Ask for the browser's console before changing anything. The engine's browser code hands on a mouse movement as
   `movementX * canvas.width / rect.width` (`_godot_js_input_mouse_move_cb` in the exported index.js); when the
   canvas has no size on the page at that moment the movement is infinite, or not a number, and
   `V2Player._input` added it to `_yaw`: the player's turn was not a number from then on, and with it both
