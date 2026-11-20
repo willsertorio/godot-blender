@@ -261,9 +261,10 @@ func _ready() -> void:
 		player.overlay.visible = false
 		hud.modulate.a = 0.0
 		V2World.progress(0.82)
-		await _warm_up()
-		V2World.progress(0.86)
-		await _rehearse()
+		if not ("--no-loading" in args):                   # (for tests of what comes after it: it takes minutes in a headless browser)
+			await _warm_up()
+			V2World.progress(0.86)
+			await _rehearse()
 		V2World.progress(1.0)
 		await get_tree().process_frame
 		V2World.progress(-1.0)
@@ -1241,6 +1242,11 @@ func _hud_update(delta: float) -> void:
 			# where the rest goes, by system (**user, of the browser build: "game code ~33 ms": which code?**)
 			_perf.text += "\n" + V2World.prof_text(_perf_n, _perf_log) + "   robots awake %d of %d" % [
 				robots.filter(func(r: V2Robot) -> bool: return r.is_processing()).size(), robots.size()]
+			var shown := 0                             # (areas drawn: with the view's numbers, what a black picture is made of)
+			for a in dungeon.areas:
+				if (a.node as Node3D).visible:
+					shown += 1
+			_perf.text += "\n%s  areas drawn %d of %d%s" % [player.view_text(), shown, dungeon.areas.size(), "" if dungeon.visible else "  DUNGEON HIDDEN"]
 			if player.view_fault != "":
 				_perf.text += "\nview set right %d times, last: %s" % [player.view_faults, player.view_fault]
 			if _perf_log:

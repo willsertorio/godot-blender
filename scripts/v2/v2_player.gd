@@ -59,6 +59,7 @@ var hit_confirm := 0.0              # > 0 just after one of the player's rounds 
 var shots_hit := 0
 var bot_aim := false                # the aim held by code (the checks)
 var bot_jump := false               # a jump asked for by code (the bot at a wreck)
+var _last_good := Vector3.ZERO
 var view_fault := ""                # the last thing found wrong with the camera's numbers and set right ("" = never)
 var view_faults := 0
 var rehearsal := false              # (the game's loading: rounds are fired for the picture's sake, they strike nothing)
@@ -223,6 +224,22 @@ func _view_overlay() -> void:
 	view_cam.environment = env
 	vp.add_child(view_cam)
 	view_cam.current = true
+
+
+## Something the view hangs on was found wrong and set right: named once each (F3, the console).
+func _fault(what: String) -> void:
+	if what == view_fault:
+		return
+	view_fault = what
+	view_faults += 1
+	print("[view] fault %d: %s" % [view_faults, what])
+
+
+## For F3: the numbers the view hangs on.
+func view_text() -> String:
+	return "view: yaw %.2f pitch %.2f aimed %.2f fov %.0f  at %.1f %.1f %.1f  gun %s%s  %s" % [_yaw, _pitch, _aimed, cam.fov,
+		global_position.x, global_position.y, global_position.z, weapon, "" if (_views[weapon].scene as Node3D).visible else " (hidden)",
+		"overlay on" if overlay.visible else "overlay off"]
 
 
 ## Where a robot aims: the chest (lower when crouched).
@@ -527,9 +544,15 @@ func _input(event: InputEvent) -> void:
 	if down or locked:
 		return
 	if event is InputEventMouseMotion and mouse_look and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		var sens := 0.0022 * lerpf(1.0, AIM_ZOOM, _aimed)        # (slower while zoomed in: the same hand movement, the same picture)
-		_yaw -= event.relative.x * sens
-		_pitch = clampf(_pitch - event.relative.y * sens, -1.45, 1.45)
+		var sens := 0.0022 * lerpf(1.0, AIM_ZOOM, clampf(_aimed, 0.0, 1.0) if is_finite(_aimed) else 0.0)        # (slower while zoomed in: the same hand movement, the same picture)
+		# (a browser's pointer lock now and then reports a jump of thousands of pixels, or no number at all:
+		# such a movement is not a movement of the hand)
+		var rel: Vector2 = event.relative
+		if not rel.is_finite() or absf(rel.x) > 3000.0 or absf(rel.y) > 3000.0:
+			_fault("mouse movement %s" % str(rel))
+			return
+		_yaw = wrapf(_yaw - rel.x * sens, -PI, PI)
+		_pitch = clampf(_pitch - rel.y * sens, -1.45, 1.45)
 	elif event is InputEventMouseButton and event.pressed:
 		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 			if grab:
@@ -638,6 +661,26 @@ func _frame(delta: float) -> void:
 		reload()
 	if not rules and not down and _since_hurt > REGEN_AFTER:
 		hp = minf(hp + REGEN * delta, MAX_HP)
+	# (numbers that everything 3D hangs on: one that is not a number takes the room and the gun off the screen
+	# for good, and nothing else says so)
+	if not is_finite(_yaw):
+		_fault("yaw %s" % _yaw)
+		_yaw = 0.0
+	if not is_finite(_pitch):
+		_fault("pitch %s" % _pitch)
+		_pitch = 0.0
+	if not is_finite(_aimed):
+		_fault("aimed %s" % _aimed)
+		_aimed = 0.0
+	if not is_finite(_kick):
+		_fault("kick %s" % _kick)
+		_kick = 0.0
+	if not global_position.is_finite():
+		_fault("the player's place %s" % str(global_position))
+		global_position = _last_good
+		velocity = Vector3.ZERO
+	else:
+		_last_good = global_position
 	rotation.y = _yaw
 	# The camera: the player's pitch, then the camera motion of the gun's clip (view punch, walk bob, burst
 	# shake: the CamKick node of the view, which is in the Blender camera's frame = this camera's turned 90 degrees).
@@ -683,11 +726,7 @@ func _frame(delta: float) -> void:
 				kick.transform = Transform3D.IDENTITY
 		if why.is_empty():
 			why.append("camera %s" % str(ct))
-		var fault := ", ".join(why)
-		if fault != view_fault:
-			view_fault = fault
-			view_faults += 1
-			print("[view] fault %d: %s" % [view_faults, fault])
+		_fault(", ".join(why))
 		ct = Transform3D(Basis(Vector3.RIGHT, _pitch), Vector3(0, _eye, 0))
 	cam.transform = ct
 	var ap := _ap()
@@ -723,10 +762,27 @@ func _frame(delta: float) -> void:
 	_aimed = move_toward(_aimed, aimed, delta * 8.0)
 	# (out of a sprint, a reload, a draw the gun is still on its way back for a moment)
 	_settle = 0.25 if busy in NO_CURSOR else maxf(_settle - delta, 0.0)
-	(view.scene as Node3D).transform = Transform3D(Basis(Quaternion.IDENTITY.slerp(view.fix, 1.0 - _aimed)), Vector3.ZERO) * view.seat
+	var seat := Transform3D(Basis(Quaternion.IDENTITY.slerp(view.fix, 1.0 - _aimed)), Vector3.ZERO) * (view.seat as Transform3D)
+	if not seat.is_finite() or absf(seat.basis.determinant()) < 0.2:
+		_fault("the %s's seat %s (fix %s)" % [weapon, str(seat), str(view.fix)])
+		seat = view.seat if (view.seat as Transform3D).is_finite() else Transform3D.IDENTITY
+	(view.scene as Node3D).transform = seat
 	# aiming zooms the world a little (the gun keeps its own field of view); the gun's camera rides on the world's
-	cam.fov = V2Assets.data().camera.fov_h * lerpf(1.0, AIM_ZOOM, smoothstep(0.0, 1.0, _aimed))
-	view_cam.global_transform = cam.global_transform
+	var fov: float = V2Assets.data().camera.fov_h * lerpf(1.0, AIM_ZOOM, smoothstep(0.0, 1.0, _aimed))
+	if not is_finite(fov) or fov < 20.0 or fov > 150.0:
+		_fault("field of view %s" % fov)
+		fov = 80.0
+	cam.fov = fov
+	if not cam.global_transform.is_finite():
+		_fault("the camera in the world %s" % str(cam.global_transform))
+	else:
+		view_cam.global_transform = cam.global_transform
+	if not cam.current:                                # (nothing else may take the view)
+		_fault("the camera was not the current one")
+		cam.make_current()
+	if not view_cam.current:
+		_fault("the gun's camera was not the current one")
+		view_cam.make_current()
 	_cursor()
 	# the clip's own sounds (magazine, slide, bolt, the gun shifting in the hands)
 	var cue_clip := String(ap.current_animation)
