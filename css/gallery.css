@@ -1,7 +1,7 @@
 [hidden] { display: none !important; }
 .gallery { display: grid; grid-template-columns: 220px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); height: 100vh; height: 100dvh; }
 .g-list { border-right: 1px solid var(--line); overflow-y: auto; padding: 12px 10px 24px; background: var(--bg); }
-.g-list button { display: block; width: 100%; border: 0; background: none; text-align: left; font: 400 15px/1.3 var(--body); color: var(--ink); padding: 7px 10px; margin-bottom: 2px; border-radius: 8px; cursor: pointer; }
+.g-list button { display: block; width: 100%; border: 0; background: none; text-align: left; font: 400 14px/1.3 var(--body); color: var(--ink); padding: 6px 10px; margin-bottom: 2px; border-radius: 8px; cursor: pointer; }
 .g-list button:hover { background: var(--hover); }
 .g-list button[aria-current="true"] { color: #FFFFFF; background: var(--accent-bg); }
 .g-list hr { border: 0; border-top: 1px solid var(--line); margin: 8px 10px; }
@@ -17,7 +17,7 @@
 .g-top { top: 12px; }
 .g-bottom { bottom: 12px; background: rgba(14, 18, 21, 0.78); color: #F4F7F8; border-radius: 6px; padding: 8px; backdrop-filter: blur(6px); }
 .seg { display: inline-flex; background: rgba(245, 246, 246, 0.92); border-radius: 6px; padding: 3px; gap: 2px; }
-.seg button, .clips button { border: 0; background: none; font: 500 11px/1 var(--mono); text-transform: uppercase; letter-spacing: 0.14em; padding: 8px 10px; border-radius: 4px; cursor: pointer; color: #5C6468; }
+.seg button, .clips button { border: 0; background: none; font: 500 11px/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; padding: 8px 10px; border-radius: 4px; cursor: pointer; color: #5C6468; }
 .seg button[aria-pressed="true"] { background: #16191B; color: #fff; }
 .icon-btn { border: 0; background: rgba(245, 246, 246, 0.92); width: 34px; height: 32px; border-radius: 6px; cursor: pointer; font-size: 15px; color: #16191B; }
 .g-bottom .icon-btn { background: #3FD0E8; }
