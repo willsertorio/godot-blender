@@ -1241,6 +1241,8 @@ func _hud_update(delta: float) -> void:
 			# where the rest goes, by system (**user, of the browser build: "game code ~33 ms": which code?**)
 			_perf.text += "\n" + V2World.prof_text(_perf_n, _perf_log) + "   robots awake %d of %d" % [
 				robots.filter(func(r: V2Robot) -> bool: return r.is_processing()).size(), robots.size()]
+			if player.view_fault != "":
+				_perf.text += "\nview set right %d times, last: %s" % [player.view_faults, player.view_fault]
 			if _perf_log:
 				print("[perf] ", _perf.text.replace("\n", " | "))
 			_perf_t = 0.0

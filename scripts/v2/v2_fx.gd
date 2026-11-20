@@ -31,6 +31,8 @@ static var _depth := 0
 
 
 static func tracer(from: Vector3, to: Vector3, color: Color) -> void:
+	if not (from.is_finite() and to.is_finite()):
+		return                                         # (a place or direction that is not a number: nothing is made)
 	var t := Time.get_ticks_usec()
 	_depth += 1
 	_tracer(from, to, color)
@@ -41,6 +43,8 @@ static func tracer(from: Vector3, to: Vector3, color: Color) -> void:
 
 
 static func scorch(pos: Vector3, normal: Vector3, big: float = 0.0) -> void:
+	if not (pos.is_finite() and normal.is_finite()):
+		return                                         # (a place or direction that is not a number: nothing is made)
 	var t := Time.get_ticks_usec()
 	_depth += 1
 	_scorch(pos, normal, big)
@@ -51,6 +55,8 @@ static func scorch(pos: Vector3, normal: Vector3, big: float = 0.0) -> void:
 
 
 static func impact(pos: Vector3, normal: Vector3, metal: bool = false) -> void:
+	if not (pos.is_finite() and normal.is_finite()):
+		return                                         # (a place or direction that is not a number: nothing is made)
 	var t := Time.get_ticks_usec()
 	_depth += 1
 	_impact(pos, normal, metal)
@@ -61,6 +67,8 @@ static func impact(pos: Vector3, normal: Vector3, metal: bool = false) -> void:
 
 
 static func sparks(pos: Vector3, dir: Vector3 = Vector3.UP, amount: int = 16) -> void:
+	if not (pos.is_finite() and dir.is_finite()):
+		return                                         # (a place or direction that is not a number: nothing is made)
 	var t := Time.get_ticks_usec()
 	_depth += 1
 	_sparks(pos, dir, amount)
@@ -71,6 +79,8 @@ static func sparks(pos: Vector3, dir: Vector3 = Vector3.UP, amount: int = 16) ->
 
 
 static func sparkle(pos: Vector3, amount: int = 10, db: float = 0.0) -> void:
+	if not (pos.is_finite()):
+		return                                         # (a place or direction that is not a number: nothing is made)
 	var t := Time.get_ticks_usec()
 	_depth += 1
 	_sparkle(pos, amount, db)
@@ -81,6 +91,8 @@ static func sparkle(pos: Vector3, amount: int = 10, db: float = 0.0) -> void:
 
 
 static func arc(a: Vector3, b: Vector3) -> void:
+	if not (a.is_finite() and b.is_finite()):
+		return                                         # (a place or direction that is not a number: nothing is made)
 	var t := Time.get_ticks_usec()
 	_depth += 1
 	_arc(a, b)
@@ -91,6 +103,8 @@ static func arc(a: Vector3, b: Vector3) -> void:
 
 
 static func explosion(pos: Vector3) -> void:
+	if not (pos.is_finite()):
+		return                                         # (a place or direction that is not a number: nothing is made)
 	var t := Time.get_ticks_usec()
 	_depth += 1
 	_explosion(pos)
@@ -101,6 +115,8 @@ static func explosion(pos: Vector3) -> void:
 
 
 static func burst(pos: Vector3) -> void:
+	if not (pos.is_finite()):
+		return                                         # (a place or direction that is not a number: nothing is made)
 	var t := Time.get_ticks_usec()
 	_depth += 1
 	_burst(pos)
@@ -313,7 +329,7 @@ static func _smoke_particles(color: Color, alpha: float, size: float, life: floa
 ## A puff of smoke or dust that swells, drifts along `dir` and fades.
 static func puff(pos: Vector3, dir: Vector3, color: Color, size: float, amount: int = 5, life: float = 0.9,
 		alpha: float = 0.35, speed: float = 0.6) -> void:
-	if root == null:
+	if root == null or not (pos.is_finite() and dir.is_finite()):
 		return
 	_shower("puff %s %.3f %d %.2f %.2f %.2f" % [color.to_html(), size, amount, life, alpha, speed], pos, dir, life + 0.6,
 		func() -> CPUParticles3D:
