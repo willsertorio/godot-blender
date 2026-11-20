@@ -1780,3 +1780,27 @@ func watch(_dir: String) -> void:
 		print("[watch] lost by '%s': found %d -> %d -> %d  back by: '%s'  report lines %d" % [how, before, during, w.call("found"), w.get("recovered_by"), (w.get("report") as Array).size()])
 		w.set("recovered_by", "")
 	print("[watch] done")
+
+
+## More than 1000 things to draw (-- --play --no-training --game-capture=x --part=many, in the browser build):
+## the engine culls on worker threads from 1000 visible instances up, and the browser build has none: it found
+## nothing at all to draw (the user's black view). project.godot puts that threshold out of reach.
+func many(_dir: String) -> void:
+	await _wait(1.0)
+	var vp := game.get_viewport().get_viewport_rid()
+	var holder := Node3D.new()
+	game.add_child(holder)
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3.ONE * 0.02
+	for step in 4:
+		for i in 600:
+			var m := MeshInstance3D.new()
+			m.mesh = mesh
+			m.position = player.global_position + Vector3(randf_range(-3, 3), randf_range(0.2, 2.5), randf_range(-3, 3))
+			holder.add_child(m)
+		await _wait(0.5)
+		print("[many] %d boxes added: 3D found %d  (threshold %s)" % [holder.get_child_count(),
+			RenderingServer.viewport_get_render_info(vp, RenderingServer.VIEWPORT_RENDER_INFO_TYPE_VISIBLE, RenderingServer.VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME),
+			ProjectSettings.get_setting("rendering/limits/spatial_indexer/threaded_cull_minimum_instances")])
+	holder.queue_free()
+	print("[many] done")

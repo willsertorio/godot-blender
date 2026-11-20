@@ -742,7 +742,15 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   situation the first room does not have (the first time in a corridor, say), the end screens.
 - **A black 3D view with the HUD still going (user, Chrome on the M1, on the site: "it blacked out after some
   shots", then "all black after the menu"; F3 there: 60 fps, 24 draw calls, 2k triangles = the engine runs and
-  draws nothing 3D)**. **Not solved.** What follows (the mouse) was found and fixed, and **was not the user's cause**: their next
+  draws nothing 3D)**. **SOLVED: the engine culls on worker threads once a scene has 1000 or more visible
+  instances (`rendering/limits/spatial_indexer/threaded_cull_minimum_instances`, default 1000), and the browser
+  build has no threads: that path finds nothing, so the world and the gun vanish while everything else runs.**
+  `project.godot` sets the threshold to 1,000,000. Proven in the browser engine with a scene of boxes: 990 drawn,
+  1010 none, back at 950; with the setting, 2000 drawn (`--part=many` does it in the game). The user's watch
+  report had "1023 visible in tree, 3D found 0". It came and went with the number of things in view (areas
+  within 28 m, effects, wrecks), hence "a different spot every time"; seed 33 here stays under 1000.
+  **Keep the count in mind on the web: never rely on that threaded path.**
+  History of the hunt (what follows, the mouse, was found and fixed, and **was not the user's cause**): their next
   screenshots show the view line sane (yaw, pitch, fov, place, areas marked drawn) and still 18 to 58 draw calls,
   1 ms of drawing, the environment's background colour and nothing else in 3D; the first time it happened was the
   moment the training dummy was destroyed, later from the start of a run. Ruled out here: an object, a light or
