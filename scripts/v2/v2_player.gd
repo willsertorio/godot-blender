@@ -58,6 +58,7 @@ var hurt_from := Vector3.ZERO       # where the round that hit came from (the HU
 var hit_confirm := 0.0              # > 0 just after one of the player's rounds hit a robot
 var shots_hit := 0
 var bot_aim := false                # the aim held by code (the checks)
+var bot_sprint := false             # a sprint asked for by code (the checks)
 var bot_jump := false               # a jump asked for by code (the bot at a wreck)
 var _last_good := Vector3.ZERO
 var view_fault := ""                # the last thing found wrong with the camera's numbers and set right ("" = never)
@@ -617,7 +618,7 @@ func _step(delta: float) -> void:
 		dir = Vector3.ZERO
 	var jump := (Input.is_key_pressed(KEY_SPACE) or bot_jump) and not locked
 	bot_jump = false
-	var sprint := Input.is_key_pressed(KEY_SHIFT) and dir.z < 0.0 and not busy.begins_with("Reload")      # (no running through a reload)
+	var sprint := (Input.is_key_pressed(KEY_SHIFT) or bot_sprint) and dir.z < 0.0 and not busy.begins_with("Reload")      # (no running through a reload)
 	_running = sprint
 	if sprint or (is_on_floor() and jump):
 		crouched = false                               # (running and jumping stand the player up)

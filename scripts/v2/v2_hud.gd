@@ -53,7 +53,6 @@ var perf: Label
 var _train: PanelContainer           # the training's card: which step, what to do, how far along
 var _train_n: Label
 var _train_line: HBoxContainer
-var _train_keys: Control
 var _train_count: Label
 var _train_shown := -1
 var _train_flash := 0.0
@@ -261,20 +260,11 @@ func _build_training() -> void:
 	var r := V2Ui.row(_train, 18)
 	var left := V2Ui.column(r, -4)
 	V2Ui.text(left, "TRAINING", "bold", 11, UIPalette.CYAN_LIGHT, 0.24)
-	_train_n = V2Ui.text(left, "1 / 4", "light", 26, UIPalette.TEXT)
+	_train_n = V2Ui.text(left, "1 / 7", "light", 26, UIPalette.TEXT)
 	V2Ui.rect(r, UIPalette.HUD_GLASS_BORDER, 1, 0)
 	_train_line = V2Ui.row(r, 9)
 	_train_count = V2Ui.text(r, "", "light", 26, UIPalette.CYAN)
 	_train.visible = false
-	# the keys no step asks for (client: "sprint, reload and other keys work but are never taught")
-	_train_keys = V2Ui.panel(self, UIPalette.hud_panel(false), [14, 6, 14, 7])
-	V2Ui.at(_train_keys, 0.5, 0.0, 0.0, EDGE.y + 78)
-	var keys := V2Ui.row(_train_keys, 8)
-	for k: Array in TRAIN_KEYS:
-		V2Ui.keycap(keys, k[0])
-		var t := V2Ui.text(keys, k[1], "medium", 13, UIPalette.LABEL)
-		t.custom_minimum_size.x = t.get_minimum_size().x + 8
-	_train_keys.visible = false
 
 
 ## A step's line: words and key caps in turn ("[C]" = a key cap).
@@ -293,31 +283,33 @@ func train_done() -> void:
 	_train_flash = 1.0
 
 
-const TRAIN_KEYS := [["R", "Reload"], ["SHIFT", "Sprint"], ["Q", "Switch gun"], ["H", "Use kit"], ["SPACE", "Jump"], ["X", "Crouch"], ["TAB", "Map"], ["ESC", "Keys"]]
-const TRAIN_STEPS := [
-	["[C]", "Hold to aim. Shoot the target with the pistol."],
-	["[2]", "Take the rifle.", "[C]", "Aim and shoot the target."],
-	["[E]", "Open the crate. The health kit is yours when you stand by it."],
-	["[E]", "Open a door. The run starts."],
-]
+const TRAIN_STEPS := {
+	"pistol": ["[C]", "Hold to aim. Shoot the target with the pistol."],
+	"reload": ["[R]", "Reload."],
+	"rifle": ["[Q]", "Switch to the rifle.", "[C]", "Aim and shoot the target."],
+	"sprint": ["[SHIFT]", "+", "[W]", "Sprint."],
+	"jump": ["[SPACE]", "Jump. Wrecks are solid: jump over them."],
+	"kit": ["[E]", "Open the crate. The health kit is yours when you stand by it."],
+	"door": ["[E]", "Open a door. The run starts."],
+}
 
 
 func _training(delta: float) -> void:
 	var on: bool = game.training and game.state == game.PLAYING
 	_train.visible = on or _train_flash > 0.0
-	_train_keys.visible = on
 	_train_flash = maxf(_train_flash - delta * 1.6, 0.0)
 	_train.modulate = Color(1, 1, 1, 1).lerp(Color(1.6, 1.6, 1.6, 1), _train_flash) if on else Color(1, 1, 1, _train_flash)
 	if not on:
 		return
-	var step: int = mini(game.train_step, TRAIN_STEPS.size() - 1)
+	var step: int = clampi(game.train_step, 0, game.TRAIN.size() - 1)
+	var name: String = game.TRAIN[step]
 	if step != _train_shown:
 		_train_shown = step
-		_train_step(TRAIN_STEPS[step])
-		_train_n.text = "%d / %d" % [step + 1, TRAIN_STEPS.size()]
-	_train_count.visible = step < 2
-	if step < 2:
-		_train_count.text = "%d / %d" % [game.train_hits, game.TRAIN_HITS[step]]
+		_train_step(TRAIN_STEPS[name])
+		_train_n.text = "%d / %d" % [step + 1, game.TRAIN.size()]
+	_train_count.visible = game.TRAIN_HITS.has(name)
+	if _train_count.visible:
+		_train_count.text = "%d / %d" % [game.train_hits, game.TRAIN_HITS[name]]
 
 
 ## What was just picked up (or could not be): a chip at the foot of the screen for two seconds.
