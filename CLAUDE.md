@@ -791,6 +791,23 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   in `user://v2_settings.cfg` (IndexedDB in a browser: checked there, a choice is still in force after the page
   is loaded again). Picture: `--game-capture=DIR --part=menu` at `--resolution 1440x810`.
 
+## Client feedback round (playtest report; the user sorted it with me)
+
+- **Changed** (user: "agree, go ahead"): the training never runs the rifle dry (`_training_tick` keeps the reserve
+  at 60: only aimed hits count, and 90 rounds from the hip left no way on); the training's kit is taken from
+  2.8 m (where the crate is opened) and the card says so; a second training card lists the keys no step asks for
+  (`V2Hud.TRAIN_KEYS`) and the Esc card has CONTROLS (`V2Game.CONTROLS`); **a press while the hands are busy is
+  not lost**: the aim key is a held key (the gun comes up as soon as `busy` is empty), a pistol click waits
+  `FIRE_BUF` 0.35 s; **no wreck is solid within `V2Robot.DOOR_CLEAR` (1.5 m) of a doorway** (`V2Robot.doorways`,
+  set by the game; two wrecks had shut one); past the generator's places the threat level goes on adding robots
+  (a free cell of a room two or more from the start, spider or drone, up to half the room's cells; its own random
+  stream): seed 33 has 22 / 28 / 34 robots at threat 0 / 6 / 12. Not checked by a test: the doorway rule and the
+  click buffer (the existing checks pass).
+- **Not changed, answered as design choices (user)**: difficulty by numbers, three shooting robots told apart by
+  silhouette, ammunition on the HUD (no ring at the cursor), no progression outside a run. The client's "auto-save"
+  is RE-ASSEMBLE (a new dungeon at the same threat; nothing is saved but the resolution). Their black screens were
+  the 1000-instance bug. The user wants the V1 assets beside the final ones for the reply.
+
 ## The environment set (approved by the user; it is what the game is built from)
 
 **User, after the themed kit: "the elements in the map are poorly designed", go back to Blender, more realistic,
