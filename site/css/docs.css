@@ -60,7 +60,7 @@ a { color: var(--accent); }
 }
 
 /* GAME */
-.game { height: 100vh; padding: 20px 24px 24px; display: grid; place-items: center; background: #04070A; }
+.game { min-height: 100vh; padding: 20px 24px 24px; display: grid; place-items: center; background: #04070A; }
 .game-wrap { width: min(100%, calc((100vh - 96px) * 16 / 9)); }
 .tabs { display: flex; gap: 4px; margin-bottom: 12px; }
 .tabs button { border: 0; background: none; color: var(--ink-2); font: 400 14px/1.3 var(--body); padding: 7px 12px; border-radius: 8px; cursor: pointer; }
@@ -248,3 +248,17 @@ details.sec > summary { padding: 14px 4px; gap: 12px; }
 .step dd li { margin: 2px 0; }
 @media (max-width: 479px) { .step dl { grid-template-columns: 1fr; gap: 2px; } .step dd { margin-bottom: 8px; } }
 .doc .boxes { padding-left: 0; }
+
+/* PLAY: release notes under the game */
+.game details.notes { margin-top: 20px; }
+.game details.notes > summary h2 { font-size: 16px; }
+.game details.notes ul { margin: 4px 0 16px; padding-left: 1.2em; max-width: 80ch; color: var(--ink-2); }
+.game details.notes li { margin: 6px 0; }
+.game details.notes strong { color: var(--ink); font-weight: 600; }
+@media (max-width: 760px) { .game details.notes { margin: 16px 12px 0; } }
+
+/* OVERVIEW: V1 comparison */
+figure.compare { display: block; margin: 24px 0 8px; }
+figure.compare > a { display: block; }
+figure.compare img { display: block; width: 100%; height: auto; border-radius: 6px; }
+figure.compare figcaption { margin-top: 8px; font-size: 13px; line-height: 1.5; color: var(--ink-2); }
