@@ -72,6 +72,8 @@ var rules := false                  # the game: magazines run out, health does n
 var mag := {"pistol": 15, "rifle": 30}      # rounds in each gun
 var reserve := 60                   # machine gun rounds carried; the pistol's never run out
 var kits := 0
+const FIRE_BUF := 0.35
+var _fire_buf := 0.0                 # a click on the pistol that found the hands busy: seconds it still counts
 var _want_reload := false           # the magazine ran dry: reload as soon as the hands are free
 var _dry_t := 0.0
 var _since_hurt := 99.0
@@ -559,6 +561,8 @@ func _input(event: InputEvent) -> void:
 				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		elif event.button_index == MOUSE_BUTTON_LEFT:
 			act("Fire")
+			if not (busy in ["Fire", "ADSFire"]) and not (rules and mag[weapon] <= 0):
+				_fire_buf = FIRE_BUF                         # (the hands were busy: the round leaves when they are free)
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
 			act("ADS")
 	elif event is InputEventKey and event.pressed and not event.echo:
@@ -743,6 +747,19 @@ func _frame(delta: float) -> void:
 			_release()
 		elif ap.current_animation_position >= sp[0] + sp[1]:
 			ap.seek(ap.current_animation_position - sp[1], true)
+	# A press that came while the hands were busy is not lost (client: "pressing C sometimes does nothing or the
+	# weapon still will not fire"): the aim key is a held key, so the gun comes up as soon as it can; a click
+	# on the pistol waits a third of a second for the reload, the draw or the gun's way up to the eye to end.
+	if aiming() and busy == "" and not down and not locked and not _running:
+		act("ADS")
+	if _fire_buf > 0.0:
+		_fire_buf -= delta
+		if weapon in AUTO or down or locked:
+			_fire_buf = 0.0
+		elif busy in ["", "ADS"]:
+			act("Fire")
+			if busy in ["Fire", "ADSFire"] or (rules and mag[weapon] <= 0):
+				_fire_buf = 0.0
 	if weapon in AUTO and held and busy in ["", "ADS"]:
 		act("Fire")                                    # the machine gun fires for as long as the button is held
 	if busy == "":

@@ -33,6 +33,7 @@ func _ready() -> void:
 	V2Fx.root = self
 	V2Fx.reset()
 	V2Robot.no_go = []
+	V2Robot.doorways = []
 	V2Sfx.root = self
 	V2Sfx.enabled = not ("--no-sound" in args)
 	_render_setup()

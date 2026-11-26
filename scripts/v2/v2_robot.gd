@@ -171,6 +171,9 @@ var _breath := 0.0
 ## Squares that spiders and drones go round: [middle (world), half its side with room for the robot]. Set by the
 ## scene (the game: the training cage), emptied by every scene's `_ready`.
 static var no_go: Array = []
+static var doorways: Array[Vector3] = []   # the middles of the dungeon's doorways (floor): no wreck is solid within DOOR_CLEAR of one
+const DOOR_CLEAR := 1.5
+var _no_solid := false
 var _via := Vector3.INF           # the corner of such a square it is going round by
 var _legs: Array = []             # spider: [hip, thigh, shin, foot] of each leg (`_feet_plant`)
 var _foot_rel: Array = []         # where the clip has each foot this frame, in the root's frame
@@ -685,7 +688,7 @@ func hit(damage: float = 34.0, dir: Vector3 = Vector3.ZERO, point: Vector3 = Vec
 ## and blown up) and the player does not stand in it, one box over the footprint of its parts, as high as they
 ## reach but WRECK_TOP at most, so that it can always be jumped (its parts above that are not solid).
 func _wreck_solid() -> void:
-	if _wreck_body != null or kind == "turret" or not _crashed or not _exploded or _spin > 0.0:
+	if _no_solid or _wreck_body != null or kind == "turret" or not _crashed or not _exploded or _spin > 0.0:
 		return
 	if clip == "Death" and ap.is_playing() and ap.current_animation_position < ap.current_animation_length - 0.05:
 		return
@@ -707,6 +710,13 @@ func _wreck_solid() -> void:
 	# (a little inside the outermost leg tips and duct edges: what is jumped is the bulk of it)
 	var size := Vector3(maxf((hi.x - lo.x) * 0.8, 0.5), clampf(hi.y - global_position.y, 0.25, WRECK_TOP), maxf((hi.z - lo.z) * 0.8, 0.5))
 	var mid := Vector3((lo.x + hi.x) / 2.0, global_position.y + size.y / 2.0, (lo.z + hi.z) / 2.0)
+	# (client: "two bodies blocked a doorway so the next room could not be entered": a wreck in or by a doorway
+	# stays something to walk through)
+	for door: Vector3 in doorways:
+		if Vector2(door.x - mid.x, door.z - mid.z).length() < DOOR_CLEAR + maxf(size.x, size.z) / 2.0:
+			_exploded = true
+			_no_solid = true
+			return
 	if player != null:
 		var d := player.global_position - mid
 		if absf(d.x) < size.x / 2.0 + 0.45 and absf(d.z) < size.z / 2.0 + 0.45 and player.global_position.y < mid.y + size.y:

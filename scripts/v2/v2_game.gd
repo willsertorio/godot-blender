@@ -71,6 +71,9 @@ var ending := false                  # an end screen is up
 # The training of the first room (the user's five points): a dummy spider on a striped pad; aim with the pistol
 # and hit it; take the rifle, aim and hit it; take the health kit out of the crate; E opens a door, and the run
 # starts. Until then the room's doors are locked and the robots beyond hear nothing.
+const CONTROLS := [["W A S D", "Move"], ["MOUSE", "Look"], ["CLICK", "Fire (hold: rifle)"], ["C", "Aim (or right mouse)"],
+	["R", "Reload"], ["Q", "Switch gun (1, 2)"], ["SHIFT", "Sprint"], ["SPACE", "Jump"], ["X", "Crouch"], ["E", "Open door / crate"],
+	["H", "Use a health kit"], ["TAB", "Map"]]
 const TRAIN_HITS := [3, 6]           # hits wanted with the pistol, with the rifle (each one aimed)
 var training := false
 var train_step := 0                  # 0 pistol, 1 rifle, 2 the kit, 3 the door
@@ -137,6 +140,7 @@ func _ready() -> void:
 	var automated := "--game-test" in args or bot > 0 or capture != ""
 	training = ("--training" in args or "--training-test" in args) or (not trained and missions == 0 and not automated and not ("--no-training" in args))
 	V2Robot.no_go = []
+	V2Robot.doorways = []
 	_rng.seed = hash(seed_used) + 5
 	_loot_rng.seed = hash(seed_used) + 11
 	_environment(0.38, 0.25, 22.0)
@@ -183,6 +187,8 @@ func _ready() -> void:
 			crates[-1].what = "ammo" if _loot_rng.randf() < 0.57 else "health"
 	_exit()
 	V2World.mark("game: crates and exit")
+	for d in dungeon.doors:                                # (no wreck is solid in or by a doorway)
+		V2Robot.doorways.append(d.at as Vector3)
 	var per_room: Dictionary = {}                          # the generator's robots, room by room: a share of each room's is kept
 	for e in gen.enemy_spawns:
 		if not per_room.has(e.room):
@@ -204,6 +210,32 @@ func _ready() -> void:
 			if extra > 0 and keep[room_id] < mini(per_room[room_id].size(), most):
 				keep[room_id] += 1
 				extra -= 1
+	# (client: "the build stops adding robots at about threat level 6": the generator's places were used up. Past
+	# them a robot gets a free cell of a room away from the start, spider or drone, until half the room's cells
+	# hold one. Drawn from a stream of its own: the rest of the dungeon stays what its seed makes it.)
+	if extra > 0:
+		var more_rng := RandomNumberGenerator.new()
+		more_rng.seed = seed_used * 31 + 17
+		var used: Dictionary = {V2Dungeon.cell_of(gen.exit_pos): true}
+		var count: Dictionary = {}
+		for room_id in per_room:
+			count[room_id] = int(keep[room_id])
+			for e in per_room[room_id]:
+				used[V2Dungeon.cell_of(e.pos)] = true
+		var rooms_far: Array = by_size.filter(func(id: int) -> bool: return gen.rooms[id].depth >= 2)
+		var tries := 0
+		while extra > 0 and tries < 600 and not rooms_far.is_empty():
+			tries += 1
+			var room_id: int = rooms_far[tries % rooms_far.size()]
+			var rect: Rect2i = gen.rooms[room_id].rect
+			var cell := rect.position + Vector2i(more_rng.randi() % rect.size.x, more_rng.randi() % rect.size.y)
+			if used.has(cell) or dungeon.blocked.has(cell) or int(count[room_id]) >= rect.get_area() / 2:
+				continue
+			used[cell] = true
+			count[room_id] = int(count[room_id]) + 1
+			per_room[room_id].insert(int(keep[room_id]), {"type": "brawler" if more_rng.randf() < 0.55 else "pursuer", "pos": V2Dungeon.center(cell), "room": room_id})
+			keep[room_id] = int(keep[room_id]) + 1
+			extra -= 1
 	var since := Time.get_ticks_msec()
 	var made := 0
 	var to_make := 0
@@ -740,6 +772,7 @@ func _training_next() -> void:
 
 
 func _training_tick() -> void:
+	player.reserve = maxi(player.reserve, 60)              # (practice never runs the rifle dry: only aimed hits count, and 90 rounds from the hip left no way on)
 	if train_step == 2 and player.kits > _train_kits:
 		_training_next()
 	elif train_step == 3:
@@ -1075,7 +1108,9 @@ func _pickups(delta: float) -> void:
 		node.rotation.y += delta * 1.4
 		node.position.y = float(p.y) + 0.08 + 0.05 * sin(float(p.t) * 3.0)
 		var flat := Vector2(player.global_position.x - node.global_position.x, player.global_position.z - node.global_position.z)
-		if state == PLAYING and flat.length() < 1.3 and float(p.t) > 0.25 and _take(p):
+		# (in the training the kit comes to hand from where the crate was opened: the client's players did not see
+		# that it has to be walked into)
+		if state == PLAYING and flat.length() < (2.8 if training else 1.3) and float(p.t) > 0.25 and _take(p):
 			pickups.erase(p)
 			node.queue_free()
 
@@ -1191,6 +1226,20 @@ func _hud() -> void:
 		choices.add_child(b)
 		_res_buttons.append([rows, b])
 	_res_show()
+	# CONTROLS (client: "no controls menu under Esc")
+	var keys := V2Ui.column(col, 8)
+	V2Ui.text(keys, "CONTROLS", "bold", 12, UIPalette.LABEL, 0.24)
+	var grid := GridContainer.new()
+	grid.columns = 4
+	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("v_separation", 6)
+	grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	keys.add_child(grid)
+	for k: Array in CONTROLS:
+		var cap := V2Ui.keycap(grid, k[0])
+		cap.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+		var words := V2Ui.text(grid, k[1], "medium", 14, UIPalette.TEXT)
+		words.custom_minimum_size.x = 150
 	# The mouse was never ours in this run (**user, of the browser build: "the game opens on the Esc card"**: a
 	# browser gives the pointer lock only in answer to a click or a key, and may refuse even then): not the
 	# pause card, which says the player left, but an invitation; any click or key takes the mouse.
