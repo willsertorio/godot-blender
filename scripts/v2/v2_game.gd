@@ -74,9 +74,14 @@ var ending := false                  # an end screen is up
 const CONTROLS := [["W A S D", "Move"], ["MOUSE", "Look"], ["CLICK", "Fire (hold: rifle)"], ["C", "Aim (or right mouse)"],
 	["R", "Reload"], ["Q", "Switch gun (1, 2)"], ["SHIFT", "Sprint"], ["SPACE", "Jump"], ["X", "Crouch"], ["E", "Open door / crate"],
 	["H", "Use a health kit"], ["TAB", "Map"]]
-const TRAIN_HITS := [3, 6]           # hits wanted with the pistol, with the rifle (each one aimed)
+# (user, after the client's "sprint, reload and other keys are never taught": "can we have actions to teach them
+# instead of just showing a card? i dont like the card": every key is a step the player does)
+const TRAIN := ["pistol", "reload", "rifle", "sprint", "jump", "kit", "door"]
+const TRAIN_HITS := {"pistol": 3, "rifle": 6}      # aimed hits wanted
 var training := false
-var train_step := 0                  # 0 pistol, 1 rifle, 2 the kit, 3 the door
+var train_step := 0                  # the place in TRAIN
+var _train_seen := false             # the step's action was begun (a reload under way)
+var _train_t := 0.0                  # seconds of it done (the sprint)
 var train_hits := 0
 var dummy: V2Robot
 var _train_kits := 0
@@ -745,19 +750,19 @@ func _aimed() -> bool:
 
 
 func _on_dummy_struck() -> void:
-	if not training or train_step > 1:
+	var want := train_name()
+	if not training or not TRAIN_HITS.has(want):
 		return
-	var want := "pistol" if train_step == 0 else "rifle"
 	if player.weapon != want:
-		if train_step == 0:
-			say("The pistol first · press 1", "weapon_pistol", true)
+		if want == "pistol":
+			say("The pistol first · press Q", "weapon_pistol", true)
 		return
 	if not _aimed():
 		say("Aim first · hold C or right mouse", "", true)
 		return
 	train_hits += 1
-	if train_hits >= TRAIN_HITS[train_step]:
-		if train_step == 1:                                # every shot asked for has been fired at it: it is destroyed
+	if train_hits >= int(TRAIN_HITS[want]):
+		if want == "rifle":                                # every shot asked for has been fired at it: it is destroyed
 			dummy.finish_off(player.last_aim)
 		_training_next()
 
@@ -765,17 +770,44 @@ func _on_dummy_struck() -> void:
 func _training_next() -> void:
 	train_step += 1
 	train_hits = 0
+	_train_seen = false
+	_train_t = 0.0
 	V2Sfx.play("ui")
 	hud.train_done()
-	if train_step == 3:
+	if train_name() == "door":
 		dungeon.unlock()
+
+
+## The step the training is at (a name of TRAIN).
+func train_name() -> String:
+	return TRAIN[clampi(train_step, 0, TRAIN.size() - 1)]
 
 
 func _training_tick() -> void:
 	player.reserve = maxi(player.reserve, 60)              # (practice never runs the rifle dry: only aimed hits count, and 90 rounds from the hip left no way on)
-	if train_step == 2 and player.kits > _train_kits:
-		_training_next()
-	elif train_step == 3:
+	match train_name():
+		"reload":                                          # R: done when the fresh magazine is in
+			if player.busy.begins_with("Reload"):
+				_train_seen = true
+			elif _train_seen or player.mag[player.weapon] >= V2Player.MAG[player.weapon]:
+				if not _train_seen:                        # (a full magazine cannot be reloaded: a round is taken out so that R has something to do)
+					player.mag[player.weapon] = V2Player.MAG[player.weapon] - 3
+				else:
+					_training_next()
+		"sprint":                                          # Shift + W: a third of a second at a run (a small room gives no more)
+			if player._sprinting:
+				_train_t += get_process_delta_time()
+				if _train_t >= 0.35:
+					_training_next()
+		"jump":                                            # Space: off the floor and rising
+			if not player.is_on_floor() and player.velocity.y > 1.0:
+				_train_seen = true
+			elif _train_seen and player.is_on_floor():
+				_training_next()
+		"kit":
+			if player.kits > _train_kits:
+				_training_next()
+	if train_name() == "door":
 		for d in dungeon.doors:
 			if d.door and d.open and gen.room_at(d.a) == gen.spawn_room:
 				_training_end()

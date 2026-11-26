@@ -803,6 +803,12 @@ the lab's `--concept`). Free doors (E opens any door at any time). Spiders and d
   (a free cell of a room two or more from the start, spider or drone, up to half the room's cells; its own random
   stream): seed 33 has 22 / 28 / 34 robots at threat 0 / 6 / 12. Not checked by a test: the doorway rule and the
   click buffer (the existing checks pass).
+- **The training teaches the keys by doing (user: "can we have actions to teach Sprint, reload and other keys
+  instead of just showing a card? i dont like the card")**: the keys card is gone; `V2Game.TRAIN` = pistol, reload
+  (R: done when the magazine is in; a full one loses three rounds first), rifle (Q), sprint (Shift + W: 0.35 s at
+  a run), jump (Space, landed), kit, door; `train_name()` names the step (code and checks go by name, not number),
+  `V2Hud.TRAIN_STEPS` the cards, `V2Player.bot_sprint` for the check. Crouch and the map are on the Esc card only.
+  The earlier text of this file that speaks of "TRAINING n / 4" and steps 0..3 is from before.
 - **Not changed, answered as design choices (user)**: difficulty by numbers, three shooting robots told apart by
   silhouette, ammunition on the HUD (no ring at the cursor), no progression outside a run. The client's "auto-save"
   is RE-ASSEMBLE (a new dungeon at the same threat; nothing is saved but the resolution). Their black screens were

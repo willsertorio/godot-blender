@@ -668,7 +668,7 @@ func training_test() -> void:
 	await _wait(0.4)
 	player.act("Fire")
 	await _wait(0.6)
-	ok = _check("training: a shot from the hip does not count", game.train_step == 0 and game.train_hits == 0) and ok
+	ok = _check("training: a shot from the hip does not count", game.train_name() == "pistol" and game.train_hits == 0) and ok
 	player.bot_aim = true
 	player.act("ADS")
 	await _until(func() -> bool: return player._aimed > 0.9, 2.0)
@@ -677,7 +677,7 @@ func training_test() -> void:
 		await _wait(0.15)
 		player.act("Fire")
 		await _wait(0.6)
-	ok = _check("training: three aimed pistol hits pass the first step", game.train_step == 1, "step %d, hits %d" % [game.train_step, game.train_hits]) and ok
+	ok = _check("training: three aimed pistol hits pass the first step", game.train_name() == "reload", "step %d, hits %d" % [game.train_step, game.train_hits]) and ok
 	# its feet stay where its clip has them while its body is thrown about (every reaction; a foot off that place
 	# is a foot in the air or dragged)
 	await _until(func() -> bool: return target._react == "", 8.0)
@@ -712,6 +712,13 @@ func training_test() -> void:
 			body_moved * 1000.0, worst * 1000.0, folded * 1000.0]) and ok
 	player.bot_aim = false
 	await _until(func() -> bool: return player.busy == "", 3.0)
+	await _wait(0.3)
+	var held_at: String = game.train_name()
+	player.reload()
+	await _until(func() -> bool: return game.train_name() == "rifle", 5.0)
+	ok = _check("training: nothing but R passes the reload step, and R does", held_at == "reload" and game.train_name() == "rifle" and player.mag.pistol == V2Player.MAG.pistol,
+		"before R: %s, after: %s, magazine %d" % [held_at, game.train_name(), player.mag.pistol]) and ok
+	await _until(func() -> bool: return player.busy == "", 3.0)
 	player.switch_weapon()
 	await _until(func() -> bool: return player.busy == "" and player.weapon == "rifle", 4.0)
 	_look_at(stand, target.hit_point())
@@ -719,14 +726,31 @@ func training_test() -> void:
 	player.act("ADS")
 	await _until(func() -> bool: return player._aimed > 0.9, 2.0)
 	player.bot_fire = true
-	await _until(func() -> bool: return game.train_step == 2, 4.0)
+	await _until(func() -> bool: return game.train_name() == "sprint", 4.0)
 	player.bot_fire = false
 	player.bot_aim = false
-	ok = _check("training: six aimed rifle hits pass the second step; the doors stay locked", game.train_step == 2 and d0.locked, "step %d, hits %d" % [game.train_step, game.train_hits]) and ok
+	ok = _check("training: six aimed rifle hits pass the rifle step; the doors stay locked", game.train_name() == "sprint" and d0.locked, "step %d, hits %d" % [game.train_step, game.train_hits]) and ok
 	await _wait(3.5)
 	ok = _check("training: the last round destroys the dummy; its wreck stays on the pad, solid, and counts for nothing",
 		target.state == V2Robot.DEAD and target._wreck_body != null and absf(target.global_position.y - 0.31) < 0.12 and game.kills == 0 and game.score == 0,
 		"state %d, box %s, at %.2f m, kills %d" % [target.state, str(target._wreck_body != null), target.global_position.y, game.kills]) and ok
+	await _until(func() -> bool: return player.busy == "", 3.0)
+	# Shift + W, then Space
+	_look_at(stand, stand + to_spawn.normalized() * 4.0 + Vector3(0, 1.6, 0))      # (away from the cage: the way the player came in)
+	await _wait(0.3)
+	player.auto_move = Vector3(0, 0, -1)
+	await _wait(0.3)
+	var walked: String = game.train_name()
+	player.bot_sprint = true
+	await _until(func() -> bool: return game.train_name() == "jump", 3.0)
+	player.bot_sprint = false
+	player.auto_move = Vector3.ZERO
+	var ran: String = game.train_name()
+	await _wait(0.5)
+	player.bot_jump = true
+	await _until(func() -> bool: return game.train_name() == "kit", 3.0)
+	ok = _check("training: a walk does not pass the sprint step, a sprint does; then a jump; the doors stay locked",
+		walked == "sprint" and ran == "jump" and game.train_name() == "kit" and d0.locked, "walking: %s, after the sprint: %s, after the jump: %s" % [walked, ran, game.train_name()]) and ok
 	await _until(func() -> bool: return player.busy == "", 3.0)
 	var crate: Dictionary = {}
 	for c in game.crates:
@@ -743,7 +767,7 @@ func training_test() -> void:
 			teleport((p.node as Node3D).global_position)
 	await _wait(1.0)
 	ok = _check("training: the room's crate holds a health kit; taking it unlocks the doors",
-		String(crate.what) == "kit" and crate_prompt == "crate" and player.kits == 1 and game.train_step == 3 and not d0.locked,
+		String(crate.what) == "kit" and crate_prompt == "crate" and player.kits == 1 and game.train_name() == "door" and not d0.locked,
 		"crate: %s, kits %d, step %d" % [crate.what, player.kits, game.train_step]) and ok
 	var heard: int = (game.robots as Array).filter(func(r: V2Robot) -> bool: return r.alerted).size()
 	teleport((d0.at as Vector3) + inward * 1.6)
@@ -843,11 +867,20 @@ func train(dir: String) -> void:
 	player.bot_aim = false
 	await _until(func() -> bool: return player.busy == "", 3.0)
 	game._training_next()
+	await _wait(0.5)
+	await _shot(dir, "Train2_reload")
+	game._training_next()
 	player.switch_weapon()
 	await _until(func() -> bool: return player.busy == "" and player.weapon == "rifle", 4.0)
 	_look_at(feet + to_spawn.normalized() * 4.2 + Vector3(to_spawn.z, 0, -to_spawn.x).normalized() * 1.6, target.hit_point())
 	await _wait(0.5)
-	await _shot(dir, "Train2_rifle")
+	await _shot(dir, "Train3_rifle")
+	game._training_next()
+	await _wait(0.5)
+	await _shot(dir, "Train4_sprint")
+	game._training_next()
+	await _wait(0.5)
+	await _shot(dir, "Train5_jump")
 	game._training_next()
 	var crate: Dictionary = {}
 	for c in game.crates:
@@ -856,7 +889,7 @@ func train(dir: String) -> void:
 	var cat: Vector3 = (crate.node as Node3D).global_position
 	_look_at(cat + (crate.node as Node3D).global_basis.z * 1.9 + (crate.node as Node3D).global_basis.x * 0.5, cat + Vector3(0, 0.5, 0))
 	await _wait(0.6)
-	await _shot(dir, "Train3_crate")
+	await _shot(dir, "Train6_crate")
 	game._training_next()
 	var d0: Dictionary = {}
 	for d in dungeon.doors:
@@ -865,7 +898,7 @@ func train(dir: String) -> void:
 	var inward := Vector3(-d0.dir.x, 0, -d0.dir.y)
 	_look_at((d0.at as Vector3) + inward * 2.0 + Vector3(-inward.z, 0, inward.x) * 0.7, (d0.at as Vector3) + Vector3(0, 1.35, 0))
 	await _wait(0.6)
-	await _shot(dir, "Train4_door")
+	await _shot(dir, "Train7_door")
 	get_tree().quit()
 
 
@@ -1646,7 +1679,11 @@ func blackout(dir: String) -> void:
 	await _until(func() -> bool: return player._aimed > 0.9, 2.0)
 	var n := 0
 	for i in 60:
-		if game.train_step == 1 and player.weapon != "rifle":
+		if game.train_name() == "reload":
+			player.bot_aim = false
+			player.reload()
+			await _until(func() -> bool: return game.train_name() != "reload", 5.0)
+		if game.train_name() == "rifle" and player.weapon != "rifle":
 			player.bot_aim = false
 			await _until(func() -> bool: return player.busy == "", 3.0)
 			player.switch_weapon()
@@ -1654,7 +1691,7 @@ func blackout(dir: String) -> void:
 			player.bot_aim = true
 			player.act("ADS")
 			await _until(func() -> bool: return player._aimed > 0.9, 2.0)
-		if game.train_step < 2:
+		if game.train_step < 3:
 			if is_instance_valid(target):
 				_look_at(stand, target.hit_point())
 			if player.weapon == "rifle":
@@ -1680,7 +1717,7 @@ func blackout(dir: String) -> void:
 			n += 1
 			if n >= 2:
 				break
-		if game.train_step >= 2 and i > 30:
+		if game.train_step >= 3 and i > 30:
 			break
 	await _shot(dir, "Blackout_end")
 	get_tree().quit()
